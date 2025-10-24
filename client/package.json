@@ -1,0 +1,25 @@
+{
+  "name": "@kerits/convex-transport",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "KERI message transport over Convex with challenge-response authentication",
+  "main": "index.ts",
+  "types": "index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./types": "./types.ts"
+  },
+  "keywords": [
+    "keri",
+    "transport",
+    "convex",
+    "messaging"
+  ],
+  "peerDependencies": {
+    "convex": "^1.16.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.3.3"
+  }
+}
