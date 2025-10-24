@@ -1,12 +1,12 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
-import { MessageBusClient, mockEncrypt, mockDecrypt, type AuthCredentials } from "../src/client";
+import { MessageBusClient, mockEncrypt, mockDecrypt, type AuthCredentials } from "../../src/client";
 import {
   generateKeyPair,
   encodeCESRKey,
   createAID,
-} from "./crypto-utils";
+} from "../helpers/crypto-utils";
 import { ConvexClient } from "convex/browser";
-import { api } from "../convex/_generated/api";
+import { api } from "../../convex/_generated/api";
 
 const CONVEX_URL = process.env.CONVEX_URL;
 

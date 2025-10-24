@@ -8,7 +8,7 @@ import {
   createAID,
   uint8ArrayToBase64Url,
   base64UrlToUint8Array,
-} from "./crypto-utils";
+} from "../helpers/crypto-utils";
 
 describe("End-to-End Signature Flow (No Server)", () => {
   test("full authentication flow simulation", async () => {

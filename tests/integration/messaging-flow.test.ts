@@ -4,12 +4,12 @@
  * Tests the full flow: UI -> ConvexMessageBus -> Convex -> verifyAuth
  */
 import { describe, test, expect, beforeAll } from "bun:test";
-import { MessageBusClient, type AuthCredentials } from "../src/client";
+import { MessageBusClient, type AuthCredentials } from "../../src/client";
 import {
   generateKeyPair,
   encodeCESRKey,
   createAID,
-} from "./crypto-utils";
+} from "../helpers/crypto-utils";
 
 const CONVEX_URL = process.env.CONVEX_URL;
 

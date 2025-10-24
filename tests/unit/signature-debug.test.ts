@@ -6,7 +6,7 @@ import {
   sign,
   createIndexedSignature,
   uint8ArrayToBase64Url,
-} from "./crypto-utils";
+} from "../helpers/crypto-utils";
 
 /**
  * Debug signature verification to understand the issue

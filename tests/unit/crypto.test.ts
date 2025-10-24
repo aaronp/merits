@@ -8,7 +8,7 @@ import {
   uint8ArrayToBase64Url,
   base64UrlToUint8Array,
   computeArgsHash,
-} from "./crypto-utils";
+} from "../helpers/crypto-utils";
 
 describe("Crypto Utilities", () => {
   test("should generate valid Ed25519 keypair", async () => {
@@ -42,7 +42,7 @@ describe("Crypto Utilities", () => {
     const publicKey = new Uint8Array(32).fill(0xcd);
     const aid = createAID(publicKey);
 
-    expect(aid).toStartWith("E");
+    expect(aid).toStartWith("D"); // D prefix for Ed25519 non-transferable identifier
     expect(aid.length).toBeGreaterThan(1);
   });
 

@@ -1,7 +1,11 @@
 {
   "permissions": {
     "allow": [
-      "Bash(chmod:*)"
+      "Bash(chmod:*)",
+      "Bash(for file in tests/unit/end-to-end-simple.test.ts tests/unit/signature-debug.test.ts tests/integration/integration.test.ts tests/integration/messaging-flow.test.ts tests/integration/onboarding-flow.test.ts)",
+      "Bash(do)",
+      "Bash(done)",
+      "Bash(make test-unit:*)"
     ],
     "deny": [],
     "ask": []
