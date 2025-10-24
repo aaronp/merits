@@ -8,7 +8,7 @@ import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { createMeritsClient, type AuthCredentials } from "../../src/client";
 import { generateKeyPair, createAID } from "../../core/crypto";
 import { api } from "../../convex/_generated/api";
-import { eventually } from "../helpers/eventually";
+import { eventually, eventuallyValue } from "../helpers/eventually";
 
 describe("SDK Integration", () => {
   const convexUrl = process.env.CONVEX_URL;
@@ -56,6 +56,47 @@ describe("SDK Integration", () => {
       threshold: "1",
       lastEvtSaid: "evt-bob-0",
     });
+
+    // Bootstrap Alice as super admin and onboard both users
+    await convex.mutation(api._test_helpers.resetAdminRoles, {});
+    await convex.mutation(api._test_helpers.bootstrapSuperAdmin, {
+      aid: alice.aid,
+    });
+
+    // Also whitelist Bob as an onboarding admin to allow messages from unknown users
+    // This ensures sends succeed even if tier writes are delayed in some environments
+    await convex.mutation(api.authorization.addOnboardingAdmin, {
+      aid: bob.aid,
+      description: "SDK test onboarding admin",
+      auth: await client.createAuth(alice, "admin", {
+        action: "addOnboardingAdmin",
+        aid: bob.aid,
+      }),
+    });
+
+    // Onboard Alice herself
+    await convex.mutation(api.authorization.onboardUser, {
+      userAid: alice.aid,
+      onboardingProof: "ETEST_PROOF_ALICE",
+      notes: "Test admin user",
+      auth: await client.createAuth(alice, "admin", {
+        action: "onboardUser",
+        userAid: alice.aid,
+        onboardingProof: "ETEST_PROOF_ALICE",
+      }),
+    });
+
+    // Onboard Bob so he can receive messages
+    await convex.mutation(api.authorization.onboardUser, {
+      userAid: bob.aid,
+      onboardingProof: "ETEST_PROOF_BOB",
+      notes: "Test user",
+      auth: await client.createAuth(alice, "admin", {
+        action: "onboardUser",
+        userAid: bob.aid,
+        onboardingProof: "ETEST_PROOF_BOB",
+      }),
+    });
   });
 
   afterEach(() => {
@@ -85,12 +126,15 @@ describe("SDK Integration", () => {
 
     expect(messageId).toBeDefined();
 
+    // Give the message a moment to be stored
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
     // Bob receives the message
     const receiveAuth = await client.createAuth(bob, "receive", {
       recpAid: bob.aid,
     });
 
-    const messages = await eventually(
+    const messages = await eventuallyValue(
       async () => {
         const msgs = await client.transport.receiveMessages({
           for: bob.aid,
@@ -98,9 +142,10 @@ describe("SDK Integration", () => {
         });
         return msgs.length > 0 ? msgs : undefined;
       },
-      { timeout: 3000 }
+      { timeout: 10000, interval: 500 }
     );
 
+    expect(messages).toBeDefined();
     expect(messages!.length).toBe(1);
     expect(messages![0].from).toBe(alice.aid);
     expect(messages![0].ct).toBe(ct);

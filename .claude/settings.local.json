@@ -15,7 +15,10 @@
       "Bash(bun test:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test ./tests/integration/identity-auth-interface.test.ts)",
       "Bash(source:*)",
-      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test ./tests/integration/group-integration.test.ts --timeout 60000)"
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test ./tests/integration/group-integration.test.ts --timeout 60000)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/sdk-integration.test.ts)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/sdk-integration.test.ts --timeout 15000)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/sdk-integration.test.ts --timeout 20000)"
     ],
     "deny": [],
     "ask": []
