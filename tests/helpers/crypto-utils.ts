@@ -2,36 +2,18 @@
  * Crypto utilities for testing KERI authentication
  */
 
-/**
- * Generate Ed25519 keypair using Web Crypto API
- */
+import { generateKeyPair as nobleGenerate, sign as nobleSign } from "../../core/crypto";
+
 export async function generateKeyPair(): Promise<{
   publicKey: Uint8Array;
   privateKey: Uint8Array;
   publicKeyCESR: string;
 }> {
-  const keypair = await crypto.subtle.generateKey(
-    {
-      name: "Ed25519",
-      namedCurve: "Ed25519",
-    },
-    true,
-    ["sign", "verify"]
-  );
-
-  const publicKeyRaw = await crypto.subtle.exportKey("raw", keypair.publicKey);
-  const privateKeyRaw = await crypto.subtle.exportKey("pkcs8", keypair.privateKey);
-
-  // Extract raw 32-byte private key from PKCS8 format (last 32 bytes)
-  const privateKeyBytes = new Uint8Array(privateKeyRaw);
-  const rawPrivateKey = privateKeyBytes.slice(-32);
-
-  const publicKeyBytes = new Uint8Array(publicKeyRaw);
-
+  const { publicKey, privateKey } = await nobleGenerate();
   return {
-    publicKey: publicKeyBytes,
-    privateKey: rawPrivateKey,
-    publicKeyCESR: encodeCESRKey(publicKeyBytes),
+    publicKey,
+    privateKey,
+    publicKeyCESR: encodeCESRKey(publicKey),
   };
 }
 
@@ -42,44 +24,13 @@ export async function sign(
   data: Uint8Array,
   privateKey: Uint8Array
 ): Promise<Uint8Array> {
-  // Import private key - need to reconstruct PKCS8 format
-  const pkcs8 = reconstructPKCS8(privateKey);
-
-  const key = await crypto.subtle.importKey(
-    "pkcs8",
-    pkcs8,
-    {
-      name: "Ed25519",
-      namedCurve: "Ed25519",
-    },
-    false,
-    ["sign"]
-  );
-
-  const signature = await crypto.subtle.sign("Ed25519", key, data);
-  return new Uint8Array(signature);
+  return await nobleSign(data, privateKey);
 }
 
 /**
  * Reconstruct PKCS8 format from raw 32-byte Ed25519 private key
  */
-function reconstructPKCS8(rawPrivateKey: Uint8Array): Uint8Array {
-  // PKCS8 Ed25519 structure (48 bytes total)
-  // This is a simplified version - in production use a proper ASN.1 encoder
-  const pkcs8Header = new Uint8Array([
-    0x30, 0x2e, // SEQUENCE (46 bytes)
-    0x02, 0x01, 0x00, // INTEGER (version = 0)
-    0x30, 0x05, // SEQUENCE (5 bytes) - algorithm
-    0x06, 0x03, 0x2b, 0x65, 0x70, // OID for Ed25519
-    0x04, 0x22, // OCTET STRING (34 bytes)
-    0x04, 0x20, // OCTET STRING (32 bytes) - the actual key
-  ]);
-
-  const result = new Uint8Array(pkcs8Header.length + rawPrivateKey.length);
-  result.set(pkcs8Header, 0);
-  result.set(rawPrivateKey, pkcs8Header.length);
-  return result;
-}
+// PKCS8 reconstruction no longer needed with noble
 
 /**
  * Encode public key in CESR format (simplified)
