@@ -37,3 +37,47 @@ Transport Implementaton:
 
  Those new users can also manage their own ACLs (e.g. block unwanted senders)
 
+
+## Interface-based client
+
+Use `createMeritsClient` to access the portable interfaces implemented by Convex adapters.
+
+```ts
+import { createMeritsClient } from "./src/client";
+
+const CONVEX_URL = process.env.CONVEX_URL!;
+const merits = createMeritsClient(CONVEX_URL);
+
+// Identity auth: issue a challenge bound to args
+const challenge = await merits.identity.issueChallenge({
+  aid: aliceAid,
+  purpose: "send",
+  args: { recpAid: bobAid, ctHash, ttl: 60000, alg: "", ek: "" },
+});
+
+// Transport: send, receive, ack
+await merits.transport.sendMessage({
+  to: bobAid,
+  ct: ciphertext,
+  typ: "chat.text.v1",
+  ttlMs: 60000,
+  auth: { challengeId: challenge.challengeId, sigs, ksn: 0 },
+});
+
+const messages = await merits.transport.receiveMessages({
+  for: bobAid,
+  auth: bobReceiveAuth,
+});
+
+// Groups
+await merits.group.createGroup({
+  name: "Project Team",
+  initialMembers: [aliceAid, bobAid],
+  auth: manageGroupAuth,
+});
+
+merits.close();
+```
+
+Legacy `MessageBusClient` remains available for backwards compatibility.
+

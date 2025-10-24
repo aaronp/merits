@@ -1,6 +1,12 @@
 import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { ConvexIdentityAuth } from "../convex/adapters/ConvexIdentityAuth";
+import { ConvexTransport } from "../convex/adapters/ConvexTransport";
+import { ConvexGroupApi } from "../convex/adapters/ConvexGroupApi";
+import type { IdentityAuth } from "../core/interfaces/IdentityAuth";
+import type { Transport } from "../core/interfaces/Transport";
+import type { GroupApi } from "../core/interfaces/GroupApi";
 
 export interface Message {
   id: Id<"messages">;
@@ -341,4 +347,22 @@ export function mockEncrypt(plaintext: string): string {
  */
 export function mockDecrypt(ciphertext: string): string {
   return Buffer.from(ciphertext, "base64").toString("utf-8");
+}
+
+// Interface-based unified client (non-breaking addition)
+export interface MeritsClient {
+  identity: IdentityAuth;
+  transport: Transport;
+  group: GroupApi;
+  close(): void;
+}
+
+export function createMeritsClient(convexUrl: string): MeritsClient {
+  const convex = new ConvexClient(convexUrl);
+  return {
+    identity: new ConvexIdentityAuth(convex),
+    transport: new ConvexTransport(convex),
+    group: new ConvexGroupApi(convex),
+    close: () => convex.close(),
+  };
 }
