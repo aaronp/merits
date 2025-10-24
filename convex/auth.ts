@@ -1,6 +1,15 @@
 import { v } from "convex/values";
 import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
+import {
+  verify,
+  decodeCESRKey,
+  base64UrlToUint8Array,
+  uint8ArrayToBase64Url,
+  sha256,
+  sha256Hex,
+  computeArgsHash as coreComputeArgsHash,
+} from "../core/crypto";
 
 /**
  * KERI Key State
@@ -15,29 +24,19 @@ export type KeyState = {
 };
 
 /**
- * Compute SHA256 hash (generic utility)
- */
-async function sha256(input: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(input);
-  const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-}
-
-/**
  * Compute SHA256 hash of arguments to bind challenge to specific operation
  */
-async function computeArgsHash(args: Record<string, any>): Promise<string> {
-  const canonical = JSON.stringify(args, Object.keys(args).sort());
-  return await sha256(canonical);
+function computeArgsHash(args: Record<string, any>): string {
+  return coreComputeArgsHash(args);
 }
 
 /**
  * Compute content hash (for ct binding)
  */
-export async function computeCtHash(ct: string): Promise<string> {
-  return await sha256(ct);
+export function computeCtHash(ct: string): string {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(ct);
+  return sha256Hex(data);
 }
 
 /**
@@ -47,7 +46,7 @@ export async function computeCtHash(ct: string): Promise<string> {
  * NOTE: This uses server-computed timestamps (createdAt, expiresAt) since it's
  * computed AFTER authentication, not during the challenge binding.
  */
-export async function computeEnvelopeHash(
+export function computeEnvelopeHash(
   recpAid: string,
   senderAid: string,
   ctHash: string,
@@ -55,7 +54,7 @@ export async function computeEnvelopeHash(
   ek: string | undefined,
   createdAt: number,
   expiresAt: number
-): Promise<string> {
+): string {
   // Canonical envelope with version (deterministic order)
   const envelope = {
     ver: "envelope/1",
@@ -69,7 +68,9 @@ export async function computeEnvelopeHash(
   };
   // Deterministic JSON: sorted keys, no whitespace
   const canonical = JSON.stringify(envelope, Object.keys(envelope).sort());
-  return await sha256(canonical);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(canonical);
+  return sha256Hex(data);
 }
 
 /**
@@ -156,76 +157,8 @@ export const registerKeyState = mutation({
  * Simplified CESR for testing: just 'D' prefix + base64url(publicKey)
  * Production CESR would use proper lead-byte padding, but for now we keep it simple.
  */
-function decodeKey(cesrKey: string): Uint8Array {
-  const code = cesrKey[0];
-
-  if (code === 'D' || code === 'B' || code === 'C') {
-    // Extract base64url portion after prefix
-    const b64url = cesrKey.slice(1);
-    return base64UrlToUint8Array(b64url);
-  }
-
-  throw new Error(`Unsupported CESR key format: ${cesrKey}`);
-}
-
-function base64UrlToUint8Array(base64url: string): Uint8Array {
-  // Remove any whitespace
-  base64url = base64url.trim();
-
-  // Convert base64url to base64
-  let base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-
-  // Add padding if needed
-  const padding = (4 - (base64.length % 4)) % 4;
-  if (padding > 0) {
-    base64 += "=".repeat(padding);
-  }
-
-  // Decode base64
-  const binaryString = atob(base64);
-  const bytes = new Uint8Array(binaryString.length);
-  for (let i = 0; i < binaryString.length; i++) {
-    bytes[i] = binaryString.charCodeAt(i);
-  }
-  return bytes;
-}
-
-function uint8ArrayToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (let i = 0; i < bytes.length; i++) {
-    binary += String.fromCharCode(bytes[i]);
-  }
-  const base64 = btoa(binary);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-/**
- * Verify Ed25519 signature using Web Crypto API
- */
-async function verifyEd25519(
-  signature: Uint8Array,
-  data: Uint8Array,
-  publicKey: Uint8Array
-): Promise<boolean> {
-  try {
-    // Import Ed25519 public key
-    const key = await crypto.subtle.importKey(
-      "raw",
-      publicKey,
-      {
-        name: "Ed25519",
-        namedCurve: "Ed25519",
-      },
-      false,
-      ["verify"]
-    );
-
-    // Verify signature
-    return await crypto.subtle.verify("Ed25519", key, signature, data);
-  } catch (error) {
-    return false;
-  }
-}
+// Crypto helper functions are now imported from core/crypto.ts
+// All using @noble/ed25519 instead of Web Crypto API
 
 /**
  * Verify KERI indexed signatures against key state
@@ -264,10 +197,10 @@ async function verifyIndexedSigs(
     }
 
     const sigBytes = base64UrlToUint8Array(sigB64);
-    const keyBytes = decodeKey(keyState.keys[idx]);
+    const keyBytes = decodeCESRKey(keyState.keys[idx]);
 
     try {
-      const valid = await verifyEd25519(sigBytes, data, keyBytes);
+      const valid = await verify(sigBytes, data, keyBytes);
       if (valid) {
         validSigs++;
       }

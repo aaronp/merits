@@ -7,6 +7,9 @@ import { ConvexGroupApi } from "../convex/adapters/ConvexGroupApi";
 import type { IdentityAuth } from "../core/interfaces/IdentityAuth";
 import type { Transport } from "../core/interfaces/Transport";
 import type { GroupApi } from "../core/interfaces/GroupApi";
+import { MessageRouter, createMessageRouter } from "../core/runtime/router";
+import { computeArgsHash, signPayload, sha256Hex } from "../core/crypto";
+import type { AuthProof } from "../core/types";
 
 export interface Message {
   id: Id<"messages">;
@@ -349,20 +352,114 @@ export function mockDecrypt(ciphertext: string): string {
   return Buffer.from(ciphertext, "base64").toString("utf-8");
 }
 
-// Interface-based unified client (non-breaking addition)
+/**
+ * Unified Merits Client
+ *
+ * Provides a single entry point for all Merits operations:
+ * - identity: Challenge/response authentication
+ * - transport: Message send/receive/ack/subscribe
+ * - group: Group management and messaging
+ * - router: Application-level message routing
+ * - helpers: Common operations (createAuth, computeArgsHash)
+ */
 export interface MeritsClient {
+  /** Identity authentication (challenge/response) */
   identity: IdentityAuth;
+
+  /** Message transport (send/receive/ack/subscribe) */
   transport: Transport;
+
+  /** Group management and messaging */
   group: GroupApi;
+
+  /** Message router for application-level dispatch */
+  router: MessageRouter;
+
+  /** Helper: Create authenticated proof for operations */
+  createAuth(
+    credentials: AuthCredentials,
+    purpose: string,
+    args: Record<string, any>
+  ): Promise<AuthProof>;
+
+  /** Helper: Compute args hash (deterministic) */
+  computeArgsHash(args: Record<string, any>): string;
+
+  /** Helper: Compute content hash */
+  computeCtHash(ct: string): string;
+
+  /** Close the client connection */
   close(): void;
 }
 
+/**
+ * Create a unified Merits client
+ *
+ * @param convexUrl - Convex deployment URL
+ * @returns MeritsClient with all interfaces and helpers
+ *
+ * @example
+ * ```typescript
+ * const client = createMeritsClient(process.env.CONVEX_URL);
+ *
+ * // Use interfaces directly
+ * const challenge = await client.identity.issueChallenge({...});
+ * await client.transport.sendMessage({...});
+ * await client.group.createGroup({...});
+ *
+ * // Or use helpers
+ * const auth = await client.createAuth(credentials, "send", {...});
+ * ```
+ */
 export function createMeritsClient(convexUrl: string): MeritsClient {
   const convex = new ConvexClient(convexUrl);
+  const identity = new ConvexIdentityAuth(convex);
+  const transport = new ConvexTransport(convex);
+  const group = new ConvexGroupApi(convex);
+  const router = createMessageRouter();
+
   return {
-    identity: new ConvexIdentityAuth(convex),
-    transport: new ConvexTransport(convex),
-    group: new ConvexGroupApi(convex),
-    close: () => convex.close(),
+    identity,
+    transport,
+    group,
+    router,
+
+    async createAuth(
+      credentials: AuthCredentials,
+      purpose: string,
+      args: Record<string, any>
+    ): Promise<AuthProof> {
+      const argsHash = computeArgsHash(args);
+      const challenge = await identity.issueChallenge({
+        aid: credentials.aid,
+        purpose: purpose as any,
+        args,
+      });
+      const sigs = await signPayload(
+        challenge.payloadToSign,
+        credentials.privateKey,
+        0
+      );
+
+      return {
+        challengeId: challenge.challengeId,
+        sigs,
+        ksn: credentials.ksn,
+      };
+    },
+
+    computeArgsHash(args: Record<string, any>): string {
+      return computeArgsHash(args);
+    },
+
+    computeCtHash(ct: string): string {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(ct);
+      return sha256Hex(data);
+    },
+
+    close() {
+      convex.close();
+    },
   };
 }

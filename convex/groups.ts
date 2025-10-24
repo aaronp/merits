@@ -10,6 +10,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAuth } from "./auth";
 import type { Id } from "./_generated/dataModel";
+import { sha256Hex } from "../core/crypto";
 
 /**
  * Create a new group
@@ -205,9 +206,7 @@ export const sendGroupMessage = mutation({
     // Compute ctHash
     const encoder = new TextEncoder();
     const data = encoder.encode(args.ct);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const ctHash = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    const ctHash = sha256Hex(data);
 
     // Verify authentication
     const verified = await verifyAuth(
@@ -255,9 +254,7 @@ export const sendGroupMessage = mutation({
       expiresAt,
     };
     const canonical = JSON.stringify(envelope, Object.keys(envelope).sort());
-    const envelopeHashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(canonical));
-    const envelopeHashArray = Array.from(new Uint8Array(envelopeHashBuffer));
-    const envelopeHash = envelopeHashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    const envelopeHash = sha256Hex(encoder.encode(canonical));
 
     // Insert group log entry
     const logId = await ctx.db.insert("groupLog", {

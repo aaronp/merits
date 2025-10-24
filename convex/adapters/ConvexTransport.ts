@@ -14,6 +14,7 @@ import {
   SubscribeOptions,
 } from "../../core/interfaces/Transport";
 import { AuthProof } from "../../core/types";
+import { sha256Hex } from "../../core/crypto";
 
 /**
  * Convex implementation of Transport interface
@@ -23,7 +24,7 @@ export class ConvexTransport implements Transport {
 
   async sendMessage(req: MessageSendRequest): Promise<{ messageId: string }> {
     // Compute ctHash client-side for binding
-    const ctHash = await this.computeCtHash(req.ct);
+    const ctHash = this.computeCtHash(req.ct);
 
     const messageId = await this.client.mutation(api.messages.send, {
       recpAid: req.to,
@@ -155,11 +156,9 @@ export class ConvexTransport implements Transport {
   /**
    * Compute SHA-256 hash of ciphertext
    */
-  private async computeCtHash(ct: string): Promise<string> {
+  private computeCtHash(ct: string): string {
     const encoder = new TextEncoder();
     const data = encoder.encode(ct);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+    return sha256Hex(data);
   }
 }
