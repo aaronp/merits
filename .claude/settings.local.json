@@ -11,7 +11,10 @@
       "Bash(bunx convex dev:*)",
       "Bash(bun add:*)",
       "Bash(make test:*)",
-      "Bash(make test-integration:*)"
+      "Bash(make test-integration:*)",
+      "Bash(bun test:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test ./tests/integration/identity-auth-interface.test.ts)",
+      "Bash(source:*)"
     ],
     "deny": [],
     "ask": []

@@ -87,6 +87,7 @@ export const send = mutation({
       senderAid, // Server-verified, not client-supplied!
       ct: args.ct,
       ctHash,
+      typ: args.typ,
       ek: args.ek,
       alg: args.alg,
       createdAt: now,
@@ -146,6 +147,7 @@ export const receive = mutation({
       id: msg._id,
       senderAid: msg.senderAid,
       ct: msg.ct,
+      typ: msg.typ,
       ctHash: msg.ctHash,
       ek: msg.ek,
       alg: msg.alg,
@@ -267,6 +269,7 @@ export const list = query({
       id: msg._id,
       senderAid: msg.senderAid,
       ct: msg.ct,
+      typ: msg.typ,
       ek: msg.ek,
       alg: msg.alg,
       createdAt: msg.createdAt,

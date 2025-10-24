@@ -14,6 +14,8 @@ import type {
   FunctionReference,
 } from "convex/server";
 import type * as _test_helpers from "../_test_helpers.js";
+import type * as adapters_ConvexIdentityAuth from "../adapters/ConvexIdentityAuth.js";
+import type * as adapters_ConvexTransport from "../adapters/ConvexTransport.js";
 import type * as auth from "../auth.js";
 import type * as authorization from "../authorization.js";
 import type * as debug from "../debug.js";
@@ -29,6 +31,8 @@ import type * as messages from "../messages.js";
  */
 declare const fullApi: ApiFromModules<{
   _test_helpers: typeof _test_helpers;
+  "adapters/ConvexIdentityAuth": typeof adapters_ConvexIdentityAuth;
+  "adapters/ConvexTransport": typeof adapters_ConvexTransport;
   auth: typeof auth;
   authorization: typeof authorization;
   debug: typeof debug;

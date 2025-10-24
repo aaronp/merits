@@ -7,6 +7,7 @@ export default defineSchema({
     senderAid: v.string(), // REQUIRED - set by server after verification (never trust client)
     ct: v.string(), // Ciphertext (sealed to recpAid)
     ctHash: v.string(), // Hash of ct (binds challenge to this message)
+    typ: v.optional(v.string()), // Optional message type for routing/authorization
     ek: v.optional(v.string()), // Sender's ephemeral X25519 pub (PFS)
     alg: v.optional(v.string()), // e.g. "x25519-xchacha20poly1305"
     createdAt: v.number(),

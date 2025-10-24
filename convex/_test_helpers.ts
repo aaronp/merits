@@ -67,3 +67,33 @@ export const resetAdminRoles = mutation({
     return { deletedRoles: roles.length, deletedAdmins: admins.length };
   },
 });
+
+/**
+ * Reset ALL state for tests (TEST ONLY)
+ */
+export const resetAll = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const tables = [
+      "messages",
+      "challenges",
+      "keyStates",
+      "adminRoles",
+      "onboardingAdmins",
+      "userTiers",
+      "rateLimits",
+    ] as const;
+
+    const deleted: Record<string, number> = {};
+
+    for (const table of tables) {
+      const records = await ctx.db.query(table as any).collect();
+      for (const rec of records) {
+        await ctx.db.delete(rec._id);
+      }
+      deleted[table] = records.length;
+    }
+
+    return { deleted };
+  },
+});
