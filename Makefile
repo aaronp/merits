@@ -1,4 +1,4 @@
-.PHONY: test install dev cli clean
+.PHONY: test install dev cli clean summarise
 
 # Run integration tests
 test:
@@ -31,3 +31,9 @@ cli:
 clean:
 	rm -rf node_modules
 	rm -rf convex/_generated
+
+# Generate summary of convex files and copy to clipboard
+summarise:
+	@./scripts/summarise.sh
+	@cat merits-summary.txt | pbcopy
+	@echo "Summary copied to clipboard"

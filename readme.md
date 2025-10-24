@@ -17,8 +17,23 @@ Transport API:
 Group API:
  * There should be a GroupApi, which may be able to use an underlying Transport API in its implementation, to support sending messages to groups. 
  * Groups should just be modeled with a unique groupId against a set of memberIds (which will thus also be able to model groups of groups)
+ * It's assumed the implementation will be able to model this by using metadata alongside direct messages (e.g. Alice sends a message to Bob encrypted with his public key, but with metadata which says "this is a message I'm sending to use as part of group ABC")
+ * The metadata mechanism should be generic enough to support various group dynamics (e.g. a group which might use a RAFT-like mechanism to determine the group history), but equally the server implementation can help with practical scalability issues, such as allowing senders to send messages to a 'group', and the server can then encode individual messages with the recipients public keys and enque them in those recipients mailboxes. The server can then also itself impose a 'group message ordering' consistent for all participants.
+ 
 
 Transport Implementaton:
  * Admins can't see the encrypted contents, but just the information they need for delivery.
- * The server can keep data in order to rate-limit accounts and maintain simple "Access Controls" to define who 
+ * The server can keep data in order to rate-limit accounts and maintain simple "Access Controls" which allow users as well as admins to restrict/block who can send what to whom
+ * The implementation can keep data on usage for admins to be able to see aggregate data, such as how many messages were sent and consumed, and other metadata about message timestamps so as to support the platform (but without being able to see the encoded message bodies, but could see the message metadata)
+ 
+ ## Use-Case
+
+ New users can create and verify (via challenge/response) their own IDs and public-key mappings.
+ This auth should be sympathetic to how KERI does challenge response to verify ownership of an Id (AID).
+
+ The result of first registry is for new users to be in an 'unknown' group, which is a group containing the new AID and the AIDS of specified admins.
+
+ Those people can then message each other, and admins can asign a 'role' to the new AID user which governs their rate-limits, access, etc.
+
+ Those new users can also manage their own ACLs (e.g. block unwanted senders)
 
