@@ -95,4 +95,44 @@ export default defineSchema({
     messagesInWindow: v.number(), // Count in current window
     limit: v.number(), // Max messages per window
   }).index("by_aid", ["aid"]),
+
+  // Groups - collections of AIDs for server-side fanout messaging
+  groups: defineTable({
+    name: v.string(), // Human-readable group name
+    createdBy: v.string(), // Creator AID (initial owner)
+    createdAt: v.number(),
+    // Members stored inline for fast access
+    members: v.array(
+      v.object({
+        aid: v.string(),
+        role: v.string(), // "owner" | "admin" | "member"
+        joinedAt: v.number(),
+      })
+    ),
+  })
+    .index("by_member", ["members"]) // Find groups by member AID
+    .index("by_created", ["createdAt"]),
+
+  // Group message log - maintains total ordering of group messages
+  groupLog: defineTable({
+    groupId: v.id("groups"),
+    senderAid: v.string(), // Verified sender AID
+    seqNum: v.number(), // Monotonic sequence number per group
+    ct: v.string(), // Original ciphertext (encrypted to group key)
+    ctHash: v.string(), // Hash of ct
+    typ: v.optional(v.string()), // Message type for routing
+    createdAt: v.number(),
+    expiresAt: v.number(),
+    senderSig: v.array(v.string()), // Sender's indexed sigs
+    senderKsn: v.number(),
+    senderEvtSaid: v.string(),
+    envelopeHash: v.string(), // Audit anchor
+    usedChallengeId: v.id("challenges"),
+    // Fan-out status - track which members have been notified
+    fanoutComplete: v.boolean(),
+    fanoutCount: v.number(), // Number of individual messages created
+  })
+    .index("by_group", ["groupId", "seqNum"])
+    .index("by_group_time", ["groupId", "createdAt"])
+    .index("by_expiration", ["expiresAt"]),
 });

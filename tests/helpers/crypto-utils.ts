@@ -8,6 +8,7 @@
 export async function generateKeyPair(): Promise<{
   publicKey: Uint8Array;
   privateKey: Uint8Array;
+  publicKeyCESR: string;
 }> {
   const keypair = await crypto.subtle.generateKey(
     {
@@ -25,9 +26,12 @@ export async function generateKeyPair(): Promise<{
   const privateKeyBytes = new Uint8Array(privateKeyRaw);
   const rawPrivateKey = privateKeyBytes.slice(-32);
 
+  const publicKeyBytes = new Uint8Array(publicKeyRaw);
+
   return {
-    publicKey: new Uint8Array(publicKeyRaw),
+    publicKey: publicKeyBytes,
     privateKey: rawPrivateKey,
+    publicKeyCESR: encodeCESRKey(publicKeyBytes),
   };
 }
 
@@ -151,4 +155,31 @@ export async function computeArgsHash(args: Record<string, any>): Promise<string
   const data = encoder.encode(canonical);
   const hash = await sha256(data);
   return uint8ArrayToBase64Url(hash);
+}
+
+/**
+ * Sign a payload and return indexed signatures
+ *
+ * @param payload The payload object to sign
+ * @param privateKey The private key to sign with
+ * @param keyIndex The index of the key (for indexed signatures)
+ * @returns Array of indexed signatures (format: "idx-signature_base64url")
+ */
+export async function signPayload(
+  payload: Record<string, any>,
+  privateKey: Uint8Array,
+  keyIndex: number
+): Promise<string[]> {
+  // Canonicalize payload (sort keys deterministically)
+  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  const encoder = new TextEncoder();
+  const data = encoder.encode(canonical);
+
+  // Sign the data
+  const signature = await sign(data, privateKey);
+
+  // Create indexed signature
+  const indexedSig = createIndexedSignature(keyIndex, signature);
+
+  return [indexedSig];
 }
