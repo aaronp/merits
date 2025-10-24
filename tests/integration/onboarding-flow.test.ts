@@ -34,6 +34,14 @@ describe("End-to-End Onboarding Flow", () => {
     convex = new ConvexClient(CONVEX_URL);
     client = new MessageBusClient(CONVEX_URL);
 
+    // Ensure a clean admin state for this suite (test-only reset)
+    try {
+      // @ts-ignore - using generated API without types
+      await convex.mutation(api._test_helpers.resetAdminRoles, {});
+    } catch (e) {
+      // Best-effort cleanup; ignore if not available
+    }
+
     // Generate keypairs
     const superAdminKeys = await generateKeyPair();
     superAdmin = {

@@ -5,7 +5,13 @@
       "Bash(for file in tests/unit/end-to-end-simple.test.ts tests/unit/signature-debug.test.ts tests/integration/integration.test.ts tests/integration/messaging-flow.test.ts tests/integration/onboarding-flow.test.ts)",
       "Bash(do)",
       "Bash(done)",
-      "Bash(make test-unit:*)"
+      "Bash(make test-unit:*)",
+      "Bash(cat:*)",
+      "Bash(bun install:*)",
+      "Bash(bunx convex dev:*)",
+      "Bash(bun add:*)",
+      "Bash(make test:*)",
+      "Bash(make test-integration:*)"
     ],
     "deny": [],
     "ask": []

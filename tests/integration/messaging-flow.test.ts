@@ -4,6 +4,8 @@
  * Tests the full flow: UI -> ConvexMessageBus -> Convex -> verifyAuth
  */
 import { describe, test, expect, beforeAll } from "bun:test";
+import { ConvexClient } from "convex/browser";
+import { api } from "../../convex/_generated/api";
 import { MessageBusClient, type AuthCredentials } from "../../src/client";
 import {
   generateKeyPair,
@@ -30,6 +32,7 @@ describe("Messaging Flow Integration", () => {
 
   beforeAll(async () => {
     client = new MessageBusClient(CONVEX_URL!);
+    const convex = new ConvexClient(CONVEX_URL!);
 
     // Setup Alice
     aliceKeys = await generateKeyPair();
@@ -64,6 +67,29 @@ describe("Messaging Flow Integration", () => {
       "EBBB"
     );
 
+    // Test-only: ensure clean admin state and bootstrap Bob as onboarding admin
+    try {
+      // @ts-ignore - using generated API without types
+      await convex.mutation(api._test_helpers.resetAdminRoles, {});
+    } catch (e) {
+      // ignore if not available
+    }
+
+    // Bootstrap Bob as super admin
+    // @ts-ignore - using generated API without types
+    await convex.mutation(api._test_helpers.bootstrapSuperAdmin, { aid: bobAid });
+
+    // Add Bob as onboarding admin (requires admin auth)
+    await convex.mutation(api.authorization.addOnboardingAdmin, {
+      aid: bobAid,
+      description: "Test onboarding admin",
+      auth: await client.createAuth(
+        { aid: bobAid, privateKey: bobKeys.privateKey, ksn: 0 },
+        "admin",
+        { action: "addOnboardingAdmin", aid: bobAid }
+      ),
+    });
+
     // Setup credentials
     aliceCreds = {
       aid: aliceAid,
@@ -78,6 +104,7 @@ describe("Messaging Flow Integration", () => {
     };
 
     console.log("✓ Registered key states");
+    convex.close();
   });
 
   test("send message using MessageBusClient (like UI does)", async () => {
