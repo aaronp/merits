@@ -18,7 +18,7 @@ import type {
 } from "../../core/interfaces/GroupApi";
 
 export class ConvexGroupApi implements GroupApi {
-  constructor(private client: ConvexClient) {}
+  constructor(private client: ConvexClient) { }
 
   async createGroup(req: CreateGroupRequest): Promise<{ groupId: GroupId }> {
     const result = await this.client.mutation(api.groups.createGroup, {
@@ -89,10 +89,17 @@ export class ConvexGroupApi implements GroupApi {
   }
 
   async getGroup(req: GetGroupRequest): Promise<Group> {
-    // Extract callerAid from auth proof
-    // NOTE: In production, you'd verify the auth on server side
-    // For now, we'll need to pass callerAid separately or add a verifyAuth query
-    throw new Error("getGroup requires authentication - not yet implemented in query context");
+    // Resolve caller AID from challengeId (read-only, no verification here)
+    const { aid } = await this.client.query(api.auth.getAidForChallenge as any, {
+      challengeId: req.auth.challengeId as any,
+    });
+
+    const group = await this.client.query(api.groups.getGroup, {
+      groupId: req.groupId as any,
+      callerAid: aid,
+    });
+
+    return group as Group;
   }
 
   async leaveGroup(req: LeaveGroupRequest): Promise<void> {

@@ -511,3 +511,23 @@ export const cleanupExpiredChallenges = mutation({
     return { deleted: expiredChallenges.length };
   },
 });
+
+/**
+ * Helper query: get AID for a given challengeId
+ *
+ * Note: This does NOT verify signatures or mark the challenge as used.
+ * It is intended for read-only contexts (e.g., queries) that need to know
+ * the caller's AID to perform authorization checks.
+ */
+export const getAidForChallenge = query({
+  args: {
+    challengeId: v.id("challenges"),
+  },
+  handler: async (ctx, { challengeId }) => {
+    const challenge = await ctx.db.get(challengeId);
+    if (!challenge) {
+      throw new Error("Challenge not found");
+    }
+    return { aid: challenge.aid };
+  },
+});
