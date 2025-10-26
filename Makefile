@@ -47,6 +47,7 @@ cli:
 clean:
 	rm -rf node_modules
 	rm -rf convex/_generated
+	rm -rf coverage
 	rm -f merits-summary.txt
 
 # Generate summary of convex files and copy to clipboard

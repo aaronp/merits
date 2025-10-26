@@ -8,13 +8,21 @@
     "test": "CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration.test.ts",
     "test:all": "CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test",
     "test:unit": "bun test tests/crypto.test.ts tests/signature-debug.test.ts tests/timestamp-fix.test.ts tests/end-to-end-simple.test.ts",
+    "test:cli": "bun test tests/cli/unit/",
+    "typecheck": "tsc --noEmit",
     "dev": "bunx convex dev"
   },
   "dependencies": {
     "@noble/ed25519": "^3.0.0",
     "@noble/hashes": "^2.0.1",
     "cesr-ts": "github:weboftrust/cesr-ts",
-    "convex": "^1.16.0"
+    "convex": "^1.16.0",
+    "commander": "^11.1.0",
+    "chalk": "^5.3.0",
+    "ora": "^8.0.1",
+    "keytar": "^7.9.0",
+    "ajv": "^8.12.0",
+    "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
     "@clack/prompts": "^0.7.0",

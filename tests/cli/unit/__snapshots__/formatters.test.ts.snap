@@ -1,0 +1,160 @@
+// Bun Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`Message Formatters formats as JSON (minimal) 1`] = `
+"[
+  {
+    "id": "msg-123",
+    "from": "EABCDEFabcdef1234567890",
+    "to": "EXYZabcdef9876543210",
+    "typ": "chat.text.v1",
+    "ct": "aGVsbG8gd29ybGQ="
+  },
+  {
+    "id": "msg-456",
+    "from": "EXYZabcdef9876543210",
+    "to": "EABCDEFabcdef1234567890",
+    "typ": "chat.text.v1",
+    "ct": "Z29vZGJ5ZSB3b3JsZA=="
+  }
+]"
+`;
+
+exports[`Message Formatters formats as JSON (verbose) 1`] = `
+"[
+  {
+    "id": "msg-123",
+    "from": "EABCDEFabcdef1234567890",
+    "to": "EXYZabcdef9876543210",
+    "ct": "aGVsbG8gd29ybGQ=",
+    "typ": "chat.text.v1",
+    "ttlMs": 60000,
+    "createdAt": 1700000000000,
+    "sig": [
+      "0-abc123def456"
+    ],
+    "ksn": 0
+  },
+  {
+    "id": "msg-456",
+    "from": "EXYZabcdef9876543210",
+    "to": "EABCDEFabcdef1234567890",
+    "ct": "Z29vZGJ5ZSB3b3JsZA==",
+    "typ": "chat.text.v1",
+    "ek": "EKephemeral123",
+    "alg": "ECDH-ES+A256GCM",
+    "ttlMs": 60000,
+    "createdAt": 1700001000000,
+    "sig": [
+      "0-xyz789ghi012"
+    ],
+    "ksn": 1
+  }
+]"
+`;
+
+exports[`Message Formatters formats as text (no color) 1`] = `
+"From: EABCDEFabcdef1234567890
+To: EXYZabcdef9876543210
+Type: chat.text.v1
+Time: 2023-11-14 22:13:20
+Ciphertext: aGVsbG8gd29ybGQ=
+
+From: EXYZabcdef9876543210
+To: EABCDEFabcdef1234567890
+Type: chat.text.v1
+Time: 2023-11-14 22:30:00
+Ciphertext: Z29vZGJ5ZSB3b3JsZA==
+"
+`;
+
+exports[`Message Formatters formats as text (verbose, no color) 1`] = `
+"From: EABCDEFabcdef1234567890
+To: EXYZabcdef9876543210
+Type: chat.text.v1
+Time: 2023-11-14 22:13:20
+Ciphertext: aGVsbG8gd29ybGQ=
+ID: msg-123
+Signature: 0-abc123def456
+KSN: 0
+
+From: EXYZabcdef9876543210
+To: EABCDEFabcdef1234567890
+Type: chat.text.v1
+Time: 2023-11-14 22:30:00
+Ciphertext: Z29vZGJ5ZSB3b3JsZA==
+ID: msg-456
+Signature: 0-xyz789ghi012
+KSN: 1
+Ephemeral Key: EKephemeral123
+Algorithm: ECDH-ES+A256GCM
+"
+`;
+
+exports[`Message Formatters formats as compact (no color) 1`] = `
+"2023-11-14 22:13:20 EABCDEFab... [chat.text.v1] <encrypted: aGVsbG8gd29ybGQ=>
+2023-11-14 22:30:00 EXYZabcde... [chat.text.v1] <encrypted: Z29vZGJ5ZSB3b3JsZA==>"
+`;
+
+exports[`Identity Formatter formats identity as JSON 1`] = `
+"{
+  "name": "alice",
+  "aid": "EABCDEFabcdef1234567890",
+  "ksn": 0,
+  "metadata": {
+    "email": "alice@example.com",
+    "createdAt": 1700000000000
+  }
+}"
+`;
+
+exports[`Identity Formatter formats identity as text (no color) 1`] = `
+"Name: alice
+AID: EABCDEFabcdef1234567890
+KSN: 0"
+`;
+
+exports[`Identity Formatter formats identity as text (verbose, no color) 1`] = `
+"Name: alice
+AID: EABCDEFabcdef1234567890
+KSN: 0
+Metadata: {
+  "email": "alice@example.com",
+  "createdAt": 1700000000000
+}"
+`;
+
+exports[`Identity Formatter formats identity as compact 1`] = `"alice (EABCDEFabcdef1234567890) KSN=0"`;
+
+exports[`Group Formatter formats group as JSON 1`] = `
+"{
+  "id": "grp-123",
+  "name": "Test Group",
+  "members": [
+    "EABCDEFabcdef1234567890",
+    "EXYZabcdef9876543210",
+    "E123456789abcdef"
+  ],
+  "createdAt": 1700000000000
+}"
+`;
+
+exports[`Group Formatter formats group as text (no color) 1`] = `
+"ID: grp-123
+Name: Test Group
+Members: 3
+Created: 2023-11-14 22:13:20"
+`;
+
+exports[`Group Formatter formats group as text (verbose, no color) 1`] = `
+"ID: grp-123
+Name: Test Group
+Members: 3
+Created: 2023-11-14 22:13:20
+
+Member AIDs:
+  - EABCDEFabcdef1234567890
+  - EXYZabcdef9876543210
+  - E123456789abcdef"
+`;
+
+exports[`Group Formatter formats group as compact 1`] = `"Test Group (3 members) - 2023-11-14 22:13:20"`;
