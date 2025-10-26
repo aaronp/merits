@@ -6,15 +6,30 @@
 
 import { describe, test, expect } from "bun:test";
 import { createMeritsClient } from "../../src/client";
+import type { ResolvedConfig } from "../../cli/lib/config";
+
+// Helper to create test config
+function createTestConfig(url: string = "https://test.convex.cloud"): ResolvedConfig {
+  return {
+    backend: {
+      type: "convex",
+      url,
+    },
+    defaultIdentity: "test",
+    outputFormat: "text",
+    vaultPath: "/tmp/test-vault.json",
+  };
+}
 
 describe("Unified SDK", () => {
   test("createMeritsClient returns all interfaces", () => {
-    const client = createMeritsClient("https://test.convex.cloud");
+    const client = createMeritsClient(createTestConfig());
 
     // Verify all interfaces are present
-    expect(client.identity).toBeDefined();
+    expect(client.identityAuth).toBeDefined();
     expect(client.transport).toBeDefined();
     expect(client.group).toBeDefined();
+    expect(client.identityRegistry).toBeDefined();
     expect(client.router).toBeDefined();
 
     // Verify helpers are present
@@ -27,7 +42,7 @@ describe("Unified SDK", () => {
   });
 
   test("computeArgsHash produces deterministic output", () => {
-    const client = createMeritsClient("https://test.convex.cloud");
+    const client = createMeritsClient(createTestConfig());
 
     const hash1 = client.computeArgsHash({ a: 1, b: 2 });
     const hash2 = client.computeArgsHash({ b: 2, a: 1 }); // Different order
@@ -41,7 +56,7 @@ describe("Unified SDK", () => {
   });
 
   test("computeCtHash produces hex hash", () => {
-    const client = createMeritsClient("https://test.convex.cloud");
+    const client = createMeritsClient(createTestConfig());
 
     const ct = "Hello, world!";
     const hash = client.computeCtHash(ct);
@@ -58,7 +73,7 @@ describe("Unified SDK", () => {
   });
 
   test("router is functional", () => {
-    const client = createMeritsClient("https://test.convex.cloud");
+    const client = createMeritsClient(createTestConfig());
 
     const handled: string[] = [];
 
@@ -73,7 +88,7 @@ describe("Unified SDK", () => {
   });
 
   test("close() closes underlying client", () => {
-    const client = createMeritsClient("https://test.convex.cloud");
+    const client = createMeritsClient(createTestConfig());
 
     // Should not throw
     expect(() => client.close()).not.toThrow();

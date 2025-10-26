@@ -62,8 +62,8 @@ export async function getAuthProof(params: {
   // Get identity metadata (no private key)
   const identity = await vault.getIdentity(identityName);
 
-  // Issue challenge
-  const challenge = await client.identity.issueChallenge({
+  // Issue challenge via IdentityAuth interface (backend-agnostic)
+  const challenge = await client.identityAuth.issueChallenge({
     aid: identity.aid,
     purpose: purpose as any, // Cast for now, will be refined in future
     args,

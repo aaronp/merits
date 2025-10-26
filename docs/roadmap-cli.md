@@ -21,8 +21,9 @@ This roadmap tracks the implementation of the **Merits CLI** - a production-read
 | Phase | Focus | Timeline | Status |
 |-------|-------|----------|--------|
 | 1 | [Core Infrastructure](#phase-1-core-infrastructure) | Week 1 | ✅ Complete |
-| 2 | [Identity Management](#phase-2-identity-management) | Week 1-2 | ⏳ Pending |
-| 3 | [Messaging Commands](#phase-3-messaging-commands) | Week 2-3 | ⏳ Pending |
+| 2 | [Identity Management](#phase-2-identity-management) | Week 1-2 | ✅ Complete |
+| 3 | [Messaging Commands](#phase-3-messaging-commands) | Week 2-3 | ✅ Complete |
+| 3.5 | [Testing Infrastructure](#phase-35-testing-infrastructure) | Week 3 | 📋 Next |
 | 4 | [Streaming & Groups](#phase-4-streaming--groups) | Week 3-4 | ⏳ Pending |
 | 5 | [Admin & Interactive](#phase-5-admin--interactive) | Week 4-5 | ⏳ Pending |
 | 6 | [Publishing & Docs](#phase-6-publishing--docs) | Week 5-6 | ⏳ Pending |
@@ -110,7 +111,19 @@ cli/
 - Can register with Convex backend
 - Integration tests passing
 
-**Documentation**: [cli-phase-2.md](./cli-phase-2.md)
+**Documentation**: [cli-phase-2.md](./cli-phase-2.md) ✅ **COMPLETE**
+
+**Phase 2 Achievements**:
+- ✅ Backend-agnostic architecture (`MeritsClient` interface)
+- ✅ 9 identity commands implemented and tested
+- ✅ Vault enhancements (`updateMetadata`, `getPublicKey`)
+- ✅ Interactive setup wizard (`merits init`)
+- ✅ All 41 CLI tests passing
+- ✅ Security: Private keys never leave vault
+- ✅ UX: Multiple output formats, colored output, helpful errors
+
+**Files Created**: 19 new files (commands, client interfaces, tests)
+**Tests**: 41/41 passing (100%)
 
 ---
 
@@ -166,7 +179,372 @@ echo "Deploy complete" | merits send --to bob
 - Piping input/output works
 - All output formats tested
 
-**Documentation**: [cli-phase-3.md](./cli-phase-3.md) (to be created)
+**Documentation**: [cli-phase-3.md](./cli-phase-3.md) ✅
+
+**Phase 3 Achievements**:
+- ✅ 3 messaging commands implemented (`send`, `receive`, `ack`)
+- ✅ Single-proof auth operations
+- ✅ Silent JSON mode for scripting
+- ✅ Piping support (stdin/stdout)
+- ✅ All 51 unit tests passing
+- ✅ Interface alignment with core types
+- ✅ Crypto helpers added (`canonicalizeToBytes`, `sha256Hex`)
+
+**Files Created**: 6 new files (commands + tests)
+**Tests**: 51/51 unit tests passing, integration tests created
+
+---
+
+## Phase 3.5: Testing Infrastructure
+
+**Goal**: Local data directories for isolated, reproducible end-to-end testing
+
+**Duration**: Week 3 (1-2 days)
+
+**Motivation**:
+Currently, the CLI uses global paths (`~/.merits/`) which makes it difficult to:
+- Run parallel tests without conflicts
+- Create isolated test scenarios (Alice + Bob messaging)
+- Debug test failures (data mixed with personal identities)
+- Clean up after tests (must manually delete specific identities)
+
+**Solution**: Add `--dir` option to confine all data to a specific directory.
+
+### Key Features
+
+**1. Data Directory Override**
+
+Add global `--dir <path>` option:
+
+```bash
+# Use custom data directory
+merits --dir ./test-data/alice identity new alice
+merits --dir ./test-data/alice send <bob-aid> --message "Hello"
+
+# Environment variable alternative
+export MERITS_DATA_DIR=./test-data/alice
+merits identity new alice
+
+# Default behavior unchanged (uses ~/.merits/)
+merits identity list
+```
+
+**Directory structure when `--dir` is set:**
+```
+./test-data/alice/
+├── config.json           # Config (was ~/.merits/config.json)
+├── identities.json       # Vault metadata (was ~/.merits/identities.json)
+└── keychain/             # Encrypted keys (fallback if OS keychain unavailable)
+    └── alice.key         # Encrypted private key
+```
+
+**2. Config Changes**
+
+Update [cli/lib/config.ts](../cli/lib/config.ts):
+
+```typescript
+export interface MeritsConfig {
+  // NEW: Data directory override
+  dataDir?: string;
+
+  backend?: {
+    type: "convex" | "rest" | "local";
+    url: string;
+  };
+  // ... existing fields
+}
+
+// Resolve paths based on dataDir
+export function resolveConfigPath(config: MeritsConfig): string {
+  const baseDir = config.dataDir || path.join(os.homedir(), ".merits");
+  return path.join(baseDir, "config.json");
+}
+
+export function resolveVaultPath(config: MeritsConfig): string {
+  const baseDir = config.dataDir || path.join(os.homedir(), ".merits");
+  return path.join(baseDir, "identities.json");
+}
+```
+
+**Precedence** (highest to lowest):
+1. `--dir` CLI flag
+2. `MERITS_DATA_DIR` environment variable
+3. Config file `dataDir` field
+4. Default: `~/.merits/`
+
+**3. Vault Fallback Mode**
+
+For testing without OS keychain, add file-based encrypted vault:
+
+```typescript
+// cli/lib/vault/FileVault.ts (NEW)
+export class FileVault implements MeritsVault {
+  constructor(
+    private metadataPath: string,  // identities.json
+    private keychainDir: string    // ./keychain/
+  ) {}
+
+  async storeIdentity(name: string, identity: IdentityData): Promise<void> {
+    // Encrypt private key with deterministic password
+    const encrypted = await encrypt(identity.privateKey, this.getPassword());
+
+    // Write to ./keychain/{name}.key
+    await fs.writeFile(
+      path.join(this.keychainDir, `${name}.key`),
+      encrypted,
+      { mode: 0o600 }
+    );
+
+    // Store metadata as usual
+    // ...
+  }
+
+  private getPassword(): string {
+    // Deterministic password from environment or config
+    return process.env.MERITS_VAULT_PASSWORD || "test-password-insecure";
+  }
+}
+```
+
+**Vault selection logic:**
+```typescript
+// cli/lib/vault/index.ts
+export function createVault(config: ResolvedConfig): MeritsVault {
+  const metadataPath = resolveVaultPath(config);
+
+  // If dataDir is set, prefer FileVault for testing
+  if (config.dataDir) {
+    const keychainDir = path.join(config.dataDir, "keychain");
+    return new FileVault(metadataPath, keychainDir);
+  }
+
+  // Otherwise use OS Keychain
+  return new OSKeychainVault(metadataPath, "merits-cli");
+}
+```
+
+**Security Note**: FileVault is **insecure by design** (for testing only). Production should use OS Keychain.
+
+### End-to-End Test Examples
+
+**Test 1: Alice sends to Bob**
+
+```typescript
+// tests/cli/e2e/messaging.test.ts
+import { describe, test, expect, beforeEach, afterEach } from "bun:test";
+import { mkdtemp, rm } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { $ } from "bun";
+
+describe("E2E Messaging", () => {
+  let testDir: string;
+  let aliceDir: string;
+  let bobDir: string;
+
+  beforeEach(async () => {
+    // Create temp directory
+    testDir = await mkdtemp(join(tmpdir(), "merits-test-"));
+    aliceDir = join(testDir, "alice");
+    bobDir = join(testDir, "bob");
+  });
+
+  afterEach(async () => {
+    // Cleanup
+    await rm(testDir, { recursive: true, force: true });
+  });
+
+  test("alice sends message to bob", async () => {
+    // Setup Alice
+    await $`bun run cli --dir ${aliceDir} identity new alice --no-register`;
+    const aliceShow = await $`bun run cli --dir ${aliceDir} identity show alice --format json`.json();
+    const aliceAid = aliceShow.aid;
+
+    // Setup Bob
+    await $`bun run cli --dir ${bobDir} identity new bob --no-register`;
+    const bobShow = await $`bun run cli --dir ${bobDir} identity show bob --format json`.json();
+    const bobAid = bobShow.aid;
+
+    // Alice sends to Bob
+    const sendResult = await $`bun run cli --dir ${aliceDir} send ${bobAid} --message "Hello Bob" --format json`.json();
+    expect(sendResult.messageId).toBeDefined();
+
+    // Bob receives
+    const receiveResult = await $`bun run cli --dir ${bobDir} receive --plaintext --format json`.json();
+    expect(receiveResult).toHaveLength(1);
+    expect(receiveResult[0].plaintext).toBe("Hello Bob");
+    expect(receiveResult[0].from).toBe(aliceAid);
+
+    // Bob acknowledges
+    await $`bun run cli --dir ${bobDir} ack ${receiveResult[0].id} --envelope-hash ${receiveResult[0].envelopeHash}`;
+  });
+
+  test("parallel test isolation", async () => {
+    // Run two isolated scenarios in parallel
+    await Promise.all([
+      testScenario(join(testDir, "scenario1")),
+      testScenario(join(testDir, "scenario2"))
+    ]);
+  });
+});
+
+async function testScenario(dataDir: string) {
+  await $`bun run cli --dir ${dataDir} identity new user`;
+  const result = await $`bun run cli --dir ${dataDir} identity list --format json`.json();
+  expect(result.identities).toHaveLength(1);
+}
+```
+
+**Test 2: Group messaging**
+
+```typescript
+test("group message fanout", async () => {
+  const aliceDir = join(testDir, "alice");
+  const bobDir = join(testDir, "bob");
+  const carolDir = join(testDir, "carol");
+
+  // Create three identities
+  await $`bun run cli --dir ${aliceDir} identity new alice`;
+  await $`bun run cli --dir ${bobDir} identity new bob`;
+  await $`bun run cli --dir ${carolDir} identity new carol`;
+
+  // Alice creates group
+  const groupResult = await $`bun run cli --dir ${aliceDir} group create test-group --format json`.json();
+  const groupId = groupResult.groupId;
+
+  // Add Bob and Carol
+  await $`bun run cli --dir ${aliceDir} group add ${groupId} ${bobAid}`;
+  await $`bun run cli --dir ${aliceDir} group add ${groupId} ${carolAid}`;
+
+  // Alice sends to group
+  await $`bun run cli --dir ${aliceDir} send ${groupId} --message "Hello group"`;
+
+  // Bob and Carol both receive
+  const bobMessages = await $`bun run cli --dir ${bobDir} receive --plaintext --format json`.json();
+  const carolMessages = await $`bun run cli --dir ${carolDir} receive --plaintext --format json`.json();
+
+  expect(bobMessages[0].plaintext).toBe("Hello group");
+  expect(carolMessages[0].plaintext).toBe("Hello group");
+});
+```
+
+**Test 3: Data directory persistence**
+
+```typescript
+test("data persists across CLI invocations", async () => {
+  const dataDir = join(testDir, "persistent");
+
+  // First invocation: create identity
+  await $`bun run cli --dir ${dataDir} identity new alice`;
+
+  // Second invocation: identity still exists
+  const result = await $`bun run cli --dir ${dataDir} identity list --format json`.json();
+  expect(result.identities).toHaveLength(1);
+  expect(result.identities[0].name).toBe("alice");
+
+  // Third invocation: can send messages
+  await $`bun run cli --dir ${dataDir} send ${bobAid} --message "Test"`;
+});
+```
+
+### Implementation Checklist
+
+**Config System:**
+- [ ] Add `dataDir` field to `MeritsConfig`
+- [ ] Add `--dir` CLI flag to program options
+- [ ] Add `MERITS_DATA_DIR` environment variable
+- [ ] Update `resolveConfigPath()` and `resolveVaultPath()`
+- [ ] Update 4-layer precedence handling
+
+**Vault System:**
+- [ ] Create `FileVault` implementation for testing
+- [ ] Update `createVault()` to choose based on `dataDir`
+- [ ] Add `MERITS_VAULT_PASSWORD` environment variable
+- [ ] Ensure file permissions (0600) on keychain files
+- [ ] Add vault type to debug output
+
+**CLI Entry Point:**
+- [ ] Add `--dir` to global options
+- [ ] Pass `dataDir` to config loader
+- [ ] Update help text with `--dir` examples
+
+**Documentation:**
+- [ ] Update CLI README with `--dir` usage
+- [ ] Add testing guide with examples
+- [ ] Document FileVault security warnings
+
+**Tests:**
+- [ ] E2E messaging test (Alice → Bob)
+- [ ] E2E group messaging test
+- [ ] Parallel test isolation test
+- [ ] Data persistence test
+- [ ] FileVault unit tests
+
+### Success Criteria
+
+- ✅ Can run CLI with `--dir` and all data confined to that directory
+- ✅ Can run parallel tests without conflicts
+- ✅ E2E tests written as CLI commands (no direct API calls)
+- ✅ Test cleanup is simple: `rm -rf test-data-{tmp}/`
+- ✅ Tests can be paused/resumed for debugging
+- ✅ FileVault works for CI environments without OS keychain
+
+### Benefits
+
+**For Testing:**
+- Complete test isolation (no shared state)
+- Parallel test execution
+- Easy cleanup (`rm -rf`)
+- Reproducible scenarios
+- Debug-friendly (inspect data directories)
+
+**For Development:**
+- Test different configurations side-by-side
+- Simulate multi-user scenarios locally
+- Quick reset without affecting personal data
+
+**For CI/CD:**
+- No OS keychain dependency
+- Deterministic test environments
+- Easy to package test fixtures
+
+### Security Considerations
+
+**FileVault is INSECURE:**
+- Uses deterministic password
+- Keys stored on disk (encrypted but weak)
+- Only for testing/development
+
+**Never use FileVault in production:**
+- CLI should warn if FileVault is active
+- Documentation should emphasize OS Keychain for production
+
+**Warning message:**
+```
+⚠️  WARNING: Using file-based vault (INSECURE)
+   This is for testing only. Production should use OS Keychain.
+   Set MERITS_VAULT_PASSWORD to change encryption password.
+```
+
+### Files to Create/Modify
+
+```
+cli/
+├── lib/
+│   ├── config.ts              # MODIFY: Add dataDir support
+│   └── vault/
+│       ├── FileVault.ts       # NEW: File-based vault for testing
+│       └── index.ts           # MODIFY: Vault selection logic
+
+tests/cli/
+└── e2e/                       # NEW: End-to-end test directory
+    ├── messaging.test.ts      # NEW: Messaging E2E tests
+    ├── groups.test.ts         # NEW: Group E2E tests
+    └── helpers/
+        └── cli-runner.ts      # NEW: CLI test helpers
+```
+
+**Documentation**: [cli-phase-3.5.md](./cli-phase-3.5.md) (to be created)
 
 ---
 
@@ -504,11 +882,12 @@ export async function runCLI(args: string[]) {
 
 ---
 
-**Current Status**: ✅ Phase 1 Complete | 📋 Phase 2 Ready
+**Current Status**: ✅ Phase 2 Complete | 📋 Phase 3 Ready
 
 **Next Steps**:
 1. ✅ ~~Phase 1 (Core Infrastructure)~~ - Complete!
-2. Begin Phase 2 (Identity Management)
-3. Create [cli-phase-2-complete.md](./cli-phase-2-complete.md) when done
+2. ✅ ~~Phase 2 (Identity Management)~~ - Complete! (41/41 tests passing)
+3. Begin Phase 3 (Messaging Commands)
+4. Create [cli-phase-3-complete.md](./cli-phase-3-complete.md) when done
 
 **Last Updated**: 2025-10-26

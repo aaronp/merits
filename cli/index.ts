@@ -106,6 +106,9 @@ import { setDefaultIdentity } from "./commands/identity/set-default";
 import { exportIdentity } from "./commands/identity/export";
 import { importIdentity } from "./commands/identity/import";
 import { deleteIdentity } from "./commands/identity/delete";
+import { sendMessage } from "./commands/send";
+import { receiveMessages } from "./commands/receive";
+import { ackMessage } from "./commands/ack";
 
 // Init command (first-time setup)
 program
@@ -169,19 +172,39 @@ identityCmd
   .option("--force", "Skip confirmation prompt")
   .action(deleteIdentity);
 
+// Send command
 program
-  .command("send")
-  .description("Send a message")
-  .action(() => {
-    console.log("Send command coming in Milestone 2!");
-  });
+  .command("send <recipient>")
+  .description("Send encrypted message to recipient")
+  .option("--message <text>", "Message text (or use stdin)")
+  .option("--ct <ciphertext>", "Pre-encrypted message (base64)")
+  .option("--encrypt-for <aid>", "Encrypt for third party (forwarding)")
+  .option("--from <identity>", "Sender identity (default: config.defaultIdentity)")
+  .option("--ttl <ms>", "Time-to-live in milliseconds (default: 24h)", parseInt)
+  .option("--typ <type>", "Message type")
+  .option("--ek <key>", "Ephemeral key")
+  .option("--alg <algorithm>", "Encryption algorithm")
+  .option("--format <type>", "Output format (json|text|compact)")
+  .action(sendMessage);
 
+// Receive command
 program
   .command("receive")
-  .description("Receive messages")
-  .action(() => {
-    console.log("Receive command coming in Milestone 2!");
-  });
+  .description("Retrieve and display messages")
+  .option("--from <identity>", "Receive as this identity (default: config.defaultIdentity)")
+  .option("--mark-read", "Acknowledge messages after receiving")
+  .option("--format <type>", "Output format (json|text|compact)")
+  .option("--limit <n>", "Maximum messages to retrieve", parseInt)
+  .option("--plaintext", "Decrypt and show plaintext")
+  .action(receiveMessages);
+
+// Ack command
+program
+  .command("ack <message-id>")
+  .description("Acknowledge message receipt")
+  .requiredOption("--envelope-hash <hash>", "Envelope hash to sign (required for non-repudiation)")
+  .option("--from <identity>", "Identity acknowledging (default: config.defaultIdentity)")
+  .action(ackMessage);
 
 program
   .command("group")

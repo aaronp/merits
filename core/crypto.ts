@@ -178,6 +178,25 @@ export function sha256Hex(data: Uint8Array): string {
     .join("");
 }
 
+/**
+ * Canonicalize payload to bytes for signing
+ * (deterministic JSON encoding with sorted keys)
+ */
+export function canonicalizeToBytes(payload: any): Uint8Array {
+  const sorted = JSON.stringify(payload, Object.keys(payload).sort());
+  return new TextEncoder().encode(sorted);
+}
+
+/**
+ * Get public key from private key
+ * (wrapper around @noble/ed25519)
+ */
+export async function getPublicKeyFromPrivate(
+  privateKey: Uint8Array
+): Promise<Uint8Array> {
+  return await ed.getPublicKeyAsync(privateKey);
+}
+
 // ============================================================================
 // Base64URL Encoding
 // ============================================================================

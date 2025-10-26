@@ -31,14 +31,6 @@ make help
 - **`make summarise`** - Generate CLI summary and copy to clipboard
 - **`make help`** - Show available targets
 
-### Test Results
-
-Current test coverage (Milestone 0):
-- **41/41 tests passing** (100% success rate)
-- **85.3% line coverage** overall
-- **100% coverage** on config.ts
-- **95.65% coverage** on OSKeychainVault.ts
-- **86.71% coverage** on formatters.ts
 
 ### Project Structure
 
@@ -47,20 +39,38 @@ cli/
 ├── Makefile              # Development tasks
 ├── README.md            # This file
 ├── index.ts             # CLI entry point
+├── commands/
+│   ├── init.ts          # First-time setup wizard
+│   ├── send.ts          # Send messages (Phase 3)
+│   ├── receive.ts       # Receive messages (Phase 3)
+│   ├── ack.ts           # Acknowledge messages (Phase 3)
+│   └── identity/
+│       ├── new.ts       # Create identity
+│       ├── list.ts      # List identities
+│       ├── show.ts      # Show identity details
+│       ├── register.ts  # Register with backend
+│       ├── set-default.ts
+│       ├── export.ts    # Export for backup
+│       ├── import.ts    # Import from backup
+│       └── delete.ts    # Delete identity
 ├── lib/
 │   ├── config.ts        # Configuration management
 │   ├── context.ts       # CLI context
 │   ├── formatters.ts    # Output formatters
-│   ├── getAuthProof.ts  # Auth helper
+│   ├── getAuthProof.ts  # Auth helper (Phase 2+)
 │   └── vault/
 │       ├── index.ts            # Vault factory
 │       ├── MeritsVault.ts      # Vault interface
 │       └── OSKeychainVault.ts  # OS Keychain implementation
 └── tests/
-    └── cli/unit/
-        ├── config.test.ts      # Config tests
-        ├── formatters.test.ts  # Formatter tests
-        └── vault.test.ts       # Vault tests
+    └── cli/
+        ├── unit/
+        │   ├── config.test.ts          # Config tests
+        │   ├── formatters.test.ts      # Formatter tests
+        │   ├── vault.test.ts           # Vault tests
+        │   └── messaging-auth.test.ts  # Messaging auth tests (Phase 3)
+        └── integration/
+            └── messaging.test.ts        # E2E messaging tests (Phase 3)
 ```
 
 ## Usage
@@ -74,10 +84,14 @@ bun run cli
 # Show help
 bun run cli --help
 
-# Example commands (Milestone 1+)
-bun run cli identity new alice
-bun run cli identity list
-bun run cli send --to bob --message "Hello!"
+# Example commands
+bun run cli init                                           # First-time setup
+bun run cli identity new alice                             # Create identity
+bun run cli identity list                                  # List identities
+bun run cli send <recipient-aid> --message "Hello Bob!"    # Send message
+bun run cli receive --plaintext                            # Receive messages
+bun run cli receive --plaintext --mark-read                # Receive and ack
+bun run cli ack <msg-id> --envelope-hash <hash>            # Acknowledge message
 ```
 
 ### Global Options
@@ -92,37 +106,47 @@ bun run cli send --to bob --message "Hello!"
 
 ## Implementation Status
 
-### ✅ Milestone 0 (Complete)
+### ✅ Phase 1: Identity Management (Complete)
 
-- [x] CLI framework (Commander.js)
-- [x] MeritsVault interface
-- [x] OSKeychainVault implementation
-- [x] Config management (4-layer precedence)
-- [x] Output formatters (JSON/text/compact)
-- [x] Auth helper (`getAuthProof`)
-- [x] Unit tests with 100% pass rate
+- [x] `identity new` - Generate new identity
+- [x] `identity list` - List all identities
+- [x] `identity show` - Show identity details
+- [x] `identity register` - Register with backend
+- [x] `identity set-default` - Set default identity
+- [x] `identity export` - Export identity for backup
+- [x] `identity import` - Import identity from backup
+- [x] `identity delete` - Delete identity
+- [x] `init` - First-time setup wizard
 
-### 🚧 Milestone 1 (Next)
+### ✅ Phase 2: Backend-Agnostic Architecture (Complete)
 
-- [ ] `identity new` - Generate new identity
-- [ ] `identity list` - List all identities
-- [ ] `identity show` - Show identity details
-- [ ] `identity export` - Export private key
-- [ ] `identity delete` - Delete identity
-- [ ] Key rotation ceremony
+- [x] MeritsClient interface (transport, identityAuth, group, identityRegistry)
+- [x] Factory pattern for backend selection
+- [x] Convex backend implementation
+- [x] Config refactored to `backend: { type, url }`
+- [x] Vault enhancements (updateMetadata, getPublicKey)
 
-### 📋 Milestone 2
+### ✅ Phase 3: Messaging Commands (Complete)
 
-- [ ] `send` - Send message
-- [ ] `receive` - Receive messages
-- [ ] Message encryption/decryption
+- [x] `send <recipient>` - Send encrypted message
+- [x] `receive` - Retrieve and display messages
+- [x] `ack <message-id>` - Acknowledge message receipt
+- [x] Single-proof auth operations
+- [x] JSON mode (silent, scriptable)
+- [x] Piping support
+- [x] Unit tests (51/51 passing)
+- [x] Integration tests
 
-### 📋 Milestone 3
+**Note**: Phase 3 encryption is a placeholder (base64). Real encryption deferred to Phase 4.
 
-- [ ] `watch` - Watch for incoming messages
+### 📋 Phase 4: Streaming & Groups (Next)
+
+- [ ] `watch` - Real-time message streaming
+- [ ] Real encryption (ECDH-ES + AES-GCM)
+- [ ] Public key registry lookup
 - [ ] `group create` - Create group
 - [ ] `group` commands - Group management
-- [ ] Session tokens
+- [ ] Session tokens for batch operations
 
 ## Architecture
 
@@ -145,10 +169,13 @@ The vault uses a **pluggable architecture** with OS-native credential storage:
 
 ### Auth Flow
 
-1. Issue challenge via `client.identity.issueChallenge()`
-2. Sign payload with vault (key stays in vault)
-3. Return `AuthProof` with signature + challenge ID
-4. Submit to mutation
+1. Issue challenge via `client.identityAuth.issueChallenge()`
+2. Canonicalize payload with `canonicalizeToBytes()`
+3. Sign with vault using `vault.signIndexed()` (key never leaves vault)
+4. Return `AuthProof` with signature + challenge ID + KSN
+5. Submit to backend mutation
+
+**Key Principle**: Private keys NEVER leave the vault. All signing happens inside the vault.
 
 ## Dependencies
 
@@ -160,10 +187,11 @@ The vault uses a **pluggable architecture** with OS-native credential storage:
 
 ## Documentation
 
-- [CLI Design Plan](../docs/cli-plan.md)
-- [Roadmap](../docs/roadmap-cli.md)
-- [Milestone 0 Details](../docs/cli-phase-1.md)
-- [Milestone 0 Complete](../docs/cli-milestone-0-complete.md)
+- [CLI Roadmap](../docs/roadmap-cli.md)
+- [Phase 1: Identity Management](../docs/cli-phase-1.md)
+- [Phase 2: Backend-Agnostic Architecture](../docs/cli-phase-2.md)
+- [Phase 3: Messaging Commands](../docs/cli-phase-3.md) ✅ Current
+- [Phase 2 Review](../docs/phase2-review.md)
 
 ## Contributing
 
