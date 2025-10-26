@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-watch test-coverage install dev cli clean summarise
+.PHONY: test test-unit test-integration test-watch test-coverage install dev cli clean summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -47,10 +47,18 @@ cli:
 clean:
 	rm -rf node_modules
 	rm -rf convex/_generated
+	rm -rf coverage
 	rm -f merits-summary.txt
+	rm -f core-summary.txt
 
 # Generate summary of convex files and copy to clipboard
 summarise:
+	@echo "📝 Generating core summary..."
+	@./scripts/summariseCore.sh | pbcopy
+	@echo "✅ Summary copied to clipboard"
+
+# Generate summary of convex backend files
+summarise-convex:
 	@./scripts/summarise.sh
 	@cat merits-summary.txt | pbcopy
 	@echo "Summary copied to clipboard"

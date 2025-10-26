@@ -353,16 +353,15 @@ export function mockDecrypt(ciphertext: string): string {
 }
 
 /**
- * Unified Merits Client
+ * LEGACY: Unified Merits Client (backward compatibility)
  *
- * Provides a single entry point for all Merits operations:
- * - identity: Challenge/response authentication
- * - transport: Message send/receive/ack/subscribe
- * - group: Group management and messaging
- * - router: Application-level message routing
- * - helpers: Common operations (createAuth, computeArgsHash)
+ * @deprecated Use the new backend-agnostic client from ./client/index.ts
+ *
+ * This legacy interface is kept for backward compatibility with existing code.
+ * New code should use createMeritsClient from ./client/index.ts which supports
+ * multiple backends (Convex, REST, local).
  */
-export interface MeritsClient {
+export interface LegacyMeritsClient {
   /** Identity authentication (challenge/response) */
   identity: IdentityAuth;
 
@@ -393,25 +392,25 @@ export interface MeritsClient {
 }
 
 /**
- * Create a unified Merits client
+ * LEGACY: Create a unified Merits client (Convex only)
+ *
+ * @deprecated Use the new backend-agnostic createMeritsClient from ./client/index.ts
  *
  * @param convexUrl - Convex deployment URL
- * @returns MeritsClient with all interfaces and helpers
+ * @returns LegacyMeritsClient for backward compatibility
  *
  * @example
  * ```typescript
+ * // OLD (deprecated):
  * const client = createMeritsClient(process.env.CONVEX_URL);
  *
- * // Use interfaces directly
- * const challenge = await client.identity.issueChallenge({...});
- * await client.transport.sendMessage({...});
- * await client.group.createGroup({...});
- *
- * // Or use helpers
- * const auth = await client.createAuth(credentials, "send", {...});
+ * // NEW (recommended):
+ * import { createMeritsClient } from "./client";
+ * const config = loadConfig();
+ * const client = createMeritsClient(config);
  * ```
  */
-export function createMeritsClient(convexUrl: string): MeritsClient {
+export function createLegacyMeritsClient(convexUrl: string): LegacyMeritsClient {
   const convex = new ConvexClient(convexUrl);
   const identity = new ConvexIdentityAuth(convex);
   const transport = new ConvexTransport(convex);
@@ -463,3 +462,7 @@ export function createMeritsClient(convexUrl: string): MeritsClient {
     },
   };
 }
+
+// Re-export new client for convenience
+export { createMeritsClient } from "./client/index";
+export type { MeritsClient } from "./client/types";
