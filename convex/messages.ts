@@ -164,18 +164,24 @@ export const receive = mutation({
 /**
  * Mark a message as retrieved (acknowledge receipt) - authenticated
  *
+ * Phase 4: Accepts either auth proof OR session token
+ *
  * SECURITY: Stores recipient's signature over envelopeHash for non-repudiable
  * proof of delivery.
  */
 export const acknowledge = mutation({
   args: {
     messageId: v.id("messages"),
-    receipt: v.array(v.string()), // Recipient signs envelopeHash
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
-    }),
+    receipt: v.optional(v.array(v.string())), // Recipient signs envelopeHash (optional)
+    // Phase 4: Accept either auth OR sessionToken
+    auth: v.optional(
+      v.object({
+        challengeId: v.id("challenges"),
+        sigs: v.array(v.string()),
+        ksn: v.number(),
+      })
+    ),
+    sessionToken: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     // Fetch message to get recpAid
@@ -184,19 +190,33 @@ export const acknowledge = mutation({
       throw new Error("Message not found");
     }
 
-    // Verify authentication - argsHash binds to recpAid + messageId
-    const verified = await verifyAuth(
-      ctx,
-      args.auth,
-      "ack",
-      {
+    let verifiedAid: string;
+    let verifiedKsn: number;
+    let verifiedEvtSaid: string | undefined;
+
+    // Phase 4: Support both auth proof and session token
+    if (args.sessionToken) {
+      // Validate session token
+      const { validateSessionToken } = await import("./sessions");
+      const session = await validateSessionToken(ctx, args.sessionToken, "ack");
+      verifiedAid = session.aid;
+      verifiedKsn = session.ksn;
+      // evtSaid not available from session token (could be added if needed)
+    } else if (args.auth) {
+      // Traditional auth proof
+      const verified = await verifyAuth(ctx, args.auth, "ack", {
         recpAid: message.recpAid,
         messageId: args.messageId,
-      }
-    );
+      });
+      verifiedAid = verified.aid;
+      verifiedKsn = verified.ksn;
+      verifiedEvtSaid = verified.evtSaid;
+    } else {
+      throw new Error("Must provide either auth or sessionToken");
+    }
 
     // SECURITY: Ensure the verified AID matches the recipient
-    if (verified.aid !== message.recpAid) {
+    if (verifiedAid !== message.recpAid) {
       throw new Error("Cannot acknowledge message for different AID");
     }
 
@@ -210,8 +230,8 @@ export const acknowledge = mutation({
     await ctx.db.patch(args.messageId, {
       retrieved: true,
       receiptSig: args.receipt,
-      receiptKsn: verified.ksn,
-      receiptEvtSaid: verified.evtSaid,
+      receiptKsn: verifiedKsn,
+      receiptEvtSaid: verifiedEvtSaid,
     });
   },
 });

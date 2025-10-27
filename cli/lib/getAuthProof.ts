@@ -81,29 +81,80 @@ export async function getAuthProof(params: {
 }
 
 /**
- * Get session token (Milestone 3 placeholder)
+ * Get session token for streaming operations (Phase 4)
  *
- * Session tokens allow streaming receive + batch ack without
- * issuing a fresh proof for every message.
+ * Session tokens are scoped bearer tokens that allow streaming
+ * receive + batch ack without repeated signing.
+ *
+ * Security properties:
+ * - Short-lived (max 60s)
+ * - Scoped to specific operations
+ * - KSN-bound (invalidated on key rotation)
+ * - Each refresh requires new vault signature
  *
  * @param params.client - Merits client
  * @param params.vault - Vault for signing
  * @param params.identityName - Identity name in vault
  * @param params.scopes - Token scopes (e.g., ['receive', 'ack'])
- * @param params.ttl - Token lifetime in ms (max 60s)
- * @returns Session token + expiration
+ * @param params.ttlMs - Token lifetime in milliseconds (max 60000)
+ * @returns Session token + expiration timestamp
  *
- * @throws Error - Not yet implemented
+ * @example
+ * ```typescript
+ * const { sessionToken, expiresAt } = await getSessionToken({
+ *   client,
+ *   vault,
+ *   identityName: 'alice',
+ *   scopes: ['receive', 'ack'],
+ *   ttlMs: 60000, // 60 seconds
+ * });
+ *
+ * // Use token for streaming without repeated signing
+ * await client.transport.subscribe({
+ *   for: aliceAid,
+ *   sessionToken,
+ *   autoAck: true,
+ *   onMessage: async (msg) => { / * process message * / }
+ * });
+ * ```
  */
 export async function getSessionToken(params: {
   client: MeritsClient;
   vault: MeritsVault;
   identityName: string;
-  scopes: string[];
-  ttl?: number;
+  scopes: ("receive" | "ack")[];
+  ttlMs?: number;
 }): Promise<{ sessionToken: string; expiresAt: number }> {
-  // TODO: Implement in Milestone 3
-  throw new Error("Session tokens not yet implemented (Milestone 3)");
+  const { client, vault, identityName, scopes, ttlMs = 60000 } = params;
+
+  // Get identity metadata (no private key)
+  const identity = await vault.getIdentity(identityName);
+
+  // Issue auth proof for session creation
+  // Purpose: "openSession" (Phase 4)
+  const auth = await getAuthProof({
+    client,
+    vault,
+    identityName,
+    purpose: "openSession",
+    args: {
+      scopes,
+      ttlMs,
+    },
+  });
+
+  // Create session via Transport interface
+  const session = await client.transport.openSession({
+    aid: identity.aid,
+    scopes,
+    ttlMs,
+    auth,
+  });
+
+  return {
+    sessionToken: session.token,
+    expiresAt: session.expiresAt,
+  };
 }
 
 /**

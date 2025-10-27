@@ -28,7 +28,12 @@
       "Bash(node:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/messaging-flow.test.ts --timeout 20000)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/onboarding-flow.test.ts --timeout 20000)",
-      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/ --timeout 20000)"
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/ --timeout 20000)",
+      "Bash(echo:*)",
+      "Bash(export MERITS_VAULT_QUIET=1)",
+      "Bash(timeout:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/cli/e2e/watch.test.ts --timeout 60000)",
+      "Bash(find:*)"
     ],
     "deny": [],
     "ask": []

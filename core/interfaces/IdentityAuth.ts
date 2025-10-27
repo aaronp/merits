@@ -19,7 +19,8 @@ export type Purpose =
   | "ack"         // Acknowledge message receipt
   | "admin"       // Admin operations
   | "sendGroup"   // Send group message
-  | "manageGroup"; // Create/update group
+  | "manageGroup" // Create/update group
+  | "openSession"; // Phase 4: Create session token for streaming
 
 /**
  * Request to issue an authentication challenge

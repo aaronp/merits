@@ -143,4 +143,21 @@ export default defineSchema({
     .index("by_group", ["groupId", "seqNum"])
     .index("by_group_time", ["groupId", "createdAt"])
     .index("by_expiration", ["expiresAt"]),
+
+  // Phase 4: Session Tokens - Short-lived bearer tokens for streaming operations
+  sessionTokens: defineTable({
+    token: v.string(), // Cryptographically random token (64 bytes hex)
+    aid: v.string(), // AID this token is bound to
+    ksn: v.number(), // Key sequence number at token issuance (invalidated on rotation)
+    scopes: v.array(v.string()), // Operations allowed: ["receive", "ack"]
+    createdAt: v.number(), // Token creation timestamp
+    expiresAt: v.number(), // Token expiry (max 60s from creation)
+    usedChallengeId: v.id("challenges"), // Challenge that authorized token creation
+    // Audit trail
+    lastUsedAt: v.optional(v.number()), // Last time token was used
+    useCount: v.number(), // Number of times token has been used
+  })
+    .index("by_token", ["token"]) // Fast lookup by token string
+    .index("by_aid", ["aid"]) // Lookup all tokens for an AID
+    .index("by_expiration", ["expiresAt"]), // Cleanup expired tokens
 });

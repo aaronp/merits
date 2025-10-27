@@ -61,25 +61,31 @@ export class ConvexTransport implements Transport {
 
   async ackMessage(req: {
     messageId: string;
-    auth: AuthProof;
+    auth?: AuthProof;
+    sessionToken?: string;
     receiptSig?: string[];
   }): Promise<void> {
     await this.client.mutation(api.messages.acknowledge, {
       messageId: req.messageId as Id<"messages">,
       receipt: req.receiptSig ?? [],
-      auth: {
-        challengeId: req.auth.challengeId as Id<"challenges">,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      auth: req.auth
+        ? {
+            challengeId: req.auth.challengeId as Id<"challenges">,
+            sigs: req.auth.sigs,
+            ksn: req.auth.ksn,
+          }
+        : undefined,
+      sessionToken: req.sessionToken,
     });
   }
 
   /**
    * Subscribe to live message feed using Convex's reactive queries
    *
+   * Phase 4: Supports both auth proof and session token
+   *
    * Uses the messages.list query with onUpdate to get real-time pushes.
-   * Auto-acknowledges messages when onMessage returns true.
+   * Auto-acknowledges messages when onMessage returns true OR autoAck is set.
    */
   async subscribe(opts: SubscribeOptions): Promise<() => void> {
     // Track which messages we've already processed to avoid duplicates
@@ -105,11 +111,15 @@ export class ConvexTransport implements Transport {
             // Call user's handler
             const shouldAck = await opts.onMessage(encryptedMsg);
 
-            // Auto-ack if handler returned true
-            if (shouldAck) {
+            // Auto-ack if handler returned true OR autoAck option is true
+            const doAck = opts.autoAck !== undefined ? opts.autoAck : shouldAck;
+
+            if (doAck) {
+              // Phase 4: Use session token if provided, otherwise auth proof
               await this.ackMessage({
                 messageId: id,
                 auth: opts.auth,
+                sessionToken: opts.sessionToken,
               });
 
               // Remove from processed set after ack (message won't appear again)
@@ -127,7 +137,51 @@ export class ConvexTransport implements Transport {
     );
 
     // Return cancel function
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      if (opts.onClose) {
+        opts.onClose();
+      }
+    };
+  }
+
+  /**
+   * Phase 4: Open authenticated session for streaming operations
+   */
+  async openSession(req: {
+    aid: string;
+    scopes: ("receive" | "ack")[];
+    ttlMs: number;
+    auth: AuthProof;
+  }): Promise<{ token: string; expiresAt: number }> {
+    const result = await this.client.mutation(api.sessions.openSession, {
+      aid: req.aid,
+      scopes: req.scopes,
+      ttlMs: req.ttlMs,
+      auth: {
+        challengeId: req.auth.challengeId as Id<"challenges">,
+        sigs: req.auth.sigs,
+        ksn: req.auth.ksn,
+      },
+    });
+
+    return {
+      token: result.token,
+      expiresAt: result.expiresAt,
+    };
+  }
+
+  /**
+   * Phase 4: Refresh session token for active subscription
+   */
+  async refreshSessionToken(req: {
+    for: string;
+    sessionToken: string;
+  }): Promise<void> {
+    await this.client.mutation(api.sessions.refreshSessionToken, {
+      forAid: req.for,
+      sessionToken: req.sessionToken,
+    });
   }
 
   /**

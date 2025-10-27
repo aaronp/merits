@@ -22,6 +22,7 @@ import type * as authorization from "../authorization.js";
 import type * as debug from "../debug.js";
 import type * as groups from "../groups.js";
 import type * as messages from "../messages.js";
+import type * as sessions from "../sessions.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   debug: typeof debug;
   groups: typeof groups;
   messages: typeof messages;
+  sessions: typeof sessions;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

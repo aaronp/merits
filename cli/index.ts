@@ -111,6 +111,7 @@ import { deleteIdentity } from "./commands/identity/delete";
 import { sendMessage } from "./commands/send";
 import { receiveMessages } from "./commands/receive";
 import { ackMessage } from "./commands/ack";
+import { watchMessages } from "./commands/watch";
 
 // Init command (first-time setup)
 program
@@ -219,12 +220,16 @@ program
     console.log("  merits group send        - Send group message");
   });
 
+// Watch command (Phase 4: Real-time streaming with session tokens)
 program
   .command("watch")
-  .description("Watch for incoming messages")
-  .action(() => {
-    console.log("Watch command coming in Milestone 3!");
-  });
+  .description("Stream messages in real-time (Phase 4)")
+  .option("--from <identity>", "Watch as this identity (default: config.defaultIdentity)")
+  .option("--no-auto-ack", "Disable automatic acknowledgment (default: auto-ack enabled)")
+  .option("--plaintext", "Decrypt and show plaintext")
+  .option("--format <type>", "Output format (json|text|compact)")
+  .option("--filter <pattern>", "Filter messages by sender or content (not yet implemented)")
+  .action(watchMessages);
 
 program
   .command("config")

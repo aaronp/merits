@@ -97,13 +97,18 @@ export interface EncryptedMessage {
 
 /**
  * Options for subscribing to live message feed
+ * Phase 4: Extended to support session tokens and additional callbacks
  */
 export interface SubscribeOptions {
   /** AID to receive messages for */
   for: AID;
 
-  /** Authentication proof (proves control of the AID) */
-  auth: AuthProof;
+  /**
+   * Authentication - provide either auth proof OR session token
+   * Phase 4: Session token allows streaming without repeated signing
+   */
+  auth?: AuthProof;
+  sessionToken?: string;
 
   /**
    * Callback invoked for each new message.
@@ -121,6 +126,19 @@ export interface SubscribeOptions {
    * Optional - if not provided, errors will be thrown.
    */
   onError?: (err: Error) => void;
+
+  /**
+   * Phase 4: Callback when subscription closes (gracefully or due to error)
+   */
+  onClose?: () => void;
+
+  /**
+   * Phase 4: Auto-ack override
+   * If true, server auto-acks after onMessage returns successfully,
+   * overriding onMessage() return value semantics.
+   * Eliminates client-side ack calls for streaming use cases.
+   */
+  autoAck?: boolean;
 }
 
 /**
@@ -168,10 +186,12 @@ export interface Transport {
    * non-repudiation proof of delivery.
    *
    * Authentication required - must be the message recipient.
+   * Phase 4: Can use either auth proof OR session token
    */
   ackMessage(req: {
     messageId: string;
-    auth: AuthProof;
+    auth?: AuthProof;
+    sessionToken?: string; // Phase 4: Alternative to auth for streaming
     receiptSig?: string[]; // Recipient's indexed sigs over envelopeHash
   }): Promise<void>;
 
@@ -186,4 +206,39 @@ export interface Transport {
    * @returns Cancel function to stop the subscription
    */
   subscribe(opts: SubscribeOptions): Promise<() => void>;
+
+  /**
+   * Phase 4: Open authenticated session for streaming operations.
+   *
+   * Creates a short-lived bearer token that can be reused for multiple
+   * operations without signing. Token is scoped to specific purposes
+   * and bound to AID + KSN.
+   *
+   * Security properties:
+   * - Short-lived (max 60s)
+   * - Scoped to specific operations
+   * - KSN-bound (invalidated on key rotation)
+   * - Non-extendable (must issue new token)
+   *
+   * @returns Session token and expiry timestamp
+   */
+  openSession(req: {
+    aid: AID;
+    scopes: ("receive" | "ack")[];
+    ttlMs: number;
+    auth: AuthProof;
+  }): Promise<{ token: string; expiresAt: number }>;
+
+  /**
+   * Phase 4: Refresh session token for active subscription.
+   *
+   * Allows updating session token mid-stream without tearing down
+   * the WebSocket connection. Used for long-lived watch sessions.
+   *
+   * The new token must be obtained via openSession() first.
+   */
+  refreshSessionToken(req: {
+    for: AID;
+    sessionToken: string;
+  }): Promise<void>;
 }
