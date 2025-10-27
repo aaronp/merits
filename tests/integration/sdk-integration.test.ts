@@ -21,7 +21,15 @@ describe("SDK Integration", () => {
   let bob: AuthCredentials;
 
   beforeEach(async () => {
-    client = createMeritsClient(convexUrl);
+    client = createMeritsClient({
+      backend: {
+        type: "convex",
+        url: convexUrl,
+      },
+      defaultIdentity: "test",
+      outputFormat: "text",
+      vaultPath: "/tmp/test-vault.json",
+    });
 
     // Generate keys
     const aliceKeys = await generateKeyPair();
@@ -40,7 +48,8 @@ describe("SDK Integration", () => {
     };
 
     // Register key states (using direct Convex mutation for setup)
-    const convex = (client as any).identity.client; // Access underlying client
+    // Access underlying Convex client from ConvexMeritsClient
+    const convex = (client as any).convex; // ConvexMeritsClient.convex
     await convex.mutation(api.auth.registerKeyState, {
       aid: alice.aid,
       ksn: 0,
