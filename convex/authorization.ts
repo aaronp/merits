@@ -89,6 +89,52 @@ async function getAdminRole(
 }
 
 /**
+ * Check if recipient AID matches any active authorization patterns
+ * Only applies to unknown tier (known/verified have broad access)
+ */
+async function matchesAnyPattern(
+  ctx: QueryCtx | MutationCtx,
+  recipientAid: string,
+  tier: Tier
+): Promise<boolean> {
+  // Only check patterns for unknown tier
+  if (tier !== "unknown") {
+    return false;
+  }
+
+  // Get active patterns for this tier, sorted by priority (descending)
+  const patterns = await ctx.db
+    .query("authPatterns")
+    .withIndex("by_appliesTo", (q) => q.eq("appliesTo", tier).eq("active", true))
+    .collect();
+
+  // Sort by priority descending (higher priority first)
+  patterns.sort((a, b) => b.priority - a.priority);
+
+  // Check if recipient matches any pattern
+  const now = Date.now();
+  for (const pattern of patterns) {
+    // Skip expired patterns
+    if (pattern.expiresAt && pattern.expiresAt < now) {
+      continue;
+    }
+
+    try {
+      const regex = new RegExp(pattern.pattern);
+      if (regex.test(recipientAid)) {
+        return true;
+      }
+    } catch (err) {
+      // Invalid regex - skip and continue
+      console.warn(`Invalid regex pattern: ${pattern.pattern}`, err);
+      continue;
+    }
+  }
+
+  return false;
+}
+
+/**
  * Check rate limit for an AID (read-only for queries)
  */
 async function checkRateLimitReadOnly(
@@ -204,16 +250,27 @@ export async function canSend(
 
   // Tier-specific authorization
   if (tier === "unknown") {
-    // Unknown users can ONLY message onboarding admins
+    // Unknown users can message:
+    // 1. Onboarding admins (always)
+    // 2. Recipients matching authorization patterns (e.g., TEST* for dev/testing)
+
     const isAdmin = await isOnboardingAdmin(ctx, to);
-    if (!isAdmin) {
-      return {
-        allowed: false,
-        reason: "Unknown users can only message onboarding admins",
-        tier,
-      };
+    if (isAdmin) {
+      return { allowed: true, tier };
     }
-    return { allowed: true, tier };
+
+    // Check authorization patterns
+    const matchesPattern = await matchesAnyPattern(ctx, to, tier);
+    if (matchesPattern) {
+      return { allowed: true, tier };
+    }
+
+    // No admin match, no pattern match → deny
+    return {
+      allowed: false,
+      reason: "Unknown users can only message onboarding admins",
+      tier,
+    };
   }
 
   if (tier === "known") {
@@ -616,5 +673,117 @@ export const getTierStats = query({
       verified: all.filter((t) => t.tier === "verified").length,
       total: all.length,
     };
+  },
+});
+
+/**
+ * Add authorization pattern (super_admin only)
+ */
+export const addPattern = mutation({
+  args: {
+    pattern: v.string(),
+    description: v.string(),
+    appliesTo: v.string(), // "unknown" only for now
+    priority: v.number(),
+    expiresAt: v.optional(v.number()),
+    auth: v.object({
+      challengeId: v.id("challenges"),
+      sigs: v.array(v.string()),
+      ksn: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    // Verify authentication
+    const verified = await verifyAuth(ctx, args.auth, "admin_operation", {
+      operation: "addPattern",
+      pattern: args.pattern,
+    });
+
+    // Only super_admins can add patterns
+    const role = await getAdminRole(ctx, verified.aid);
+    if (role !== "super_admin") {
+      throw new Error("Only super_admins can add authorization patterns");
+    }
+
+    // Validate regex
+    try {
+      new RegExp(args.pattern);
+    } catch (err) {
+      throw new Error(`Invalid regex pattern: ${args.pattern}`);
+    }
+
+    // Validate appliesTo
+    if (args.appliesTo !== "unknown") {
+      throw new Error("Currently only 'unknown' tier is supported for patterns");
+    }
+
+    // Check for duplicate pattern
+    const existing = await ctx.db
+      .query("authPatterns")
+      .filter((q) => q.eq(q.field("pattern"), args.pattern))
+      .first();
+
+    if (existing) {
+      throw new Error(`Pattern already exists: ${args.pattern}`);
+    }
+
+    const now = Date.now();
+    await ctx.db.insert("authPatterns", {
+      pattern: args.pattern,
+      description: args.description,
+      appliesTo: args.appliesTo,
+      priority: args.priority,
+      active: true,
+      createdBy: verified.aid,
+      createdAt: now,
+      expiresAt: args.expiresAt,
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Bootstrap default TEST pattern (no auth required - for initial setup)
+ * Should be called once during development setup
+ */
+export const bootstrapTestPattern = mutation({
+  args: {},
+  handler: async (ctx) => {
+    // Check if TEST pattern already exists
+    const existing = await ctx.db
+      .query("authPatterns")
+      .filter((q) => q.eq(q.field("pattern"), "^TEST"))
+      .first();
+
+    if (existing) {
+      return { message: "TEST pattern already exists", patternId: existing._id };
+    }
+
+    // Add default TEST pattern
+    const patternId = await ctx.db.insert("authPatterns", {
+      pattern: "^TEST",
+      description: "Allow messaging to test identities (development/testing only)",
+      appliesTo: "unknown",
+      priority: 100,
+      active: true,
+      createdBy: "SYSTEM",
+      createdAt: Date.now(),
+    });
+
+    return { message: "TEST pattern created", patternId };
+  },
+});
+
+/**
+ * List all authorization patterns
+ */
+export const listPatterns = query({
+  args: {},
+  handler: async (ctx) => {
+    return await ctx.db
+      .query("authPatterns")
+      .order("desc") // Most recent first
+      .collect();
   },
 });

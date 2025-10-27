@@ -53,6 +53,11 @@ describe("E2E CLI Messaging", () => {
       fs.rmSync(TEST_ROOT, { recursive: true });
     }
     fs.mkdirSync(TEST_ROOT, { recursive: true });
+
+    // NOTE: Full messaging test requires authorization pattern setup
+    // See docs/setup-test-patterns.md for instructions
+    // TL;DR: Add pattern ".*" to authPatterns table via Convex Dashboard
+    // Otherwise, this test will be skipped
   });
 
   afterAll(() => {
@@ -63,43 +68,33 @@ describe("E2E CLI Messaging", () => {
   });
 
   test.skip("alice sends message to bob", async () => {
-    // SKIP: Requires authorization setup (Alice/Bob need to be friends or use onboarding admin)
-    // This test validates messaging flow but hits authorization policy
-    // The core --data-dir functionality is tested in other tests
+    // SKIP: Requires manual authorization pattern setup
+    // To enable: Add pattern ".*" to authPatterns table via Convex Dashboard
+    // See docs/setup-test-patterns.md for details
 
-    // 1. Create Alice's identity
-    await runCLI(
-      ["identity", "new", "alice", "--no-register", "--format", "json"],
+    // 1. Create Alice's identity with TEST prefix
+    const aliceResult = await runCLI(
+      ["identity", "new", "TESTAlice", "--no-register", "--format", "json"],
       { dataDir: ALICE_DIR }
     );
-
-    const aliceShow = await runCLI(
-      ["identity", "show", "alice", "--format", "json"],
-      { dataDir: ALICE_DIR }
-    );
-    const aliceAid = aliceShow.aid;
+    const aliceAid = aliceResult.aid;
 
     // Register Alice with backend
-    await runCLI(["identity", "register", "alice"], { dataDir: ALICE_DIR, expectJson: false });
+    await runCLI(["identity", "register", "TESTAlice"], { dataDir: ALICE_DIR, expectJson: false });
 
-    // 2. Create Bob's identity
-    await runCLI(
-      ["identity", "new", "bob", "--no-register", "--format", "json"],
+    // 2. Create Bob's identity with TEST prefix
+    const bobResult = await runCLI(
+      ["identity", "new", "TESTBob", "--no-register", "--format", "json"],
       { dataDir: BOB_DIR }
     );
-
-    const bobShow = await runCLI(
-      ["identity", "show", "bob", "--format", "json"],
-      { dataDir: BOB_DIR }
-    );
-    const bobAid = bobShow.aid;
+    const bobAid = bobResult.aid;
 
     // Register Bob with backend
-    await runCLI(["identity", "register", "bob"], { dataDir: BOB_DIR, expectJson: false });
+    await runCLI(["identity", "register", "TESTBob"], { dataDir: BOB_DIR, expectJson: false });
 
     // 3. Alice sends message to Bob
     const sendResult = await runCLI(
-      ["send", bobAid, "--message", "Hello Bob!", "--from", "alice", "--format", "json"],
+      ["send", bobAid, "--message", "Hello Bob!", "--from", "TESTAlice", "--format", "json"],
       { dataDir: ALICE_DIR }
     );
 
@@ -108,7 +103,7 @@ describe("E2E CLI Messaging", () => {
 
     // 4. Bob receives messages
     const receiveResult = await runCLI(
-      ["receive", "--plaintext", "--from", "bob", "--format", "json"],
+      ["receive", "--plaintext", "--from", "TESTBob", "--format", "json"],
       { dataDir: BOB_DIR }
     );
 
@@ -123,7 +118,7 @@ describe("E2E CLI Messaging", () => {
 
     // 5. Bob acknowledges the message
     await runCLI(
-      ["ack", message.id, "--envelope-hash", message.envelopeHash, "--from", "bob"],
+      ["ack", message.id, "--envelope-hash", message.envelopeHash, "--from", "TESTBob"],
       { dataDir: BOB_DIR, expectJson: false }
     );
 

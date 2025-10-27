@@ -25,9 +25,9 @@ export async function newIdentity(name: string, opts: NewIdentityOptions): Promi
   const ctx = opts._ctx;
   const isJson = ctx.config.outputFormat === "json";
 
-  // Validate name
-  if (!/^[a-z0-9-]+$/.test(name)) {
-    throw new Error('Identity name must be lowercase alphanumeric with dashes (e.g., "alice", "work-identity")');
+  // Validate name (allow TEST prefix for testing)
+  if (!/^[a-zA-Z0-9-]+$/.test(name)) {
+    throw new Error('Identity name must be alphanumeric with dashes (e.g., "alice", "work-identity", "TESTAlice")');
   }
 
   // Check if already exists

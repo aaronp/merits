@@ -96,6 +96,20 @@ export default defineSchema({
     limit: v.number(), // Max messages per window
   }).index("by_aid", ["aid"]),
 
+  // Authorization Patterns - Regex-based recipient allow-lists (unknown tier only)
+  authPatterns: defineTable({
+    pattern: v.string(), // Regex pattern for recipient AIDs (e.g., "^TEST")
+    description: v.string(), // Human-readable description
+    appliesTo: v.string(), // "unknown" only (could add "known", "all" later)
+    priority: v.number(), // Higher priority = checked first
+    active: v.boolean(), // Can disable without deleting
+    createdBy: v.string(), // Admin AID who created this
+    createdAt: v.number(),
+    expiresAt: v.optional(v.number()), // Optional TTL for temporary patterns
+  })
+    .index("by_active_priority", ["active", "priority"])
+    .index("by_appliesTo", ["appliesTo", "active"]),
+
   // Groups - collections of AIDs for server-side fanout messaging
   groups: defineTable({
     name: v.string(), // Human-readable group name

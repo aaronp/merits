@@ -24,7 +24,8 @@
       "Bash(make:*)",
       "Bash(bun:*)",
       "Bash(export CONVEX_URL=https://accurate-penguin-901.convex.cloud)",
-      "Bash(bunx convex deploy:*)"
+      "Bash(bunx convex deploy:*)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []
