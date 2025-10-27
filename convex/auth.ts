@@ -412,6 +412,21 @@ export async function verifyAuth(
 }
 
 /**
+ * Get key state for an identity
+ */
+export const getKeyState = query({
+  args: {
+    aid: v.string(),
+  },
+  handler: async (ctx, { aid }) => {
+    return await ctx.db
+      .query("keyStates")
+      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .first();
+  },
+});
+
+/**
  * Compute args hash (helper for clients)
  */
 export const computeHash = query({

@@ -75,15 +75,16 @@ export async function sendMessage(
   const ttlMs = opts.ttl ?? 24 * 60 * 60 * 1000;
 
   // Create auth proof (SINGLE proof for entire send operation)
+  // IMPORTANT: Args MUST match backend verification exactly!
   const auth = await getAuthProof({
     client: ctx.client,
     vault: ctx.vault,
     identityName: fromIdentity,
     purpose: "send",
     args: {
-      to: recipient, // IMPORTANT: Use 'to' not 'recpAid'
+      recpAid: recipient, // Match backend: recpAid not 'to'
       ctHash,
-      ttlMs, // IMPORTANT: Use 'ttlMs' not 'ttl'
+      ttl: ttlMs, // Match backend: ttl not 'ttlMs'
       alg: opts.alg ?? "",
       ek: opts.ek ?? "",
     },
@@ -132,10 +133,14 @@ async function fetchPublicKeyFor(
     return await ctx.vault.getPublicKey(aid);
   } catch {
     // Not local, fetch from backend
-    // TODO: Implement backend public key lookup in Phase 4
-    throw new Error(
-      `Public key lookup not yet implemented for remote AID: ${aid}`
-    );
+    try {
+      const result = await ctx.client.identityRegistry.getPublicKey(aid);
+      return result.publicKey;
+    } catch (err: any) {
+      throw new Error(
+        `Failed to fetch public key for ${aid}: ${err.message}`
+      );
+    }
   }
 }
 

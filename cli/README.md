@@ -96,6 +96,7 @@ bun run cli ack <msg-id> --envelope-hash <hash>            # Acknowledge message
 
 ### Global Options
 
+- `--data-dir <path>` - Data directory (overrides ~/.merits/ for testing/isolation)
 - `--format <json|text|compact>` - Output format (default: text)
 - `--verbose` - Show detailed envelope data
 - `--from <identity>` - Identity to use
@@ -103,6 +104,30 @@ bun run cli ack <msg-id> --envelope-hash <hash>            # Acknowledge message
 - `--convex-url <url>` - Convex deployment URL
 - `--no-color` - Disable colored output
 - `--debug` - Enable debug logging
+
+### Testing with `--data-dir`
+
+The `--data-dir` option allows complete isolation of CLI data for testing:
+
+```bash
+# Create isolated test environments
+merits --data-dir ./test-data/alice identity new alice
+merits --data-dir ./test-data/bob identity new bob
+
+# Each has separate vault and config
+ls test-data/alice/  # identities.json, keychain/, config.json
+ls test-data/bob/    # identities.json, keychain/, config.json
+
+# Clean up
+rm -rf test-data/
+```
+
+**Features**:
+- Uses FileVault (encrypted file-based storage) instead of OS Keychain
+- Password from `MERITS_VAULT_PASSWORD` env var (default: "test-password-insecure")
+- Set `MERITS_VAULT_QUIET=1` to suppress security warnings
+- Supports parallel test execution without state conflicts
+- Environment variable: `MERITS_DATA_DIR`
 
 ## Implementation Status
 
@@ -135,9 +160,19 @@ bun run cli ack <msg-id> --envelope-hash <hash>            # Acknowledge message
 - [x] JSON mode (silent, scriptable)
 - [x] Piping support
 - [x] Unit tests (51/51 passing)
-- [x] Integration tests
+- [x] Integration tests (40/40 passing)
 
 **Note**: Phase 3 encryption is a placeholder (base64). Real encryption deferred to Phase 4.
+
+### ✅ Phase 3.5: Testing Infrastructure (Complete)
+
+- [x] `--data-dir` flag for isolated test environments
+- [x] `MERITS_DATA_DIR` environment variable
+- [x] FileVault for testing (encrypted file-based storage)
+- [x] Vault selection (FileVault if dataDir set, else OS Keychain)
+- [x] E2E tests with isolated data directories
+- [x] Parallel test support
+- [x] Backend public key lookup (`identityRegistry.getPublicKey()`)
 
 ### 📋 Phase 4: Streaming & Groups (Next)
 

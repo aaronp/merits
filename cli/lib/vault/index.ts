@@ -2,47 +2,64 @@
  * Vault Factory
  *
  * Creates appropriate vault implementation based on environment.
- * Future: Add EncryptedFileVault for headless/unsupported systems.
+ * - OSKeychainVault: Production (macOS/Linux/Windows)
+ * - FileVault: Testing with dataDir (INSECURE)
  */
 
 export type { MeritsVault, IdentityMetadata } from "./MeritsVault";
 export { VaultError } from "./MeritsVault";
 export { OSKeychainVault, setupFlushOnExit } from "./OSKeychainVault";
+export { FileVault } from "./FileVault";
 
 import { OSKeychainVault, setupFlushOnExit } from "./OSKeychainVault";
+import { FileVault } from "./FileVault";
 import type { MeritsVault } from "./MeritsVault";
+import type { ResolvedConfig } from "../config";
+import { resolveVaultPath, resolveDataDir } from "../config";
+import * as path from "path";
 
 /**
  * Create a vault instance
  *
- * @param options.type - Vault type ('keychain' | 'encrypted-file')
- * @param options.meritsDir - Base directory for metadata (default: ~/.merits)
+ * @param config - Resolved configuration
  * @returns MeritsVault implementation
+ *
+ * Selection logic:
+ * - If config.dataDir is set → FileVault (for testing)
+ * - Otherwise → OSKeychainVault (production)
  *
  * @example
  * ```typescript
- * const vault = createVault();
- * setupFlushOnExit(vault); // Auto-flush on process exit
+ * // Production: Uses OS Keychain
+ * const vault = createVault(config);
+ *
+ * // Testing: Uses FileVault
+ * const testConfig = { ...config, dataDir: './test-data/alice' };
+ * const testVault = createVault(testConfig);
  * ```
  */
-export function createVault(options?: {
-  type?: "keychain" | "encrypted-file";
-  meritsDir?: string;
-}): MeritsVault {
-  const type = options?.type || "keychain";
+export function createVault(config: Partial<ResolvedConfig>): MeritsVault {
+  const metadataPath = resolveVaultPath(config);
 
-  switch (type) {
-    case "keychain": {
-      const vault = new OSKeychainVault(options?.meritsDir);
-      setupFlushOnExit(vault);
-      return vault;
+  // If dataDir is set, use FileVault for testing
+  if (config.dataDir) {
+    const keychainDir = path.join(resolveDataDir(config), "keychain");
+    const vault = new FileVault(metadataPath, keychainDir);
+    setupFlushOnExit(vault);
+
+    // Warn about insecure vault
+    if (!process.env.MERITS_VAULT_QUIET) {
+      console.warn("⚠️  WARNING: Using file-based vault (INSECURE)");
+      console.warn("   This is for testing only. Production should use OS Keychain.");
+      console.warn("   Set MERITS_VAULT_PASSWORD to change encryption password.");
+      console.warn("   Set MERITS_VAULT_QUIET=1 to suppress this warning.");
     }
 
-    case "encrypted-file":
-      // TODO: Implement in future milestone
-      throw new Error("EncryptedFileVault not yet implemented");
-
-    default:
-      throw new Error(`Unknown vault type: ${type}`);
+    return vault;
   }
+
+  // Production: Use OS Keychain
+  const vault = new OSKeychainVault(metadataPath);
+  setupFlushOnExit(vault);
+  return vault;
 }

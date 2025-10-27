@@ -23,6 +23,7 @@ export interface NewIdentityOptions {
  */
 export async function newIdentity(name: string, opts: NewIdentityOptions): Promise<void> {
   const ctx = opts._ctx;
+  const isJson = ctx.config.outputFormat === "json";
 
   // Validate name
   if (!/^[a-z0-9-]+$/.test(name)) {
@@ -35,13 +36,13 @@ export async function newIdentity(name: string, opts: NewIdentityOptions): Promi
     throw new Error(`Identity '${name}' already exists. Use 'merits identity show ${name}' to view it.`);
   }
 
-  console.log(`Creating identity '${name}'...`);
+  if (!isJson) console.log(`Creating identity '${name}'...`);
 
   // Generate keypair
   const keys = await generateKeyPair();
   const aid = createAID(keys.publicKey);
 
-  console.log(`  AID: ${aid}`);
+  if (!isJson) console.log(`  AID: ${aid}`);
 
   // Store in vault with public key in metadata
   await ctx.vault.storeIdentity(name, {
@@ -56,12 +57,13 @@ export async function newIdentity(name: string, opts: NewIdentityOptions): Promi
     }
   });
 
-  console.log(`✓ Identity created locally`);
+  if (!isJson) console.log(`✓ Identity created locally`);
 
   // Register with backend if requested (default: true)
+  let registered = false;
   if (opts.register !== false) {
     try {
-      console.log(`Registering with backend...`);
+      if (!isJson) console.log(`Registering with backend...`);
 
       await ctx.client.identityRegistry.registerIdentity({
         aid,
@@ -75,10 +77,13 @@ export async function newIdentity(name: string, opts: NewIdentityOptions): Promi
         registeredAt: Date.now(),
       });
 
-      console.log(`✓ Identity registered with backend`);
+      registered = true;
+      if (!isJson) console.log(`✓ Identity registered with backend`);
     } catch (err: any) {
-      console.warn(`⚠️  Registration failed: ${err.message}`);
-      console.warn(`   Identity created locally. Use 'merits identity register ${name}' to retry.`);
+      if (!isJson) {
+        console.warn(`⚠️  Registration failed: ${err.message}`);
+        console.warn(`   Identity created locally. Use 'merits identity register ${name}' to retry.`);
+      }
     }
   }
 
@@ -87,12 +92,22 @@ export async function newIdentity(name: string, opts: NewIdentityOptions): Promi
     const { saveConfig } = await import("../../lib/config");
     ctx.config.defaultIdentity = name;
     await saveConfig(ctx.config);
-    console.log(`✓ Set as default identity`);
+    if (!isJson) console.log(`✓ Set as default identity`);
   }
 
-  console.log(`\n✅ Identity '${name}' created successfully!`);
+  // Output result
+  if (isJson) {
+    console.log(JSON.stringify({
+      name,
+      aid,
+      registered,
+      isDefault: opts.setDefault || false,
+    }));
+  } else {
+    console.log(`\n✅ Identity '${name}' created successfully!`);
 
-  if (!opts.setDefault && existing.length === 0) {
-    console.log(`\nTip: Set as default with: merits identity set-default ${name}`);
+    if (!opts.setDefault && existing.length === 0) {
+      console.log(`\nTip: Set as default with: merits identity set-default ${name}`);
+    }
   }
 }

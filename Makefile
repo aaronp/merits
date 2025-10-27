@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-watch test-coverage install dev cli clean summarise summarise-convex
+.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli clean summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -17,6 +17,21 @@ test-integration:
 		exit 1; \
 	fi
 	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && bun test ./tests/integration/
+
+# CLI unit tests (fast, isolated)
+test-cli:
+	@echo "Running CLI unit tests..."
+	@bun test ./tests/cli/unit/
+
+# E2E CLI tests (requires Convex, uses isolated data dirs)
+test-e2e:
+	@echo "Running E2E CLI tests..."
+	@if [ ! -f .env.local ]; then \
+		echo "Error: .env.local file not found"; \
+		echo "Please run 'make dev' first to set up your Convex deployment"; \
+		exit 1; \
+	fi
+	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && bun test ./tests/cli/e2e/
 
 # Watch mode for development
 test-watch:

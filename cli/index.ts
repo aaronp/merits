@@ -35,6 +35,7 @@ program
 
 // Global options
 program
+  .option("--data-dir <path>", "Data directory (overrides ~/.merits/)")
   .option("--format <type>", "Output format (json|text|compact)", "text")
   .option("--verbose", "Show detailed envelope data", false)
   .option("--from <aid>", "Identity to use")
@@ -54,6 +55,7 @@ program.hook("preAction", (thisCommand, actionCommand) => {
 
   // Load config with 4-layer precedence
   const config = loadConfig(opts.config, {
+    dataDir: opts.dataDir, // NEW: Data directory override
     backend: opts.convexUrl ? { type: "convex", url: opts.convexUrl } : undefined,
     outputFormat: opts.format,
     verbose: opts.verbose,
@@ -61,8 +63,8 @@ program.hook("preAction", (thisCommand, actionCommand) => {
     defaultIdentity: opts.from,
   });
 
-  // Create vault (OS keychain)
-  const vault = createVault();
+  // Create vault (uses dataDir if set for FileVault)
+  const vault = createVault(config);
 
   // Create Merits client (backend-agnostic)
   const client = createMeritsClient(config);

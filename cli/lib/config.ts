@@ -18,6 +18,7 @@ import * as os from "os";
  */
 export interface MeritsConfig {
   version: number;
+  dataDir?: string; // NEW: Override data directory (for testing)
   backend?: {
     type: "convex" | "rest" | "local";
     url: string;
@@ -57,6 +58,7 @@ const CONFIG_SCHEMA = {
   type: "object",
   properties: {
     version: { type: "number", enum: [1] },
+    dataDir: { type: "string", minLength: 1 }, // NEW: Data directory override
     backend: {
       type: "object",
       properties: {
@@ -87,6 +89,39 @@ export class ConfigError extends Error {
     super(message);
     this.name = "ConfigError";
   }
+}
+
+/**
+ * Resolve base data directory
+ *
+ * @param config - Configuration object
+ * @returns Absolute path to data directory
+ */
+export function resolveDataDir(config: Partial<MeritsConfig>): string {
+  if (config.dataDir) {
+    return path.resolve(config.dataDir);
+  }
+  return path.join(os.homedir(), ".merits");
+}
+
+/**
+ * Resolve config file path based on dataDir
+ *
+ * @param config - Configuration object
+ * @returns Absolute path to config.json
+ */
+export function resolveConfigPath(config: Partial<MeritsConfig>): string {
+  return path.join(resolveDataDir(config), "config.json");
+}
+
+/**
+ * Resolve vault metadata path based on dataDir
+ *
+ * @param config - Configuration object
+ * @returns Absolute path to identities.json
+ */
+export function resolveVaultPath(config: Partial<MeritsConfig>): string {
+  return path.join(resolveDataDir(config), "identities.json");
 }
 
 /**
@@ -242,6 +277,11 @@ function loadConfigFile(filePath: string): Partial<MeritsConfig> {
  */
 function loadEnvConfig(): Partial<MeritsConfig> {
   const config: Partial<MeritsConfig> = {};
+
+  // Data directory override
+  if (process.env.MERITS_DATA_DIR) {
+    config.dataDir = process.env.MERITS_DATA_DIR;
+  }
 
   // NEW: Explicit backend config
   if (process.env.MERITS_BACKEND_TYPE && process.env.MERITS_BACKEND_URL) {

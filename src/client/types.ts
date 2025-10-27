@@ -49,6 +49,14 @@ export interface IdentityRegistry {
     newPublicKey: Uint8Array;
     rotationProofSigs: string[]; // Indexed signatures from old key
   }): Promise<void>;
+
+  /**
+   * Get public key for an identity
+   *
+   * @param aid - Identity AID
+   * @returns Public key and current KSN
+   */
+  getPublicKey(aid: string): Promise<{ publicKey: Uint8Array; ksn: number }>;
 }
 
 /**
