@@ -22,6 +22,7 @@ This roadmap tracks the implementation of the **Merits CLI** - a production-read
 |-------|-------|----------|--------|
 | 1 | [Core Infrastructure](#phase-1-core-infrastructure) | Week 1 | ✅ Complete |
 | 2 | [Identity Management](#phase-2-identity-management) | Week 1-2 | ✅ Complete |
+| 2.5 | [Tier Refactor](#phase-25-tier-refactor) | Week 2 | ✅ Complete |
 | 3 | [Messaging Commands](#phase-3-messaging-commands) | Week 2-3 | ✅ Complete |
 | 3.5 | [Testing Infrastructure](#phase-35-testing-infrastructure) | Week 3 | 📋 Next |
 | 4 | [Streaming & Groups](#phase-4-streaming--groups) | Week 3-4 | ⏳ Pending |
@@ -124,6 +125,56 @@ cli/
 
 **Files Created**: 19 new files (commands, client interfaces, tests)
 **Tests**: 41/41 passing (100%)
+
+---
+
+## Phase 2.5: Tier Refactor
+
+**Goal**: Unified tier-based authorization system
+
+**Duration**: Week 2 (2 days)
+
+**Motivation**: The original authorization system had tiers working on senders but patterns working on recipients, with hardcoded rate limits. This refactor consolidates everything into a unified, data-driven tier model.
+
+**Key Changes**:
+- **Schema**: Replaced `userTiers`, `authPatterns`, `onboardingAdmins` tables with `tierConfigs` and `aidTiers`
+- **Authorization**: Pattern matching now works on **sender AIDs** (not recipients)
+- **Rate Limits**: Data-driven from tier configs (not hardcoded)
+- **Permissions**: All tier settings (permissions, rate limits, patterns) in one configuration
+
+**Deliverables**:
+- ✅ New schema with `tierConfigs` and `aidTiers` tables
+- ✅ Updated authorization logic (getTierConfig, canSend)
+- ✅ Mutations: `assignTier()`, `createTier()`, `bootstrapDefaultTiers()`
+- ✅ Queries: `getTierInfo()`, `listTiers()`, `getTierStats()`
+- ✅ Backward compatibility: `onboardUser()` wrapper
+- ✅ Updated documentation: [permissions.md](./permissions.md)
+- ✅ All integration tests updated and passing (40/40)
+
+**Default Tiers**:
+1. **unknown**: Default tier, can message unknown and known (for onboarding), 10 msgs/hour
+2. **known**: Onboarded users, can message all tiers, 100 msgs/hour
+3. **verified**: KYC-verified, can message all tiers, 1000 msgs/hour
+4. **test**: Development tier (matches `^TEST` pattern), unrestricted messaging
+
+**Technical Highlights**:
+- 🎯 Data-driven authorization (create/modify tiers without code changes)
+- 🔍 Pattern-based auto-assignment (regex on sender AIDs, by priority)
+- 📊 Flexible rate limiting per tier
+- 🔒 Admin-only tier assignment with audit trail
+- ✅ Onboarding flow preserved (unknown → known via admin)
+
+**Test Results**: 40/40 integration tests passing
+- SDK integration: 4/4
+- Messaging flow: 2/2
+- Onboarding flow: 12/12
+- Identity auth: 5/5
+- Transport: 4/4
+- Router: 2/2
+- Groups: 3/3
+- Main: 8/8
+
+**Documentation**: [permissions.md](./permissions.md) ✅
 
 ---
 
@@ -882,12 +933,15 @@ export async function runCLI(args: string[]) {
 
 ---
 
-**Current Status**: ✅ Phase 2 Complete | 📋 Phase 3 Ready
+**Current Status**: ✅ Phase 3 Complete (with Phase 2.5 Tier Refactor) | 📋 Phase 3.5 Ready
 
 **Next Steps**:
 1. ✅ ~~Phase 1 (Core Infrastructure)~~ - Complete!
 2. ✅ ~~Phase 2 (Identity Management)~~ - Complete! (41/41 tests passing)
-3. Begin Phase 3 (Messaging Commands)
-4. Create [cli-phase-3-complete.md](./cli-phase-3-complete.md) when done
+3. ✅ ~~Phase 2.5 (Tier Refactor)~~ - Complete! (40/40 integration tests passing)
+4. ✅ ~~Phase 3 (Messaging Commands)~~ - Complete! (51/51 unit tests passing)
+5. Begin Phase 3.5 (Testing Infrastructure)
 
-**Last Updated**: 2025-10-26
+**Phase 3 Completion Details**: See [cli-phase-3.md](./cli-phase-3.md#phase-3-completion-summary)
+
+**Last Updated**: 2025-10-27

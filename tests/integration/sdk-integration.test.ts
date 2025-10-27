@@ -103,10 +103,7 @@ describe("SDK Integration", () => {
 
     expect(messageId).toBeDefined();
 
-    // Give the message a moment to be stored
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    // Bob receives the message
+    // Bob receives the message (poll for eventual consistency)
     const receiveAuth = await client.createAuth(bob, "receive", {
       recpAid: bob.aid,
     });

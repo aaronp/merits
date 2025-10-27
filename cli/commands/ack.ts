@@ -48,7 +48,7 @@ export async function ackMessage(
     purpose: "ack",
     args: {
       messageId,
-      for: identity.aid,
+      recpAid: identity.aid, // Backend expects recpAid
     },
   });
 

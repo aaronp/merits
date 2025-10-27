@@ -18,7 +18,11 @@ const BOB_DIR = path.join(TEST_ROOT, "bob");
 // Convex URL from environment
 const CONVEX_URL = process.env.CONVEX_URL;
 if (!CONVEX_URL) {
-  throw new Error("CONVEX_URL environment variable required for E2E tests");
+  throw new Error(
+    "CONVEX_URL environment variable required for E2E tests.\n" +
+    "Run with: make test-e2e\n" +
+    "Or set manually: export CONVEX_URL=https://your-deployment.convex.cloud"
+  );
 }
 
 // Helper to run CLI command and parse JSON output
@@ -54,10 +58,9 @@ describe("E2E CLI Messaging", () => {
     }
     fs.mkdirSync(TEST_ROOT, { recursive: true });
 
-    // NOTE: Full messaging test requires authorization pattern setup
-    // See docs/setup-test-patterns.md for instructions
-    // TL;DR: Add pattern ".*" to authPatterns table via Convex Dashboard
-    // Otherwise, this test will be skipped
+    // NOTE: Phase 2.5 tier system allows unknown→unknown messaging by default
+    // No special setup required! Alice (unknown) can message Bob (unknown)
+    // See docs/setup-test-patterns.md for advanced configuration options
   });
 
   afterAll(() => {
@@ -67,34 +70,33 @@ describe("E2E CLI Messaging", () => {
     }
   });
 
-  test.skip("alice sends message to bob", async () => {
-    // SKIP: Requires manual authorization pattern setup
-    // To enable: Add pattern ".*" to authPatterns table via Convex Dashboard
-    // See docs/setup-test-patterns.md for details
+  test("alice sends message to bob", async () => {
+    // With Phase 2.5 tier system, unknown users can message each other by default
+    // No special setup or admin configuration needed!
 
-    // 1. Create Alice's identity with TEST prefix
+    // 1. Create Alice's identity
     const aliceResult = await runCLI(
-      ["identity", "new", "TESTAlice", "--no-register", "--format", "json"],
+      ["identity", "new", "alice", "--no-register", "--format", "json"],
       { dataDir: ALICE_DIR }
     );
     const aliceAid = aliceResult.aid;
 
     // Register Alice with backend
-    await runCLI(["identity", "register", "TESTAlice"], { dataDir: ALICE_DIR, expectJson: false });
+    await runCLI(["identity", "register", "alice"], { dataDir: ALICE_DIR, expectJson: false });
 
-    // 2. Create Bob's identity with TEST prefix
+    // 2. Create Bob's identity
     const bobResult = await runCLI(
-      ["identity", "new", "TESTBob", "--no-register", "--format", "json"],
+      ["identity", "new", "bob", "--no-register", "--format", "json"],
       { dataDir: BOB_DIR }
     );
     const bobAid = bobResult.aid;
 
     // Register Bob with backend
-    await runCLI(["identity", "register", "TESTBob"], { dataDir: BOB_DIR, expectJson: false });
+    await runCLI(["identity", "register", "bob"], { dataDir: BOB_DIR, expectJson: false });
 
     // 3. Alice sends message to Bob
     const sendResult = await runCLI(
-      ["send", bobAid, "--message", "Hello Bob!", "--from", "TESTAlice", "--format", "json"],
+      ["send", bobAid, "--message", "Hello Bob!", "--from", "alice", "--format", "json"],
       { dataDir: ALICE_DIR }
     );
 
@@ -103,7 +105,7 @@ describe("E2E CLI Messaging", () => {
 
     // 4. Bob receives messages
     const receiveResult = await runCLI(
-      ["receive", "--plaintext", "--from", "TESTBob", "--format", "json"],
+      ["receive", "--plaintext", "--from", "bob", "--format", "json"],
       { dataDir: BOB_DIR }
     );
 
@@ -118,7 +120,7 @@ describe("E2E CLI Messaging", () => {
 
     // 5. Bob acknowledges the message
     await runCLI(
-      ["ack", message.id, "--envelope-hash", message.envelopeHash, "--from", "TESTBob"],
+      ["ack", message.id, "--envelope-hash", message.envelopeHash, "--from", "bob"],
       { dataDir: BOB_DIR, expectJson: false }
     );
 

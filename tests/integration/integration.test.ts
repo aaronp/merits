@@ -7,6 +7,7 @@ import {
 } from "../helpers/crypto-utils";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
+import { eventuallyValue } from "../helpers/eventually";
 
 const CONVEX_URL = process.env.CONVEX_URL;
 
@@ -146,14 +147,15 @@ describe("MessageBus Integration Tests with KERI Authentication", () => {
     const messageId = await client.send(bobAid, ciphertext, aliceCreds);
     expect(messageId).toBeDefined();
 
-    // Wait a bit for the message to be stored
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Bob receives the message (poll for eventual consistency)
+    const receivedMessage = await eventuallyValue(
+      async () => {
+        const messages = await client.receive(bobAid, bobCreds);
+        return messages.find((m) => m.id === messageId);
+      },
+      { timeout: 2000, interval: 50, message: "Waiting for message delivery" }
+    );
 
-    // Bob receives the message
-    const messages = await client.receive(bobAid, bobCreds);
-    expect(messages.length).toBeGreaterThan(0);
-
-    const receivedMessage = messages.find((m) => m.id === messageId);
     expect(receivedMessage).toBeDefined();
     expect(receivedMessage!.ct).toBe(ciphertext);
     expect(receivedMessage!.senderAid).toBe(aliceAid);

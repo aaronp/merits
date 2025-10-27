@@ -14,6 +14,7 @@ import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
 import { generateKeyPair, createAID, encodeCESRKey, sign, computeArgsHash } from "../helpers/crypto-utils";
 import { MessageBusClient, type AuthCredentials } from "../../src/client";
+import { eventuallyValue } from "../helpers/eventually";
 
 const CONVEX_URL = process.env.CONVEX_URL || "http://localhost:3000";
 
@@ -192,11 +193,15 @@ describe("End-to-End Onboarding Flow", () => {
   });
 
   test("Step 5: Admin receives onboarding message from unknown user", async () => {
-    await new Promise((resolve) => setTimeout(resolve, 200));
+    // Poll for message arrival (eventual consistency)
+    const onboardingMessage = await eventuallyValue(
+      async () => {
+        const messages = await client.receive(superAdmin.aid, superAdmin.creds);
+        return messages.find((m) => m.senderAid === newUser.aid);
+      },
+      { timeout: 3000, interval: 50, message: "Waiting for onboarding message" }
+    );
 
-    const messages = await client.receive(superAdmin.aid, superAdmin.creds);
-
-    const onboardingMessage = messages.find((m) => m.senderAid === newUser.aid);
     expect(onboardingMessage).toBeDefined();
   });
 

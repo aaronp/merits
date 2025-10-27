@@ -41,7 +41,7 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
     identityName,
     purpose: "receive",
     args: {
-      for: identity.aid, // Bind to recipient AID
+      recpAid: identity.aid, // Backend expects recpAid, not 'for'
     },
   });
 
@@ -140,7 +140,7 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
         purpose: "ack",
         args: {
           messageId: msg.id,
-          for: identity.aid, // Bind to recipient
+          recpAid: identity.aid, // Backend expects recpAid
         },
       });
 

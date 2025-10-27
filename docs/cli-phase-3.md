@@ -1,13 +1,15 @@
 # CLI Phase 3: Messaging Commands
 
-**Status**: Planning
-**Prerequisites**: [Phase 2 Complete](./cli-phase-2.md) ✅
+**Status**: ✅ Complete (with Phase 2.5 Tier Refactor)
+**Prerequisites**: [Phase 2 Complete](./cli-phase-2.md) ✅, [Phase 2.5 Tier Refactor](./roadmap-cli.md#phase-25-tier-refactor) ✅
 **Duration**: Week 2-3
-**Next Phase**: [Phase 4: Streaming & Groups](./cli-phase-4.md)
+**Next Phase**: [Phase 3.5: Testing Infrastructure](./roadmap-cli.md#phase-35-testing-infrastructure)
 
 ## Overview
 
 Implement core messaging functionality: send encrypted messages and receive/acknowledge messages with optimized authentication flows. This phase builds on the backend-agnostic architecture from Phase 2, using the `MeritsClient.transport` interface.
+
+**Phase 2.5 Addition**: During Phase 3, we completed a critical refactor of the authorization system to create a unified tier-based model. See [Phase 2.5: Tier Refactor](./roadmap-cli.md#phase-25-tier-refactor) for details.
 
 **Key Innovation**: Optimized auth flows with single-proof operations for efficiency.
 
@@ -15,6 +17,7 @@ Implement core messaging functionality: send encrypted messages and receive/ackn
 - [CLI Roadmap](./roadmap-cli.md) - Overall CLI development plan
 - [Phase 2 Complete](./cli-phase-2.md) - Identity management foundation
 - [Phase 2 Review](./phase2-review.md) - Backend-agnostic architecture
+- [Permissions System](./permissions.md) - **NEW**: Unified tier-based authorization (Phase 2.5)
 
 ---
 
@@ -920,7 +923,7 @@ describe("Auth Helper", () => {
 
 ### Integration Tests
 
-**File**: `tests/cli/integration/messaging.test.ts`
+**File**: [tests/cli/integration/messaging.test.ts](../tests/cli/integration/messaging.test.ts)
 
 ```typescript
 describe("Messaging Flow", () => {
@@ -1096,9 +1099,77 @@ After Phase 3 completion:
 
 ---
 
-**Status**: 📋 Planning
+---
+
+## Phase 3 Completion Summary
+
+**Status**: ✅ **COMPLETE** (including Phase 2.5 Tier Refactor)
+**Completed**: 2025-10-27
 **Prerequisites**: Phase 2 ✅ (Backend-agnostic architecture complete!)
-**Estimated Effort**: 1 week
+**Actual Effort**: 1 week + 2 days (tier refactor)
+
+### What Was Completed
+
+**Core Messaging** (as planned):
+- ✅ `merits send` command
+- ✅ `merits receive` command
+- ✅ `merits ack` command
+- ✅ Single-proof auth operations
+- ✅ Piping support
+- ✅ Multiple output formats (json, text, compact)
+- ✅ 51/51 unit tests passing
+
+**Phase 2.5: Tier Refactor** (bonus work):
+- ✅ Unified tier-based authorization system
+- ✅ Schema refactor (`tierConfigs`, `aidTiers` tables)
+- ✅ Pattern-based auto-assignment (sender AIDs)
+- ✅ Data-driven rate limits
+- ✅ New mutations: `assignTier()`, `createTier()`, `bootstrapDefaultTiers()`
+- ✅ Updated queries: `getTierInfo()`, `listTiers()`, `getTierStats()`
+- ✅ Backward compatibility: `onboardUser()` wrapper
+- ✅ Comprehensive documentation: [permissions.md](./permissions.md)
+- ✅ 40/40 integration tests passing
+
+### Test Results
+
+**Integration Tests**: 40/40 passing (100%)
+- SDK integration: 4/4
+- Messaging flow: 2/2
+- Onboarding flow: 12/12 (updated for new tier system)
+- Identity auth: 5/5
+- Transport: 4/4
+- Router: 2/2
+- Groups: 3/3
+- Main: 8/8
+
+**Unit Tests**: 51/51 passing (100%)
+
+### Key Achievements
+
+1. **Messaging Commands**: Full messaging lifecycle with optimized auth
+2. **Authorization Refactor**: Unified, data-driven tier system
+3. **Test Coverage**: All tests updated and passing
+4. **Documentation**: Complete API reference and implementation guide
+5. **Backward Compatibility**: Maintained `onboardUser()` for existing code
+
+### Files Modified/Created
+
+**Authorization System**:
+- [convex/schema.ts](../convex/schema.ts) - New `tierConfigs` and `aidTiers` tables
+- [convex/authorization.ts](../convex/authorization.ts) - Complete refactor (686 lines)
+- [docs/permissions.md](../docs/permissions.md) - Comprehensive documentation
+
+**Tests Updated**:
+- [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts)
+- [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)
+- [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts)
+
+### Next Steps
+
+Ready for **Phase 3.5: Testing Infrastructure** ([roadmap](./roadmap-cli.md#phase-35-testing-infrastructure))
+- `--data-dir` flag for isolated testing
+- FileVault for test environments
+- E2E test suite with isolated data directories
 
 **Key Inheritance from Phase 2**:
 - ✅ `MeritsClient` interface (transport, identityAuth)
@@ -1106,3 +1177,8 @@ After Phase 3 completion:
 - ✅ Backend-agnostic architecture
 - ✅ Config management
 - ✅ Output formatters
+
+**Key Addition from Phase 2.5**:
+- ✅ Unified tier-based authorization system
+- ✅ Data-driven permissions and rate limits
+- ✅ Pattern-based AID assignment
