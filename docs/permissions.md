@@ -2,256 +2,178 @@
 
 ## Overview
 
-Merits uses a tiered authorization system that controls who can message whom. This document defines the complete permission model.
+Merits uses a **unified tier-based authorization system**. All permissions (messaging, rate limits, patterns) are defined per-tier, not hardcoded.
 
-## Authorization Flow
+## Core Concept: Tiers
+
+Every AID is assigned a **tier** (like a role). Each tier defines:
+- Who can message whom (allowed recipient tiers)
+- Rate limits
+- Assignment rules (auto-assign via AID patterns, or require admin promotion)
+
+## Architecture
+
+### Authorization Flow
 
 When user A attempts to send a message to user B:
 
-1. **Rate Limit Check** - Verify sender hasn't exceeded tier-specific rate limits
-2. **Pattern Check** - Check if recipient matches any authorization patterns (unknown tier only)
-3. **Tier Check** - Apply tier-specific rules
-4. **Allow/Deny** - Return authorization result
+1. **Get sender tier**: Look up A's tier (explicit assignment or pattern-based)
+2. **Get recipient tier**: Look up B's tier
+3. **Check rate limit**: Verify A hasn't exceeded tier's rate limit
+4. **Check permissions**: Can A's tier message B's tier?
+5. **Allow/Deny**: Return result
 
-## User Tiers
+### Tier Configuration
 
-Every AID has a tier that determines their messaging privileges:
+Each tier is defined by a configuration document:
+
+```typescript
+interface TierConfig {
+  name: string;                    // "unknown", "known", "verified"
+  priority: number;                // For pattern matching (higher = checked first)
+
+  // Assignment rules
+  isDefault: boolean;              // Auto-assign to AIDs with no explicit tier
+  aidPatterns: string[];           // Regex patterns for auto-assignment
+  requiresPromotion: boolean;      // Must be assigned by admin
+
+  // Permissions
+  canMessageTiers: string[];       // Which tiers can receive messages
+  canMessageAnyone: boolean;       // Bypass tier checks
+
+  // Rate limiting
+  messagesPerWindow: number;
+  windowMs: number;
+
+  // Metadata
+  description: string;
+  createdBy: string;
+  createdAt: number;
+  active: boolean;
+}
+```
+
+### AID → Tier Assignment
+
+```typescript
+interface AidTierAssignment {
+  aid: string;
+  tierName: string;              // References TierConfig.name
+  assignedBy: string;            // "SYSTEM" | admin AID
+  assignedAt: number;
+  promotionProof?: string;       // SAID reference for audit
+  notes?: string;
+}
+```
+
+## Default Tiers
 
 ### `unknown` (Default)
-- **Default state** for all newly registered identities
-- **Can message**: Onboarding admins + recipients matching authorization patterns
-- **Cannot message**: Regular users, other unknown users (unless pattern matches)
-- **Rate limit**: Low (e.g., 10 messages/hour)
-- **Transition**: Admin promotes to `known` via onboarding proof
+Default tier for all new/unrecognized AIDs.
+
+```json
+{
+  "name": "unknown",
+  "priority": 0,
+  "isDefault": true,
+  "aidPatterns": [],
+  "requiresPromotion": false,
+  "canMessageTiers": ["unknown"],
+  "canMessageAnyone": false,
+  "messagesPerWindow": 10,
+  "windowMs": 3600000,
+  "description": "Default tier for new users"
+}
+```
+
+**Permissions**:
+- Can only message other `unknown` tier users
+- Cannot message `known` or `verified` without admin intervention
+- Rate limit: 10 messages/hour
+
+**Assignment**: Auto-assigned to any AID not explicitly assigned to another tier
 
 ### `known`
-- **Status**: Onboarded by an admin
-- **Can message**: Anyone in the system
-- **Rate limit**: Medium (e.g., 100 messages/hour)
-- **Transition**: Admin promotes to `verified` with KYC proof
+Users who have been onboarded by an admin.
+
+```json
+{
+  "name": "known",
+  "priority": 10,
+  "isDefault": false,
+  "aidPatterns": [],
+  "requiresPromotion": true,
+  "canMessageTiers": ["unknown", "known", "verified"],
+  "canMessageAnyone": false,
+  "messagesPerWindow": 100,
+  "windowMs": 3600000,
+  "description": "Onboarded users"
+}
+```
+
+**Permissions**:
+- Can message `unknown`, `known`, and `verified` tiers
+- Rate limit: 100 messages/hour
+
+**Assignment**: Requires admin promotion
 
 ### `verified`
-- **Status**: KYC completed
-- **Can message**: Anyone in the system
-- **Rate limit**: High (e.g., 1000 messages/hour)
-- **Transition**: None (highest tier)
+KYC-verified users with full access.
 
-## Authorization Patterns
-
-Patterns provide flexible allow-lists for recipient AIDs. They apply **only to `unknown` tier**.
-
-### Schema
-```typescript
+```json
 {
-  pattern: string,        // Regex pattern (e.g., "^TEST")
-  description: string,    // Human description
-  appliesTo: "unknown",   // Only unknown tier supported
-  priority: number,       // Higher = checked first
-  active: boolean,        // Enable/disable without deleting
-  createdBy: string,      // Admin AID
-  createdAt: number,
-  expiresAt?: number,     // Optional TTL
+  "name": "verified",
+  "priority": 20,
+  "isDefault": false,
+  "aidPatterns": [],
+  "requiresPromotion": true,
+  "canMessageTiers": ["unknown", "known", "verified"],
+  "canMessageAnyone": false,
+  "messagesPerWindow": 1000,
+  "windowMs": 3600000,
+  "description": "KYC-verified users"
 }
 ```
 
-### Matching Logic
+**Permissions**:
+- Can message all standard tiers
+- Rate limit: 1000 messages/hour
 
-For `unknown` tier senders:
-1. Fetch active patterns sorted by priority (descending)
-2. Test recipient AID against each pattern's regex
-3. If any pattern matches → **Allow**
-4. If no patterns match → Fall back to tier logic (onboarding admins only)
+**Assignment**: Requires admin promotion with KYC proof
 
-For `known` and `verified` tiers:
-- Patterns are **not checked** (these tiers already have broad access)
+## Pattern-Based Assignment
 
-### Default Patterns
+Tiers can auto-assign based on sender AID patterns. This enables:
+- Test tiers for E2E testing
+- Special handling for specific AID formats
+- Dynamic tier assignment without explicit admin action
 
-**Development/Testing Pattern**:
-```javascript
+### Example: Test Tier
+
+```json
 {
-  pattern: "^TEST",
-  description: "Allow messaging to test identities (development only)",
-  appliesTo: "unknown",
-  priority: 100,
-  active: true,
+  "name": "test",
+  "priority": 100,
+  "isDefault": false,
+  "aidPatterns": [".*"],
+  "requiresPromotion": false,
+  "canMessageTiers": ["test"],
+  "canMessageAnyone": true,
+  "messagesPerWindow": 1000,
+  "windowMs": 3600000,
+  "description": "Test tier with unrestricted messaging"
 }
 ```
 
-This allows unknown users to message any AID starting with `TEST`, enabling:
-- E2E tests without onboarding flows
-- Local development with test accounts
-- Parallel test isolation
+**Use case**: E2E tests where pattern matches all AIDs, giving them test tier with unrestricted messaging.
 
-**Production**: Remove or deactivate test patterns in production deployments.
+**Pattern matching order**:
+1. Check for explicit AID assignment
+2. Try patterns in priority order (highest first)
+3. Fall back to default tier
 
-## Onboarding Flow
+## Code References
 
-The standard way for unknown users to gain messaging access:
-
-```
-1. Unknown user registers → tier: unknown
-2. Unknown user messages onboarding admin
-3. Admin verifies identity/intent
-4. Admin calls onboardUser(aid, proof) → tier: known
-5. Known user can now message anyone
-```
-
-**Code**: [convex/authorization.ts](../convex/authorization.ts)
-**Tests**: [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)
-
-## Admin Roles
-
-### `onboarding_admin`
-- Listed in `onboardingAdmins` table (active=true)
-- Unknown users can message them
-- Can promote unknown → known
-
-### `super_admin`
-- Listed in `adminRoles` table with role="super_admin"
-- Can manage admins (add/remove onboarding_admins)
-- Can manage authorization patterns
-- Can promote to any tier
-
-## Implementation
-
-### Backend
 - **Schema**: [convex/schema.ts](../convex/schema.ts)
-  - `userTiers` - AID → tier mapping
-  - `onboardingAdmins` - Allow-list for unknown messaging
-  - `adminRoles` - Admin privilege management
-  - `authPatterns` - Regex patterns for recipient matching
-  - `rateLimits` - Per-AID rate tracking
-
-- **Authorization Logic**: [convex/authorization.ts](../convex/authorization.ts)
-  - `canSend(from, to, typ)` - Main authorization function
-  - `getUserTier(aid)` - Get user's tier
-  - `matchesAnyPattern(recipientAid, tier)` - Pattern matching
-  - `isOnboardingAdmin(aid)` - Check admin status
-
-- **Integration**: [convex/messages.ts](../convex/messages.ts)
-  - `send` mutation calls `canSend()` before accepting message
-  - Server-verified sender AID (never trust client)
-
-### Testing
-
-**Unit Tests**: [tests/unit/groups.test.ts](../tests/unit/groups.test.ts)
-- Tier logic validation
-- Admin role hierarchy
-
-**Integration Tests**: [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)
-- Full onboarding flow (unknown → known → verified)
-- Admin operations
-- Rate limiting
-- Authorization denials
-
-**E2E Tests**: [tests/cli/e2e/messaging.test.ts](../tests/cli/e2e/messaging.test.ts)
-- CLI messaging with isolated test accounts
-- Uses TEST prefix AIDs + authorization patterns
-
-## Rate Limits
-
-Rate limits are tier-specific and enforced per-AID:
-
-| Tier      | Limit (default) | Window  |
-|-----------|-----------------|---------|
-| unknown   | 10 messages     | 1 hour  |
-| known     | 100 messages    | 1 hour  |
-| verified  | 1000 messages   | 1 hour  |
-
-**Implementation**: Sliding window per AID, incremented on successful `send`.
-
-**Code**: `incrementRateLimit()` in [convex/authorization.ts](../convex/authorization.ts)
-
-## Security Considerations
-
-1. **Server-side enforcement**: All authorization checks happen server-side (never trust client)
-2. **Verified sender**: Server extracts sender AID from authenticated proof, never from request args
-3. **Immutable tiers**: Users cannot self-promote (requires admin action)
-4. **Admin-only patterns**: Only super_admins can create/modify authorization patterns
-5. **Pattern expiration**: Patterns can have TTL for temporary access grants
-6. **Audit trail**: All tier changes and pattern additions are logged with admin AID
-
-## Example Authorization Checks
-
-### Unknown user → Regular user
-```
-Sender: unknown tier
-Recipient: DEpJbqv7k2... (regular AID)
-Pattern check: No match
-Onboarding admin: No
-Result: DENIED ("Unknown users can only message onboarding admins")
-```
-
-### Unknown user → Onboarding admin
-```
-Sender: unknown tier
-Recipient: DAdm1n... (in onboardingAdmins table, active=true)
-Pattern check: N/A (admin check takes precedence)
-Result: ALLOWED
-```
-
-### Unknown user → Test AID (with pattern)
-```
-Sender: unknown tier
-Recipient: TESTAlice... (starts with "TEST")
-Pattern check: Matches "^TEST" pattern
-Result: ALLOWED
-```
-
-### Known user → Anyone
-```
-Sender: known tier
-Recipient: DEpJbqv7k2... (any AID)
-Pattern check: Skipped (known tier has broad access)
-Result: ALLOWED
-```
-
-## Managing Patterns
-
-Patterns are managed via Convex mutations (super_admin only):
-
-```typescript
-// Add pattern
-await ctx.runMutation(api.authorization.addPattern, {
-  pattern: "^TEST",
-  description: "Test identities",
-  appliesTo: "unknown",
-  priority: 100,
-  auth: {...}
-});
-
-// Deactivate pattern
-await ctx.runMutation(api.authorization.deactivatePattern, {
-  patternId: "...",
-  auth: {...}
-});
-```
-
-**Dashboard**: Patterns can be manually added via Convex Dashboard → Data → authPatterns table
-
-## Testing Conventions
-
-When writing tests that need messaging between unknown users:
-
-1. **Use TEST prefix**: AIDs should start with `TEST` (e.g., `TESTAlice`, `TESTBob`)
-2. **Add pattern once**: Create `^TEST` pattern in test setup (or rely on default)
-3. **Isolated environments**: Use `--data-dir` to create separate test vaults
-4. **Cleanup**: Test patterns should have expiration or be manually cleaned up
-
-**Example**:
-```typescript
-// tests/cli/e2e/messaging.test.ts
-const aliceAid = "TESTAlice" + randomSuffix(39); // Total 44 chars
-const bobAid = "TESTBob" + randomSuffix(41);     // Total 44 chars
-
-// Both can message each other via ^TEST pattern
-```
-
-## Future Enhancements
-
-- [ ] Per-group authorization (group admins control membership)
-- [ ] Reputation-based tier progression
-- [ ] Message type-specific authorization (e.g., `typ: "payment"` requires verified)
-- [ ] Allowlist/blocklist per user
-- [ ] Time-based restrictions (e.g., business hours only)
+- **Authorization**: [convex/authorization.ts](../convex/authorization.ts)
+- **Tests**: [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)

@@ -75,18 +75,23 @@ describe("Messaging Flow Integration", () => {
       // ignore if not available
     }
 
+    // Bootstrap default tiers
+    await convex.mutation(api.authorization.bootstrapDefaultTiers, {});
+
     // Bootstrap Bob as super admin
     // @ts-ignore - using generated API without types
     await convex.mutation(api._test_helpers.bootstrapSuperAdmin, { aid: bobAid });
 
-    // Add Bob as onboarding admin (requires admin auth)
-    await convex.mutation(api.authorization.addOnboardingAdmin, {
+    // Assign Bob to "known" tier so Alice (unknown) can message him
+    await convex.mutation(api.authorization.assignTier, {
       aid: bobAid,
-      description: "Test onboarding admin",
+      tierName: "known",
+      promotionProof: "SYSTEM_ADMIN",
+      notes: "Test admin",
       auth: await client.createAuth(
         { aid: bobAid, privateKey: bobKeys.privateKey, ksn: 0 },
-        "admin",
-        { action: "addOnboardingAdmin", aid: bobAid }
+        "assign_tier",
+        { aid: bobAid, tierName: "known" }
       ),
     });
 

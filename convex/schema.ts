@@ -48,17 +48,6 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_aid", ["aid"]),
 
-  // Onboarding Admins - AIDs that unknown users are allowed to contact
-  onboardingAdmins: defineTable({
-    aid: v.string(), // AID of onboarding admin
-    description: v.string(), // E.g., "Primary onboarding admin"
-    active: v.boolean(), // Can be disabled
-    createdAt: v.number(),
-    addedBy: v.optional(v.string()), // Which super_admin added this
-  })
-    .index("by_aid", ["aid"])
-    .index("by_active", ["active"]),
-
   // Admin Roles - AIDs that can perform admin operations
   adminRoles: defineTable({
     aid: v.string(), // Admin AID
@@ -71,44 +60,49 @@ export default defineSchema({
     .index("by_role", ["role"])
     .index("by_active", ["active"]),
 
-  // User tiers for authorization
-  userTiers: defineTable({
-    aid: v.string(), // User AID
-    tier: v.string(), // "unknown" | "known" | "verified"
-    onboardingProof: v.optional(v.string()), // SAID reference to onboarding evidence
-    kycStatus: v.optional(v.string()), // KYC provider status
-    kycProvider: v.optional(v.string()), // E.g., "stripe", "persona"
-    kycTimestamp: v.optional(v.number()), // When KYC was completed
-    updatedAt: v.number(),
-    notes: v.optional(v.string()), // Admin notes
-    promotedBy: v.optional(v.string()), // Admin AID who promoted this user
+  // Tier Configurations - Define permissions and rules for each tier
+  tierConfigs: defineTable({
+    name: v.string(), // "unknown", "known", "verified", "test", etc.
+    priority: v.number(), // For pattern matching (higher = checked first)
+    isDefault: v.boolean(), // Auto-assign to AIDs with no explicit tier
+    aidPatterns: v.array(v.string()), // Regex patterns for auto-assignment (checked on sender)
+    requiresPromotion: v.boolean(), // Must be assigned by admin
+    canMessageTiers: v.array(v.string()), // Which tiers can receive messages
+    canMessageAnyone: v.boolean(), // Bypass tier checks
+    messagesPerWindow: v.number(), // Rate limit
+    windowMs: v.number(), // Rate limit window duration
+    description: v.string(),
+    createdBy: v.string(), // Admin AID or "SYSTEM"
+    createdAt: v.number(),
+    active: v.boolean(),
+  })
+    .index("by_priority", ["active", "priority"])
+    .index("by_name", ["name", "active"]),
+
+  // AID → Tier Assignments
+  aidTiers: defineTable({
+    aid: v.string(),
+    tierName: v.string(), // References tierConfigs.name
+    assignedBy: v.string(), // "SYSTEM" | admin AID
+    assignedAt: v.number(),
+    promotionProof: v.optional(v.string()), // SAID reference for audit
+    kycStatus: v.optional(v.string()), // For verified tier
+    kycProvider: v.optional(v.string()),
+    kycTimestamp: v.optional(v.number()),
+    notes: v.optional(v.string()),
   })
     .index("by_aid", ["aid"])
-    .index("by_tier", ["tier"]),
+    .index("by_tier", ["tierName"]),
 
-  // Rate limits per tier (optional - can be enforced later)
+  // Rate limits per AID (tracks actual usage)
   rateLimits: defineTable({
     aid: v.string(),
-    tier: v.string(),
+    tierName: v.string(), // Current tier (for audit)
     windowStart: v.number(), // Start of current window
-    windowDuration: v.number(), // Duration in ms (e.g., 3600000 for 1 hour)
+    windowDuration: v.number(), // Duration in ms
     messagesInWindow: v.number(), // Count in current window
-    limit: v.number(), // Max messages per window
+    limit: v.number(), // Max messages per window (from tier config)
   }).index("by_aid", ["aid"]),
-
-  // Authorization Patterns - Regex-based recipient allow-lists (unknown tier only)
-  authPatterns: defineTable({
-    pattern: v.string(), // Regex pattern for recipient AIDs (e.g., "^TEST")
-    description: v.string(), // Human-readable description
-    appliesTo: v.string(), // "unknown" only (could add "known", "all" later)
-    priority: v.number(), // Higher priority = checked first
-    active: v.boolean(), // Can disable without deleting
-    createdBy: v.string(), // Admin AID who created this
-    createdAt: v.number(),
-    expiresAt: v.optional(v.number()), // Optional TTL for temporary patterns
-  })
-    .index("by_active_priority", ["active", "priority"])
-    .index("by_appliesTo", ["appliesTo", "active"]),
 
   // Groups - collections of AIDs for server-side fanout messaging
   groups: defineTable({

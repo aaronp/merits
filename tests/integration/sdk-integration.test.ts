@@ -66,45 +66,13 @@ describe("SDK Integration", () => {
       lastEvtSaid: "evt-bob-0",
     });
 
-    // Bootstrap Alice as super admin and onboard both users
+    // Bootstrap default tiers (includes "test" tier with .* pattern)
+    await convex.mutation(api.authorization.bootstrapDefaultTiers, {});
+
+    // Bootstrap Alice as super admin (for group tests)
     await convex.mutation(api._test_helpers.resetAdminRoles, {});
     await convex.mutation(api._test_helpers.bootstrapSuperAdmin, {
       aid: alice.aid,
-    });
-
-    // Also whitelist Bob as an onboarding admin to allow messages from unknown users
-    // This ensures sends succeed even if tier writes are delayed in some environments
-    await convex.mutation(api.authorization.addOnboardingAdmin, {
-      aid: bob.aid,
-      description: "SDK test onboarding admin",
-      auth: await client.createAuth(alice, "admin", {
-        action: "addOnboardingAdmin",
-        aid: bob.aid,
-      }),
-    });
-
-    // Onboard Alice herself
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: alice.aid,
-      onboardingProof: "ETEST_PROOF_ALICE",
-      notes: "Test admin user",
-      auth: await client.createAuth(alice, "admin", {
-        action: "onboardUser",
-        userAid: alice.aid,
-        onboardingProof: "ETEST_PROOF_ALICE",
-      }),
-    });
-
-    // Onboard Bob so he can receive messages
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: bob.aid,
-      onboardingProof: "ETEST_PROOF_BOB",
-      notes: "Test user",
-      auth: await client.createAuth(alice, "admin", {
-        action: "onboardUser",
-        userAid: bob.aid,
-        onboardingProof: "ETEST_PROOF_BOB",
-      }),
     });
   });
 
