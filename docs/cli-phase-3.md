@@ -1111,13 +1111,18 @@ After Phase 3 completion:
 ### What Was Completed
 
 **Core Messaging** (as planned):
-- ✅ `merits send` command
-- ✅ `merits receive` command
-- ✅ `merits ack` command
-- ✅ Single-proof auth operations
+- ✅ `merits send` command - [cli/commands/send.ts](../cli/commands/send.ts)
+- ✅ `merits receive` command - [cli/commands/receive.ts](../cli/commands/receive.ts)
+- ✅ `merits ack` command - [cli/commands/ack.ts](../cli/commands/ack.ts)
+- ✅ Single-proof auth operations - [cli/lib/getAuthProof.ts](../cli/lib/getAuthProof.ts)
 - ✅ Piping support
 - ✅ Multiple output formats (json, text, compact)
 - ✅ 51/51 unit tests passing
+
+**E2E Validation**:
+- ✅ Full messaging flow - [tests/cli/e2e/messaging.test.ts](../tests/cli/e2e/messaging.test.ts)
+- ✅ SDK integration - [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts)
+- ✅ Messaging flow tests - [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts)
 
 **Phase 2.5: Tier Refactor** (bonus work):
 - ✅ Unified tier-based authorization system
@@ -1133,16 +1138,23 @@ After Phase 3 completion:
 ### Test Results
 
 **Integration Tests**: 40/40 passing (100%)
-- SDK integration: 4/4
-- Messaging flow: 2/2
-- Onboarding flow: 12/12 (updated for new tier system)
-- Identity auth: 5/5
-- Transport: 4/4
-- Router: 2/2
-- Groups: 3/3
-- Main: 8/8
+- SDK integration: 4/4 - [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts)
+- Messaging flow: 2/2 - [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts)
+- Onboarding flow: 12/12 - [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)
+- Identity auth: 5/5 - [tests/integration/identity-auth-interface.test.ts](../tests/integration/identity-auth-interface.test.ts)
+- Transport: 4/4 - [tests/integration/integration.test.ts](../tests/integration/integration.test.ts)
+- Router: 2/2 - [tests/integration/integration.test.ts](../tests/integration/integration.test.ts)
+- Groups: 3/3 - [tests/integration/group-integration.test.ts](../tests/integration/group-integration.test.ts)
+- Main: 8/8 - [tests/integration/integration.test.ts](../tests/integration/integration.test.ts)
+
+**E2E CLI Tests**: [tests/cli/e2e/messaging.test.ts](../tests/cli/e2e/messaging.test.ts)
+- Full send → receive → ack flow with isolated data directories
+- Tests `--data-dir` flag for parallel test execution
+- Validates data persistence across CLI invocations
 
 **Unit Tests**: 51/51 passing (100%)
+- End-to-end tests: [tests/unit/end-to-end-simple.test.ts](../tests/unit/end-to-end-simple.test.ts)
+- Signature debugging: [tests/unit/signature-debug.test.ts](../tests/unit/signature-debug.test.ts)
 
 ### Key Achievements
 
@@ -1154,15 +1166,24 @@ After Phase 3 completion:
 
 ### Files Modified/Created
 
-**Authorization System**:
+**CLI Commands** (Phase 3):
+- [cli/commands/send.ts](../cli/commands/send.ts) - Send encrypted messages
+- [cli/commands/receive.ts](../cli/commands/receive.ts) - Receive and decrypt messages
+- [cli/commands/ack.ts](../cli/commands/ack.ts) - Acknowledge message receipt
+- [cli/lib/getAuthProof.ts](../cli/lib/getAuthProof.ts) - Single-proof auth helper
+
+**Authorization System** (Phase 2.5):
 - [convex/schema.ts](../convex/schema.ts) - New `tierConfigs` and `aidTiers` tables
 - [convex/authorization.ts](../convex/authorization.ts) - Complete refactor (686 lines)
-- [docs/permissions.md](../docs/permissions.md) - Comprehensive documentation
+- [docs/permissions.md](./permissions.md) - Comprehensive documentation
+- [docs/setup-test-patterns.md](./setup-test-patterns.md) - Testing setup guide
 
-**Tests Updated**:
-- [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts)
-- [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts)
-- [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts)
+**Tests Created/Updated**:
+- [tests/cli/e2e/messaging.test.ts](../tests/cli/e2e/messaging.test.ts) - E2E CLI messaging flow
+- [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts) - SDK integration
+- [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts) - Onboarding flow
+- [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts) - Messaging flow
+- [tests/helpers/eventually.ts](../tests/helpers/eventually.ts) - Polling test helpers
 
 ### Next Steps
 
