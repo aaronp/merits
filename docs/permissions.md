@@ -1,354 +1,379 @@
-# Merits Messaging Permissions
+# Permissions
 
-**Status**: ✅ Implemented (Phase 2 Tier Refactor Complete)
-**Last Updated**: 2025-10-27
+**Merits v0.1.0** has a simple permission model: any registered AID can message any other registered AID. Advanced ACLs and rate limiting are planned but not yet enforced.
 
-## Overview
+## Current Model (v0.1.0)
 
-Merits uses a **unified tier-based authorization system**. All permissions (messaging, rate limits, assignment rules) are defined per-tier in database configurations, not hardcoded.
+### Direct Messaging
 
-**Key Benefits**:
-- Data-driven authorization (create/modify tiers without code changes)
-- Pattern-based auto-assignment (regex on sender AIDs)
-- Flexible rate limiting per tier
-- Audit trail for all tier assignments
+**Who can send**:
+- ✅ Any registered AID (public key in `keyStates` table)
+- ✅ Must prove control via challenge/response auth
+- ❌ No allowlist/blocklist (future)
+- ❌ No rate limiting (future)
 
-## Core Concept: Tiers
+**Who can receive**:
+- ✅ Any registered AID
+- ✅ Messages delivered to `recpAid` inbox
+- ❌ No filtering (future)
 
-Every AID is assigned a **tier** (similar to a role). Each tier defines:
-- **Permissions**: Which tiers can receive messages from this tier
-- **Rate limits**: Messages per time window
-- **Assignment rules**: Auto-assign via AID patterns, or require admin promotion
-
-## Architecture
-
-### Authorization Flow
-
-When user A attempts to send a message to user B:
-
-1. **Get sender tier**: Look up A's tier (explicit assignment or pattern-based)
-2. **Get recipient tier**: Look up B's tier
-3. **Check rate limit**: Verify A hasn't exceeded tier's rate limit
-4. **Check permissions**: Can A's tier message B's tier?
-5. **Allow/Deny**: Return result
-
-### Tier Configuration
-
-Each tier is defined by a configuration document:
-
+**Example**:
 ```typescript
-interface TierConfig {
-  name: string;                    // "unknown", "known", "verified"
-  priority: number;                // For pattern matching (higher = checked first)
+// Alice can send to Bob if both are registered
+await client.transport.sendMessage({
+  to: bob.aid,
+  ct: encrypt("Hello Bob"),
+  auth: aliceAuth,
+});
+```
 
-  // Assignment rules
-  isDefault: boolean;              // Auto-assign to AIDs with no explicit tier
-  aidPatterns: string[];           // Regex patterns for auto-assignment
-  requiresPromotion: boolean;      // Must be assigned by admin
+### Group Messaging
 
-  // Permissions
-  canMessageTiers: string[];       // Which tiers can receive messages
-  canMessageAnyone: boolean;       // Bypass tier checks
+**Who can create groups**:
+- ✅ Any registered AID
+- ✅ Creator becomes owner
+- ❌ No admin-only group creation (future)
 
-  // Rate limiting
-  messagesPerWindow: number;
-  windowMs: number;
+**Who can send to groups**:
+- ✅ Group members only (verified in backend)
+- ❌ Non-members get error: "Only group members can send messages"
 
-  // Metadata
-  description: string;
-  createdBy: string;
-  createdAt: number;
-  active: boolean;
+**Who can manage groups**:
+- Owner role:
+  - ✅ Add/remove members
+  - ✅ Cannot leave without transferring ownership
+  - ✅ Last owner cannot be removed
+- Admin role:
+  - ✅ Add/remove non-owner members
+  - ❌ **Not fully enforced** (role field exists, logic incomplete)
+- Member role:
+  - ✅ Send messages
+  - ✅ Leave group
+  - ❌ Cannot add/remove members
+
+**Example**:
+```typescript
+// Alice creates group → becomes owner
+await client.group.createGroup({
+  name: "team-alpha",
+  initialMembers: [bob.aid, carol.aid],
+  auth: aliceAuth,
+});
+
+// Alice can add members (owner)
+await client.group.addMembers({
+  groupId,
+  members: [dave.aid],
+  auth: aliceAuth,
+});
+
+// Bob cannot add members (member role)
+await client.group.addMembers({
+  groupId,
+  members: [eve.aid],
+  auth: bobAuth,  // ❌ Error: Only admins or owners can add members
+});
+```
+
+### Acknowledgments
+
+**Who can ack**:
+- ✅ Message recipient only
+- ✅ Verified via challenge/response (forAid matches recipient)
+- ✅ Session tokens can auto-ack (watch command)
+
+## Future Permission Model
+
+### Tiered Access (Planned)
+
+**Admin tier**:
+- Global system permissions
+- Onboard new users
+- Set rate limits
+- View usage metrics
+
+**Registered tier**:
+- Send/receive direct messages
+- Create groups (configurable limit)
+- Rate limited (configurable)
+
+**Onboarding tier**:
+- Receive messages only
+- Send to designated onboarders
+- Limited message quota
+- Require SAID-based proof for full registration
+
+### ACLs (Planned)
+
+**Per-AID controls**:
+```typescript
+{
+  aid: alice.aid,
+  allowlist: [bob.aid, carol.aid],  // Only these can message alice
+  blocklist: [eve.aid],             // Blocked from messaging alice
+  rateLimit: {
+    maxPerHour: 100,
+    maxPerDay: 1000,
+  },
 }
 ```
 
-### AID → Tier Assignment
+**Global controls**:
+```typescript
+{
+  requireOnboardingProof: true,  // New AIDs need SAID proof
+  defaultRateLimit: {
+    maxPerHour: 50,
+    maxPerDay: 500,
+  },
+  allowGroupCreation: true,      // Can users create groups?
+  maxGroupsPerAid: 10,
+}
+```
+
+### Rate Limiting (Planned)
+
+**Per-AID limits**:
+- Messages sent per hour/day
+- Challenges issued per hour
+- Groups created per day
+- Members added per hour
+
+**Enforcement points**:
+- `sendMessage`: Check sender rate limit
+- `issueChallenge`: Check challenge rate limit
+- `createGroup`: Check group creation limit
+- `addMembers`: Check member addition limit
+
+**Response**: `429 Too Many Requests` with retry-after header.
+
+## Current Enforcement (v0.1.0)
+
+### ✅ What's Enforced
+
+**Identity**:
+- ✅ Must be registered (public key in `keyStates`)
+- ✅ Must prove control (challenge/response)
+- ✅ Cannot impersonate others (signature verification)
+
+**Groups**:
+- ✅ Only members can send to group
+- ✅ Only owner/admin can add/remove members
+- ✅ Last owner cannot leave/be removed
+- ✅ Cannot remove non-existent members
+
+**Messages**:
+- ✅ Cannot ack others' messages (AID verification)
+- ✅ Cannot reuse auth proofs (single-use challenges)
+- ✅ Cannot modify args after signing (args hash)
+
+### ❌ What's NOT Enforced
+
+**Spam/DoS**:
+- ❌ No rate limiting (anyone can flood)
+- ❌ No message size limits
+- ❌ No attachment restrictions
+
+**Privacy**:
+- ❌ Anyone can message anyone (no blocklists)
+- ❌ No "request to message" flow
+- ❌ No read receipts control
+
+**Storage**:
+- ❌ Messages never expire (accumulate forever)
+- ❌ No per-user quota
+- ❌ No group size limits
+
+**Onboarding**:
+- ❌ Anyone can register (no admin approval)
+- ❌ No SAID-based onboarding proofs enforced
+- ❌ No tier restrictions
+
+## Data Model
+
+### User Tiers (Schema Defined, Not Enforced)
 
 ```typescript
-interface AidTierAssignment {
+// convex/schema.ts (userTiers table exists)
+{
   aid: string;
-  tierName: string;              // References TierConfig.name
-  assignedBy: string;            // "SYSTEM" | admin AID
-  assignedAt: number;
-  promotionProof?: string;       // SAID reference for audit
-  notes?: string;
+  tier: "admin" | "registered" | "onboarding";
+  onboardingProof?: string;  // SAID of welcome message
+  onboardedBy?: string;      // Admin AID who onboarded
+  createdAt: number;
 }
 ```
 
-## Default Tiers
+**v0.1.0 behavior**: Table exists, but mutations don't check it.
 
-### `unknown` (Default)
-Default tier for all new/unrecognized AIDs.
+### Rate Limits (Schema Defined, Not Enforced)
 
-```json
+```typescript
+// convex/schema.ts (rateLimits table exists)
 {
-  "name": "unknown",
-  "priority": 0,
-  "isDefault": true,
-  "aidPatterns": [],
-  "requiresPromotion": false,
-  "canMessageTiers": ["unknown", "known"],
-  "canMessageAnyone": false,
-  "messagesPerWindow": 10,
-  "windowMs": 3600000,
-  "description": "Default tier for new users (can contact known users for onboarding)"
+  aid: string;
+  maxMessagesPerHour: number;
+  maxMessagesPerDay: number;
+  lastResetHour: number;
+  lastResetDay: number;
+  currentHourCount: number;
+  currentDayCount: number;
 }
 ```
 
-**Permissions**:
-- Can message other `unknown` tier users (peer communication)
-- **Can message `known` tier users** (enables onboarding flow where unknown users contact admins)
-- Rate limit: 10 messages/hour
+**v0.1.0 behavior**: Table exists, but mutations don't increment counters.
 
-**Assignment**: Auto-assigned to any AID not explicitly assigned to another tier
+### ACLs (Not Implemented)
 
-**Onboarding Flow**: Unknown users can message known tier users to request onboarding. This is by design to enable the onboarding process where new users contact admins.
+No database tables for allowlists/blocklists yet.
 
-### `known`
-Users who have been onboarded by an admin.
+## Admin Operations
 
-```json
-{
-  "name": "known",
-  "priority": 10,
-  "isDefault": false,
-  "aidPatterns": [],
-  "requiresPromotion": true,
-  "canMessageTiers": ["unknown", "known", "verified"],
-  "canMessageAnyone": false,
-  "messagesPerWindow": 100,
-  "windowMs": 3600000,
-  "description": "Onboarded users (can receive from unknown for onboarding)"
-}
-```
+### Current Admin Functions
 
-**Permissions**:
-- Can message `unknown`, `known`, and `verified` tiers
-- Can **receive messages from `unknown`** tier (for onboarding)
-- Rate limit: 100 messages/hour
-
-**Assignment**: Requires admin promotion via `assignTier()` mutation
-
-### `verified`
-KYC-verified users with full access.
-
-```json
-{
-  "name": "verified",
-  "priority": 20,
-  "isDefault": false,
-  "aidPatterns": [],
-  "requiresPromotion": true,
-  "canMessageTiers": ["unknown", "known", "verified"],
-  "canMessageAnyone": false,
-  "messagesPerWindow": 1000,
-  "windowMs": 3600000,
-  "description": "KYC-verified users"
-}
-```
-
-**Permissions**:
-- Can message all standard tiers
-- Rate limit: 1000 messages/hour
-
-**Assignment**: Requires admin promotion with KYC proof
-
-## Pattern-Based Assignment
-
-Tiers can auto-assign based on sender AID patterns. This enables:
-- Test tiers for E2E testing
-- Special handling for specific AID formats
-- Dynamic tier assignment without explicit admin action
-
-### Example: Test Tier
-
-```json
-{
-  "name": "test",
-  "priority": 100,
-  "isDefault": false,
-  "aidPatterns": ["^TEST"],
-  "requiresPromotion": false,
-  "canMessageTiers": ["test"],
-  "canMessageAnyone": true,
-  "messagesPerWindow": 1000,
-  "windowMs": 3600000,
-  "description": "Test tier with unrestricted messaging (DEV ONLY)"
-}
-```
-
-**Use case**: E2E tests where AIDs starting with "TEST" get unrestricted messaging.
-
-**Pattern matching order**:
-1. Check for explicit AID assignment in `aidTiers` table
-2. Try tier patterns in priority order (highest first)
-3. Fall back to default tier (`isDefault: true`)
-
-**Security Note**: The test tier should be disabled in production or use a pattern that won't match real AIDs.
-
-## API / Mutations
-
-### `bootstrapDefaultTiers()`
-Creates the default tier configurations (`unknown`, `known`, `verified`, `test`).
-
-**Usage**: Call once after schema deployment to initialize tiers.
-
+**Identity registration** (`convex/identity.ts`):
 ```typescript
-await ctx.db.mutation(api.authorization.bootstrapDefaultTiers, {});
+registerKeyState({
+  aid,
+  ksn,
+  keys,
+  threshold,
+  lastEvtSaid,
+})
 ```
+- ✅ Anyone can call (no admin check)
+- ✅ Caches public keys in `keyStates`
+- ❌ No approval workflow
 
-**Implementation**: [convex/authorization.ts:520](../convex/authorization.ts#L520)
-
-### `assignTier()`
-Assign a tier to an AID (admin only).
-
-**Usage**:
+**Onboarding** (`convex/onboarding.ts`):
 ```typescript
-await ctx.db.mutation(api.authorization.assignTier, {
-  aid: "DHytGsw0r...",
-  tierName: "known",
-  promotionProof: "EPROOF_SAID",
-  notes: "Onboarded via chat",
-  auth: { challengeId, sigs, ksn }
-});
+onboardUser({
+  userAid,
+  onboardingProof,
+  auth,  // Admin auth
+})
+```
+- ✅ Function exists
+- ❌ Not enforced (users can register without it)
+- ❌ SAID verification stub (doesn't validate proof)
+
+### Future Admin Dashboard
+
+**Planned operations**:
+- View all registered AIDs
+- Set per-user rate limits
+- Ban/unban users
+- View usage metrics
+- Approve onboarding requests
+- Manage global settings
+
+## Testing Permissions
+
+**Direct messaging**:
+```bash
+# Alice sends to Bob (works)
+merits send $BOB_AID --message "Hello" --from alice
+
+# Bob receives (works)
+merits receive --from bob
 ```
 
-**Implementation**: [convex/authorization.ts:347](../convex/authorization.ts#L347)
+**Group messaging**:
+```bash
+# Alice creates group (works)
+merits group create team --from alice
 
-### `onboardUser()` (Backward Compatibility)
-Wrapper around `assignTier()` that assigns "known" tier.
+# Alice adds Bob (works - owner)
+merits group add $GROUP_ID $BOB_AID --from alice
 
-**Usage**:
-```typescript
-await ctx.db.mutation(api.authorization.onboardUser, {
-  userAid: "DHytGsw0r...",
-  onboardingProof: "EPROOF_SAID",
-  notes: "Onboarded",
-  auth: { challengeId, sigs, ksn }
-});
+# Bob tries to add Carol (fails - not owner/admin)
+merits group add $GROUP_ID $CAROL_AID --from bob
+# Error: Only admins or owners can add members
+
+# Bob sends to group (works - member)
+merits send $GROUP_ID --message "Hello team" --from bob
+
+# Carol tries to send (fails - not member)
+merits send $GROUP_ID --message "Hello" --from carol
+# Error: Only group members can send messages
 ```
 
-**Implementation**: [convex/authorization.ts:421](../convex/authorization.ts#L421)
+**See**:
+- [tests/integration/group-integration.test.ts](../tests/integration/group-integration.test.ts) - Group permission tests
+- [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts) - Message delivery tests
 
-### `createTier()`
-Create a new custom tier configuration (super_admin only).
+## Implementation Files
 
-**Usage**:
-```typescript
-await ctx.db.mutation(api.authorization.createTier, {
-  name: "premium",
-  priority: 30,
-  isDefault: false,
-  aidPatterns: [],
-  requiresPromotion: true,
-  canMessageTiers: ["unknown", "known", "verified", "premium"],
-  canMessageAnyone: false,
-  messagesPerWindow: 5000,
-  windowMs: 3600000,
-  description: "Premium tier users",
-  auth: { challengeId, sigs, ksn }
-});
-```
+**Backend**:
+- [convex/messages.ts](../convex/messages.ts) - Message send/receive (no ACL checks yet)
+- [convex/groups.ts](../convex/groups.ts) - Group role checks
+- [convex/onboarding.ts](../convex/onboarding.ts) - Onboarding (not enforced)
+- [convex/schema.ts](../convex/schema.ts) - Permission-related tables
 
-**Implementation**: [convex/authorization.ts:487](../convex/authorization.ts#L487)
+**Future**:
+- `convex/admin.ts` - Admin operations
+- `convex/acls.ts` - ACL enforcement
+- `convex/rateLimit.ts` - Rate limiting logic
 
-## Query API
+## Migration Path
 
-### `getTierInfo()`
-Get tier information for an AID.
+When ACLs/rate limiting are added:
 
-**Usage**:
-```typescript
-const tierInfo = await ctx.db.query(api.authorization.getTierInfo, {
-  aid: "DHytGsw0r..."
-});
+1. **Phase 1**: Add enforcement without breaking existing users
+   - Default to "open" mode (current behavior)
+   - New users opt-in to ACLs
+   - Rate limits very high (won't affect normal use)
 
-// Returns:
-// {
-//   tier: "known",
-//   explicit: true,  // true if explicitly assigned, false if pattern-based
-//   assignedBy: "admin-aid",
-//   permissions: {
-//     canMessageTiers: ["unknown", "known", "verified"],
-//     canMessageAnyone: false
-//   },
-//   rateLimit: {
-//     messagesPerWindow: 100,
-//     windowMs: 3600000
-//   }
-// }
-```
+2. **Phase 2**: Gradual tightening
+   - Lower rate limits for new users
+   - Require onboarding proofs for new registrations
+   - Allowlist/blocklist opt-in
 
-**Implementation**: [convex/authorization.ts:618](../convex/authorization.ts#L618)
+3. **Phase 3**: Full enforcement
+   - All users subject to rate limits
+   - Onboarding proofs required
+   - Admin approval for new registrations (optional)
 
-### `listTiers()`
-List all active tier configurations.
+**Database migrations**: None needed (tables already exist, just unenforced).
 
-**Usage**:
-```typescript
-const tiers = await ctx.db.query(api.authorization.listTiers, {});
-```
+## Security Considerations
 
-**Implementation**: [convex/authorization.ts:644](../convex/authorization.ts#L644)
+### Current Risks (v0.1.0)
 
-### `getTierStats()`
-Get counts of AIDs per tier (explicit assignments only).
+**Spam**:
+- ❌ Anyone can flood any AID with messages
+- ❌ No cost to create challenges
+- ❌ No message size limits
 
-**Usage**:
-```typescript
-const stats = await ctx.db.query(api.authorization.getTierStats, {});
+**Storage**:
+- ❌ Messages never expire
+- ❌ Attackers can fill database
+- ❌ No per-user quota
 
-// Returns: { known: 5, verified: 2 }
-```
+**Group spam**:
+- ❌ Group creator can add unlimited members
+- ❌ Members can send unlimited messages
+- ❌ No group size limits
 
-**Implementation**: [convex/authorization.ts:655](../convex/authorization.ts#L655)
+### Mitigation (v0.1.0)
 
-## Core Functions
+**Convex limits** (external to Merits):
+- Database size limits (Convex free tier: 1GB)
+- Function execution limits
+- Bandwidth limits
 
-### `getTierConfig()`
-Internal helper that resolves an AID's tier configuration using the priority system.
+**Best practices** (recommended):
+- Deploy on Convex Pro (higher limits)
+- Monitor database size
+- Manually ban abusive AIDs (delete from `keyStates`)
+- Set Convex rate limits at infrastructure level
 
-**Priority**:
-1. Explicit assignment in `aidTiers` table
-2. Pattern-based match (by priority, highest first)
-3. Default tier fallback
+### Future Mitigation
 
-**Implementation**: [convex/authorization.ts:48](../convex/authorization.ts#L48)
+See [docs/future-work.md](./future-work.md) for planned security improvements.
 
-### `canSend()`
-Authorization check for message sending.
+## References
 
-**Checks**:
-1. Rate limit (from sender's tier config)
-2. Sender tier can message recipient tier
-3. Returns `{ allowed: boolean, reason?: string, tier: string }`
-
-**Implementation**: [convex/authorization.ts:201](../convex/authorization.ts#L201)
-
-## Code References
-
-- **Schema**: [convex/schema.ts](../convex/schema.ts) - `tierConfigs` and `aidTiers` tables
-- **Authorization**: [convex/authorization.ts](../convex/authorization.ts) - Core tier logic
-- **Tests (Onboarding)**: [tests/integration/onboarding-flow.test.ts](../tests/integration/onboarding-flow.test.ts) - 12 tests covering tier assignment and permissions
-- **Tests (SDK)**: [tests/integration/sdk-integration.test.ts](../tests/integration/sdk-integration.test.ts) - Integration with tier system
-- **Tests (Messaging)**: [tests/integration/messaging-flow.test.ts](../tests/integration/messaging-flow.test.ts) - Message flow with tiers
-
-## Migration from Old System
-
-**Old System** (Removed):
-- `userTiers` table - Simple AID→tier mapping
-- `authPatterns` table - Recipient patterns only
-- `onboardingAdmins` table - Whitelist for unknown→known promotion
-- Hardcoded rate limits in authorization logic
-
-**New System** (Current):
-- `tierConfigs` table - Complete tier configuration
-- `aidTiers` table - Explicit AID assignments
-- Pattern matching on **sender AIDs** (not recipients)
-- Data-driven rate limits from tier configs
-- Admin roles via `adminRoles` table (unchanged)
-
-**Backward Compatibility**:
-- `onboardUser()` mutation maintained as wrapper around `assignTier()`
-- Tests updated to use new system
-- No data migration needed (clean slate OK per requirements)
+- **[Authentication](./auth.md)** - How users prove identity
+- **[Architecture](./architecture.md)** - Permission enforcement points
+- **[Future Work](./future-work.md)** - Planned ACL/rate limiting features

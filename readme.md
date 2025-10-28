@@ -1,167 +1,253 @@
-# Merits - KERI-Authenticated Messaging System
+# Merits v0.1.0
 
-A **backend-agnostic** messaging system with KERI-style challenge/response authentication, supporting 1:1 messaging, groups, and real-time delivery.
+A **KERI-authenticated messaging system** with challenge/response auth, supporting direct messaging, groups, and real-time delivery.
 
-## Features
-
-- ✅ **Challenge/Response Authentication** - KERI-based Ed25519 signatures
-- ✅ **1:1 Messaging** - Send/receive encrypted messages between AIDs
-- ✅ **Group Messaging** - Server-side fanout with total ordering
-- ✅ **Real-Time Delivery** - Subscribe to messages with auto-ack
-- ✅ **Message Routing** - Type-based dispatch to handlers
-- ✅ **Backend-Agnostic** - Core interfaces with Convex adapter (easily swap backends)
-- ✅ **Type-Safe** - Full TypeScript support
-- ✅ **Portable Crypto** - @noble/ed25519 + @noble/hashes (no platform dependencies)
+**What it does**: Let users prove control of their KERI AIDs and exchange encrypted messages (1:1 or groups) without passwords or sessions.
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-# Install dependencies
 bun install
-
-# Start Convex development server
-make dev
-
-# Run tests
-make test
+bunx convex dev          # Start backend
+export CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
-### Basic Usage
+### CLI Usage
+
+```bash
+# Create identity
+merits identity new alice
+merits identity register alice
+
+# Send message
+merits send <recipient-aid> --message "Hello!" --from alice
+
+# Receive messages
+merits receive --from alice --plaintext
+
+# Create group
+merits group create team-alpha --from alice
+
+# Send to group
+merits send <group-id> --message "Hello team!" --from alice
+
+# Watch real-time
+merits watch --from alice --plaintext
+```
+
+**CLI Examples**: See [tests/cli/integration/](tests/cli/integration/) for full E2E flows.
+
+### SDK Usage
 
 ```typescript
 import { createMeritsClient } from "./src/client";
-import { generateKeyPair, createAID } from "./core/crypto";
 
-// 1. Create client
 const client = createMeritsClient(process.env.CONVEX_URL!);
 
-// 2. Generate keys
-const aliceKeys = await generateKeyPair();
-const alice = {
-  aid: createAID(aliceKeys.publicKey),
-  privateKey: aliceKeys.privateKey,
-  ksn: 0,
-};
-
-// 3. Send a message
-const ct = encrypt("Hello Bob!");
-const auth = await client.createAuth(alice, "send", {
+// 1. Create auth proof
+const auth = await client.createAuth(identity, "send", {
   recpAid: bob.aid,
-  ctHash: client.computeCtHash(ct),
+  ctHash: sha256Hex(ct),
   ttl: 60000,
 });
 
+// 2. Send message
 await client.transport.sendMessage({
   to: bob.aid,
-  ct,
+  ct: encrypt("Hello!"),
   typ: "chat.text.v1",
   auth,
 });
 
-// 4. Receive messages
-const messages = await client.transport.receiveMessages({
+// 3. Receive messages
+const msgs = await client.transport.receiveMessages({
   for: bob.aid,
   auth: bobAuth,
 });
 
-client.close();
+// 4. Subscribe (real-time)
+const cancel = await client.transport.subscribe({
+  for: bob.aid,
+  auth: bobAuth,
+  onMessage: async (msg) => {
+    console.log("New message:", msg);
+    return true; // auto-ack
+  },
+});
 ```
+
+**SDK Examples**: See [tests/integration/sdk-integration.test.ts](tests/integration/sdk-integration.test.ts) and [tests/integration/messaging-flow.test.ts](tests/integration/messaging-flow.test.ts).
+
+## Key Features
+
+- ✅ **Challenge/Response Auth** - No passwords, prove AID control via Ed25519 signatures
+- ✅ **Direct Messaging** - 1:1 encrypted messages with ack/replay protection
+- ✅ **Group Messaging** - Server-side fanout with per-member encryption
+- ✅ **Real-Time Delivery** - Subscribe to messages with auto-ack
+- ✅ **Message Routing** - Type-based dispatch (`typ: "chat.text.v1"`)
+- ✅ **Backend-Agnostic** - Core interfaces + Convex adapter
+- ✅ **CLI** - Full-featured command-line tool for testing/operations
+- ✅ **Portable Crypto** - [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) (no platform deps)
 
 ## Architecture
 
-Merits uses a **layered, interface-based architecture**:
-
 ```
-┌─────────────────────────────────────┐
-│      Application Code               │
-└──────────────┬──────────────────────┘
+┌─────────────────────────────────┐
+│    CLI (merits)                 │  User-facing tool
+│    cli/commands/*.ts            │
+└──────────────┬──────────────────┘
                │
-┌──────────────▼──────────────────────┐
-│      Unified SDK                    │
-│  createMeritsClient()               │
-│  • identity  • transport            │
-│  • group     • router               │
-└──────────────┬──────────────────────┘
+┌──────────────▼──────────────────┐
+│    Unified SDK                  │  Application interface
+│    src/client.ts                │
+│    • createMeritsClient()       │
+└──────────────┬──────────────────┘
                │
-┌──────────────▼──────────────────────┐
-│   Core Interfaces (Backend-Agnostic)│
-│  • IdentityAuth  • Transport        │
-│  • GroupApi      • MessageRouter    │
-│  • core/crypto (@noble libraries)   │
-└──────────────┬──────────────────────┘
+┌──────────────▼──────────────────┐
+│  Core Interfaces                │  Backend-agnostic contracts
+│  core/interfaces/               │
+│  • IdentityAuth                 │  Challenge/response auth
+│  • Transport                    │  Send/receive messages
+│  • GroupApi                     │  Group management
+│  • MessageRouter                │  Type-based routing
+│  core/crypto.ts                 │  @noble crypto primitives
+└──────────────┬──────────────────┘
                │
-┌──────────────▼──────────────────────┐
-│     Backend Adapters                │
-│  • ConvexIdentityAuth               │
-│  • ConvexTransport                  │
-│  • ConvexGroupApi                   │
-└──────────────┬──────────────────────┘
+┌──────────────▼──────────────────┐
+│  Backend Adapters               │  Implementation layer
+│  convex/adapters/               │
+│  • ConvexIdentityAuth.ts        │
+│  • ConvexTransport.ts           │
+│  • ConvexGroupApi.ts            │
+└──────────────┬──────────────────┘
                │
-┌──────────────▼──────────────────────┐
-│      Convex Backend                 │
-│  • auth.ts    • messages.ts         │
-│  • groups.ts  • schema.ts           │
-└─────────────────────────────────────┘
+┌──────────────▼──────────────────┐
+│  Convex Backend                 │  Storage + serverless functions
+│  convex/                        │
+│  • auth.ts                      │  Challenge/proof verification
+│  • messages.ts                  │  Message CRUD
+│  • groups.ts                    │  Group fanout
+│  • sessions.ts                  │  Session tokens (watch)
+│  • schema.ts                    │  Database schema
+└─────────────────────────────────┘
 ```
 
-**Key Principle**: Core interfaces have **zero dependencies** on any backend.
+**Core Principle**: All business logic lives in backend-agnostic interfaces. Adapters are thin wrappers.
 
-See [docs/architecture.md](docs/architecture.md) for details.
-
-## Examples
-
-See [examples/](examples/) for complete working examples:
-
-- **[chat-client.ts](examples/chat-client.ts)** - Basic 1:1 messaging
-- **[group-chat.ts](examples/group-chat.ts)** - Group messaging with fanout
-- **[subscribe.ts](examples/subscribe.ts)** - Real-time message delivery
+**See**: [docs/architecture.md](docs/architecture.md) for detailed design decisions.
 
 ## Documentation
 
-- **[Architecture](docs/architecture.md)** - System design and data flow
-- **[API Reference](docs/api-reference.md)** - Complete API documentation
-- **[Migration Plan](docs/migration-plan.md)** - Development roadmap
+- **[Architecture](docs/architecture.md)** - Codebase layout, design patterns, key assumptions
+- **[Authentication](docs/auth.md)** - Challenge/response flow, signature verification, KSN binding
+- **[Permissions](docs/permissions.md)** - Who can message whom, admin controls, rate limiting
+- **[Future Work](docs/future-work.md)** - Known limitations, deferred features, roadmap
 
-## Development
-
-### Project Structure
+## Project Structure
 
 ```
 merits/
-├── core/                    # Backend-agnostic code
-│   ├── crypto.ts           # @noble-based crypto
-│   ├── types.ts            # Common types
-│   ├── interfaces/         # Core interfaces
-│   └── runtime/            # Message routing
-├── convex/                 # Convex backend
-│   ├── adapters/          # Interface implementations
-│   ├── auth.ts            # Auth mutations/queries
-│   ├── messages.ts        # Message mutations
-│   ├── groups.ts          # Group mutations
-│   └── schema.ts          # Database schema
+├── cli/                      # Command-line interface
+│   ├── commands/            # Command implementations
+│   │   ├── send.ts          # Send messages (direct + group)
+│   │   ├── receive.ts       # Receive messages
+│   │   ├── watch.ts         # Real-time streaming
+│   │   ├── group.ts         # Group management
+│   │   └── identity/        # Identity management
+│   ├── lib/                 # CLI utilities
+│   │   ├── context.ts       # CLI context (client, vault, config)
+│   │   ├── getAuthProof.ts  # Auth proof helpers
+│   │   └── vault/           # Key storage (filesystem + OS keychain)
+│   └── index.ts             # CLI entry point
+│
+├── core/                     # Backend-agnostic code
+│   ├── crypto.ts            # @noble-based crypto primitives
+│   ├── types.ts             # Common types (AID, AuthProof, etc.)
+│   ├── interfaces/          # Core interface definitions
+│   │   ├── IdentityAuth.ts  # Challenge/response auth
+│   │   ├── Transport.ts     # Message send/receive
+│   │   ├── GroupApi.ts      # Group management
+│   │   └── MessageRouter.ts # Type-based routing
+│   └── runtime/             # Message router implementation
+│
+├── convex/                   # Convex backend implementation
+│   ├── adapters/            # Interface adapters
+│   │   ├── ConvexIdentityAuth.ts
+│   │   ├── ConvexTransport.ts
+│   │   └── ConvexGroupApi.ts
+│   ├── auth.ts              # Challenge/proof mutations
+│   ├── messages.ts          # Message CRUD
+│   ├── groups.ts            # Group fanout
+│   ├── sessions.ts          # Session tokens
+│   └── schema.ts            # Database schema
+│
 ├── src/
-│   └── client.ts          # Unified SDK
-├── tests/                 # Unit + integration tests
-├── examples/              # Working code examples
-└── docs/                  # Documentation
+│   └── client.ts            # Unified SDK (createMeritsClient)
+│
+├── tests/
+│   ├── unit/                # Fast tests (no backend)
+│   ├── integration/         # Backend integration tests
+│   └── cli/                 # CLI E2E tests
+│
+├── docs/                     # Documentation
+│   ├── architecture.md
+│   ├── auth.md
+│   ├── permissions.md
+│   └── future-work.md
+│
+└── examples/                 # (Reserved for user examples)
 ```
 
-### Testing
+## Testing
 
 ```bash
-make test              # Run all tests
-make test-unit         # Unit tests only (no backend)
-make test-integration  # Integration tests (requires Convex)
+make test                  # All tests
+make test-unit             # Unit tests only (no backend)
+make test-integration      # Integration tests (requires CONVEX_URL)
+make test-cli              # CLI E2E tests
+
+# Run specific test file
+CONVEX_URL=... bun test tests/integration/messaging-flow.test.ts
 ```
 
-**Test Results**: 51 unit tests passing ✅
+**Test Coverage**:
+- ✅ Unit tests: Crypto, routing, auth logic
+- ✅ Integration tests: End-to-end flows with real backend
+- ✅ CLI tests: Command execution, vault operations, message flows
+
+## Development
+
+```bash
+# Start Convex dev server
+bunx convex dev
+
+# Run CLI locally
+bun run cli/index.ts --help
+
+# Deploy to Convex
+bunx convex deploy
+```
+
+## What's NOT Included (v0.1.0)
+
+See [docs/future-work.md](docs/future-work.md) for:
+- ECDH-ES encryption (currently stub base64)
+- Key rotation support (KSN tracked but not enforced)
+- OOBI/witness resolution (keys manually registered)
+- Message expiry/cleanup (TTL tracked but not enforced)
+- Rate limiting (structure exists, not enforced)
+- Onboarding proofs (SAID-based, structure ready)
+- Group roles beyond owner/member
+- Message filtering in watch command
 
 ## License
 
-See [LICENSE](LICENSE) for details.
+MIT (see [LICENSE](LICENSE))
 
 ---
 
-**Status**: Production-ready | All milestones complete ✅
+**Version**: 0.1.0
+**Status**: Functional MVP - Ready for testing and feedback
+**Git Tag**: v0.1.0

@@ -1,525 +1,358 @@
-# Merits Architecture
+# Architecture
 
-## Overview
+**Merits v0.1.0** uses a layered, backend-agnostic design where core interfaces define contracts and adapters implement them for specific backends.
 
-Merits is a backend-agnostic messaging system with KERI-based authentication. The architecture is built in layers, with clear separation between core interfaces, adapters, and application code.
+## Design Principles
 
-## Layer Diagram
+### 1. Backend Agnostic
 
-```
-┌─────────────────────────────────────────────────────────────┐
-│                     Application Layer                       │
-│  (Your chat app, group messaging, etc.)                     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      Unified SDK                             │
-│                  createMeritsClient()                        │
-│                                                              │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────┐   │
-│  │ identity │  │transport │  │  group   │  │  router  │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────────┘   │
-│                                                              │
-│  Helpers: createAuth(), computeArgsHash(), computeCtHash()  │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Core Interfaces                           │
-│              (Backend-Agnostic Contracts)                    │
-│                                                              │
-│  ┌────────────────┐  ┌────────────────┐  ┌──────────────┐  │
-│  │ IdentityAuth   │  │   Transport    │  │   GroupApi   │  │
-│  │ - issueChall.. │  │ - sendMessage  │  │ - createGr.. │  │
-│  │ - verifyAuth   │  │ - receiveMess..│  │ - addMemb..  │  │
-│  └────────────────┘  │ - ackMessage   │  │ - sendGrou.. │  │
-│                      │ - subscribe    │  └──────────────┘  │
-│  ┌────────────────┐  └────────────────┘                     │
-│  │ MessageRouter  │                                         │
-│  │ - register     │  ┌────────────────┐                     │
-│  │ - dispatch     │  │   core/crypto  │                     │
-│  │ - hasHandler   │  │ - @noble/ed..  │                     │
-│  └────────────────┘  │ - @noble/hash..│                     │
-│                      └────────────────┘                     │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                  Backend Adapters                            │
-│           (Implementation for specific backend)              │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │              Convex Adapters                         │   │
-│  │                                                      │   │
-│  │  ┌─────────────────┐  ┌──────────────────┐         │   │
-│  │  │ConvexIdentity..│  │ConvexTransport   │         │   │
-│  │  └─────────────────┘  └──────────────────┘         │   │
-│  │                                                      │   │
-│  │  ┌─────────────────┐                                │   │
-│  │  │ConvexGroupApi   │                                │   │
-│  │  └─────────────────┘                                │   │
-│  └──────────────────────────────────────────────────────┘   │
-│                                                              │
-│  Future: Firebase, Supabase, Custom REST API adapters       │
-└────────────────────────┬────────────────────────────────────┘
-                         │
-                         ▼
-┌─────────────────────────────────────────────────────────────┐
-│                    Backend Services                          │
-│                                                              │
-│  ┌──────────────────────────────────────────────────────┐   │
-│  │                 Convex Backend                       │   │
-│  │                                                      │   │
-│  │  • auth.ts - Challenge/response mutations           │   │
-│  │  • messages.ts - Send/receive/ack mutations          │   │
-│  │  • groups.ts - Group management                      │   │
-│  │  • schema.ts - Database schema                       │   │
-│  └──────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+**Core interfaces have zero backend dependencies**:
+- All interfaces in `core/interfaces/` are pure TypeScript
+- Crypto uses portable `@noble` libraries (no Node/Bun-specific APIs)
+- Business logic lives in interfaces, not adapters
 
-## Core Design Principles
+**Why**: Swap backends (Convex → Firebase → REST API) without touching app code.
 
-### 1. Backend-Agnostic Core
+### 2. Single Responsibility
 
-All core interfaces have **zero dependencies** on any specific backend:
+Each layer has one job:
+- **CLI**: User interaction, key management, output formatting
+- **SDK**: Convenient API, auth helpers, unified client
+- **Interfaces**: Contracts (what operations exist)
+- **Adapters**: Implementation (how they work on specific backend)
+- **Backend**: Storage, serverless functions, real-time subscriptions
 
-- `core/interfaces/` - Pure TypeScript interfaces
-- `core/crypto.ts` - Uses `@noble` libraries (portable)
-- `core/runtime/` - No backend coupling
-- `core/types.ts` - Universal types
+### 3. Explicit Authentication
 
-This enables:
-- Easy backend swapping (Convex → Firebase → Custom)
-- Testing without backend
-- Code reuse across platforms
-
-### 2. Adapter Pattern
-
-Each backend implements the core interfaces via adapters:
+**No implicit auth**. Every operation requires an `AuthProof`:
 
 ```typescript
-// Core interface (backend-agnostic)
-interface Transport {
-  sendMessage(req: MessageSendRequest): Promise<{messageId: string}>;
-  // ...
-}
-
-// Convex adapter (backend-specific)
-class ConvexTransport implements Transport {
-  constructor(private client: ConvexClient) {}
-
-  async sendMessage(req) {
-    // Convex-specific implementation
-    return this.client.mutation(api.messages.send, ...);
-  }
-}
-
-// Future: Firebase adapter
-class FirebaseTransport implements Transport {
-  async sendMessage(req) {
-    // Firebase-specific implementation
-  }
+interface AuthProof {
+  challengeId: string;  // Binds to specific operation
+  sigs: string[];       // Indexed threshold signatures
+  ksn: number;          // Key sequence number
 }
 ```
 
-### 3. Dependency Flow
+Auth is:
+- **Single-use**: Challenges consumed on first use
+- **Purpose-bound**: `"send"`, `"receive"`, `"manageGroup"`, etc.
+- **Args-bound**: Hash of operation parameters included in signed payload
+- **Time-limited**: Challenges expire (default 120s)
 
-Dependencies flow **downward only**:
+## Codebase Layout
+
+### Core (`core/`)
+
+Backend-agnostic contracts and utilities.
 
 ```
-Application Code
-    ↓ (depends on)
-Unified SDK
-    ↓ (depends on)
-Core Interfaces
-    ↓ (implements)
-Backend Adapters
-    ↓ (depends on)
-Backend Services
+core/
+├── crypto.ts              # Ed25519 sign/verify, CESR encoding, SHA256
+├── types.ts               # AID, AuthProof, EncryptedMessage
+├── interfaces/
+│   ├── IdentityAuth.ts    # Challenge/response auth contract
+│   ├── Transport.ts       # Send/receive/subscribe contract
+│   ├── GroupApi.ts        # Group management contract
+│   └── MessageRouter.ts   # Type-based routing contract
+└── runtime/
+    └── MessageRouter.ts   # Router implementation (registry + dispatch)
 ```
 
-**Never upward**: Core never depends on adapters or SDK.
+**Key Files**:
+- **[core/crypto.ts](../core/crypto.ts)**: `sign()`, `verify()`, `createAID()`, `sha256Hex()` - all using `@noble` libraries
+- **[core/interfaces/IdentityAuth.ts](../core/interfaces/IdentityAuth.ts)**: Challenge/response flow definition
+- **[core/interfaces/Transport.ts](../core/interfaces/Transport.ts)**: Message operations (send/receive/subscribe)
+- **[core/interfaces/GroupApi.ts](../core/interfaces/GroupApi.ts)**: Group operations (create/add/remove/fanout)
 
-### 4. KERI Authentication
+### Backend (`convex/`)
 
-All operations use KERI challenge/response:
+Convex implementation with serverless functions and real-time subscriptions.
 
-1. **Issue Challenge**: Server creates nonce + binds to operation args
-2. **Sign Payload**: Client signs with private key
-3. **Verify Auth**: Server verifies signatures + threshold
-4. **Execute Operation**: Server performs action as authenticated AID
-
-This provides:
-- Non-repudiation (signatures prove intent)
-- Replay prevention (challenges are single-use)
-- Threshold security (multi-sig support)
-- Args binding (prevents parameter tampering)
-
-## Component Details
-
-### Core Interfaces
-
-#### IdentityAuth
-```typescript
-interface IdentityAuth {
-  issueChallenge(req: IssueChallengeRequest): Promise<IssueChallengeResponse>;
-  verifyAuth(req: VerifyAuthRequest): Promise<VerifyAuthResult>;
-}
+```
+convex/
+├── auth.ts                # Challenge/proof mutations
+│                          # - issueChallenge, proveChallenge, verifyAuth
+├── messages.ts            # Message CRUD
+│                          # - sendMessage, receiveMessages, ackMessage
+├── groups.ts              # Group management + fanout
+│                          # - createGroup, addMembers, sendGroupMessage
+├── sessions.ts            # Session tokens (for watch command)
+│                          # - openSession, refreshSession, validateSession
+├── schema.ts              # Database tables
+│                          # - challenges, keyStates, messages, groups, sessionTokens
+└── adapters/              # Interface implementations
+    ├── ConvexIdentityAuth.ts   # Implements IdentityAuth
+    ├── ConvexTransport.ts      # Implements Transport
+    └── ConvexGroupApi.ts       # Implements GroupApi
 ```
 
-**Purpose**: Challenge/response authentication for KERI AIDs.
+**Database Schema** ([convex/schema.ts](../convex/schema.ts)):
+- `challenges`: Single-use auth challenges (120s TTL)
+- `keyStates`: Cached public keys (AID → keys mapping)
+- `messages`: Encrypted messages with envelope metadata
+- `groups`: Group membership and roles
+- `groupLog`: Ordered group message log (for fanout audit)
+- `sessionTokens`: Long-lived tokens for watch command (60s TTL, auto-refresh)
 
-**Flow**:
-1. Client requests challenge for specific operation (send, receive, etc.)
-2. Server returns nonce + payload to sign
-3. Client signs payload with AID keys
-4. Server verifies signature + threshold
+### SDK (`src/client.ts`)
 
-#### Transport
-```typescript
-interface Transport {
-  sendMessage(req: MessageSendRequest): Promise<{messageId: string}>;
-  receiveMessages(req: {for: AID; auth: AuthProof}): Promise<EncryptedMessage[]>;
-  ackMessage(req: {messageId: string; auth: AuthProof}): Promise<void>;
-  subscribe(opts: SubscribeOptions): Promise<() => void>;
-}
-```
-
-**Purpose**: Move encrypted messages between AIDs.
-
-**Features**:
-- Authenticated send/receive/ack
-- Real-time subscribe with auto-ack
-- Content hash binding (prevents substitution)
-- Receipt signatures (non-repudiation)
-
-#### GroupApi
-```typescript
-interface GroupApi {
-  createGroup(req: CreateGroupRequest): Promise<{groupId: GroupId}>;
-  addMembers(req: AddMembersRequest): Promise<void>;
-  removeMembers(req: RemoveMembersRequest): Promise<void>;
-  sendGroupMessage(req: GroupSendRequest): Promise<{messageId: string}>;
-  listGroups(req: ListGroupsRequest): Promise<Group[]>;
-  getGroup(req: GetGroupRequest): Promise<Group>;
-  leaveGroup(req: LeaveGroupRequest): Promise<void>;
-}
-```
-
-**Purpose**: Manage groups and send messages with server-side fanout.
-
-**Server-Side Fanout**:
-1. Sender sends one encrypted message
-2. Server decrypts once
-3. Server re-encrypts for each member
-4. Individual messages created atomically
-5. Total ordering via sequence numbers
-
-#### MessageRouter
-```typescript
-interface MessageRouter {
-  register(typ: string, handler: MessageHandler): void;
-  dispatch(ctx: MessageHandlerContext, msg: EncryptedMessage): Promise<void>;
-  hasHandler(typ: string): boolean;
-  unregister(typ: string): boolean;
-}
-```
-
-**Purpose**: Route messages to handlers based on `typ` field.
-
-**Features**:
-- Type-based dispatch
-- Error handling hooks
-- Default handler
-- Async support
-
-### Core Crypto
-
-All crypto operations use `@noble` libraries:
+Unified client with convenience methods.
 
 ```typescript
-// core/crypto.ts
-import * as ed from "@noble/ed25519";
-import { sha256 } from "@noble/hashes/sha2.js";
+createMeritsClient(convexUrl: string): {
+  // Direct interface access
+  identity: IdentityAuth;
+  transport: Transport;
+  group: GroupApi;
+  router: MessageRouter;
 
-export async function sign(message: Uint8Array, privateKey: Uint8Array): Promise<Uint8Array> {
-  return ed.signAsync(message, privateKey);
-}
+  // Convenience helpers
+  createAuth(identity, purpose, args): Promise<AuthProof>;
+  computeCtHash(ct: string): string;
+  computeArgsHash(args: Record<string, any>): string;
 
-export async function verify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
-  return ed.verifyAsync(signature, message, publicKey);
-}
-
-export function sha256Hex(data: Uint8Array): string {
-  // ... using @noble/hashes
+  // Lifecycle
+  close(): void;
 }
 ```
 
-**Zero dependencies** on:
-- Web Crypto API
-- Node.js crypto
-- Any backend-specific crypto
+**See**: [src/client.ts](../src/client.ts) for implementation.
 
-### Unified SDK
+### CLI (`cli/`)
 
-Single entry point for all operations:
+Command-line interface with key management.
 
-```typescript
-const client = createMeritsClient(convexUrl);
-
-// All interfaces available
-await client.identity.issueChallenge({...});
-await client.transport.sendMessage({...});
-await client.group.createGroup({...});
-client.router.register("chat.text.v1", handler);
-
-// Helpers included
-const auth = await client.createAuth(credentials, "send", args);
-const hash = client.computeArgsHash(args);
-
-client.close();
 ```
+cli/
+├── commands/              # Command implementations
+│   ├── send.ts            # Send direct/group messages
+│   ├── receive.ts         # Receive messages (pull)
+│   ├── watch.ts           # Subscribe (push, auto-ack)
+│   ├── group.ts           # Group CRUD
+│   └── identity/          # Identity management
+├── lib/
+│   ├── context.ts         # CLIContext (client + vault + config)
+│   ├── getAuthProof.ts    # Auth helpers (challenge → proof)
+│   └── vault/             # Key storage
+│       ├── MeritsVault.ts         # Interface
+│       ├── FileVault.ts           # Filesystem storage
+│       └── OSKeychainVault.ts     # OS keychain (future)
+└── index.ts               # Commander.js setup
+```
+
+**Vault Design**:
+- Stores private keys encrypted at rest
+- Metadata in `~/.merits/vault-metadata.json`
+- Keys in `~/.merits/identities/<name>/privateKey.enc`
+- Future: OS keychain integration for production
+
+## Key Assumptions (v0.1.0)
+
+### Identity & Key Management
+
+1. **Manual Key Registration**
+   - Public keys manually registered via `identity.register`
+   - No OOBI/witness resolution (structure exists, not implemented)
+   - No automatic key discovery
+
+2. **Key Rotation Not Enforced**
+   - KSN (Key Sequence Number) tracked in database
+   - Backend accepts KSN in auth proofs
+   - **But**: Rotations not triggered, old keys not invalidated
+   - Future: Implement KEL event processing
+
+3. **Single Current Key**
+   - Each AID has one active key set
+   - Threshold signatures supported in crypto layer
+   - Multi-sig not tested in practice
+
+### Encryption
+
+1. **Stub Encryption (v0.1.0)**
+   - Messages encrypted with **base64 encoding** (NOT SECURE)
+   - Structure ready for ECDH-ES + AES-GCM
+   - See [docs/future-work.md](./future-work.md) for crypto roadmap
+
+2. **Group Encryption**
+   - Group messages use placeholder encryption
+   - Backend re-encrypts for each member (fanout)
+   - No shared group keys (each member gets individual copy)
+
+### Permissions
+
+1. **Open Messaging (v0.1.0)**
+   - Any registered AID can message any other registered AID
+   - No allowlists/blocklists enforced
+   - Rate limiting structure exists but not active
+   - See [docs/permissions.md](./permissions.md) for details
+
+2. **Group Membership**
+   - Only group members can send group messages
+   - Role-based permissions (owner/admin/member)
+   - Owner role enforced (cannot remove last owner)
+   - Admin/member distinction not fully implemented
+
+### Message Lifecycle
+
+1. **No TTL Enforcement**
+   - Messages have `expiresAt` field
+   - **Not enforced** - no cleanup mutations
+   - Old messages accumulate in database
+
+2. **No Message Deletion**
+   - Ack marks message as `retrieved: true`
+   - Message stays in database forever
+   - Future: Add expiry cleanup cron job
 
 ## Data Flow Examples
 
-### Send Message Flow
+### 1. Send Direct Message
 
 ```
-Alice                  SDK                 ConvexTransport        Convex Backend
-  |                     |                        |                      |
-  | sendMessage()       |                        |                      |
-  |-------------------->|                        |                      |
-  |                     | computeCtHash(ct)      |                      |
-  |                     |                        |                      |
-  |                     | createAuth(...)        |                      |
-  |                     |   |                    |                      |
-  |                     |   | issueChallenge     |                      |
-  |                     |   |------------------->|--------------------->|
-  |                     |   |<-------------------|<---------------------|
-  |                     |   | (challengeId, payload)                    |
-  |                     |   |                    |                      |
-  |                     |   | signPayload(...)   |                      |
-  |                     |   | (using @noble/ed25519)                    |
-  |                     |   |                    |                      |
-  |                     |<--|                    |                      |
-  |                     | (AuthProof)            |                      |
-  |                     |                        |                      |
-  |                     | transport.sendMessage()|                      |
-  |                     |----------------------->|                      |
-  |                     |                        | mutation(api.messages.send)
-  |                     |                        |--------------------->|
-  |                     |                        |                      | verifyAuth()
-  |                     |                        |                      | insertMessage()
-  |                     |                        |<---------------------|
-  |                     |<-----------------------| (messageId)          |
-  |<--------------------|                        |                      |
-  | (messageId)         |                        |                      |
+CLI: merits send <aid> --message "Hello"
+  ↓
+SDK: client.createAuth(identity, "send", {...})
+  ↓
+IdentityAuth: issueChallenge("send", argsHash)
+  ← Challenge { challengeId, payloadToSign }
+  ↓
+SDK: Sign payloadToSign with private key → AuthProof
+  ↓
+Transport: sendMessage({ to, ct, auth })
+  ↓
+Backend: verifyAuth(auth) → Check sigs, consume challenge
+Backend: Insert into messages table
+  ← { messageId }
 ```
 
-### Subscribe + Route Flow
+### 2. Watch Real-Time Messages
 
 ```
-Bob                    SDK                 ConvexTransport        Convex Backend
-  |                     |                        |                      |
-  | router.register()   |                        |                      |
-  |-------------------->|                        |                      |
-  |                     |                        |                      |
-  | subscribe()         |                        |                      |
-  |-------------------->|                        |                      |
-  |                     | transport.subscribe()  |                      |
-  |                     |----------------------->|                      |
-  |                     |                        | onUpdate(api.messages.list)
-  |                     |                        |--------------------->|
-  |                     |                        |                      |
-  |                     |                        |<---------------------|
-  |                     |                        | (new messages)       |
-  |                     |                        |                      |
-  |                     |                        | onMessage callback   |
-  |                     |<-----------------------|                      |
-  |                     |                        |                      |
-  |                     | router.dispatch()      |                      |
-  |                     | (routes by typ field)  |                      |
-  |                     |                        |                      |
-  | handler callback    |                        |                      |
-  |<--------------------|                        |                      |
-  | (message processed) |                        |                      |
-  |                     |                        |                      |
-  |                     | ackMessage()           |                      |
-  |                     |----------------------->|--------------------->|
-  |                     |                        |                      | deleteMessage()
+CLI: merits watch --from alice
+  ↓
+SDK: client.createAuth(identity, "openSession", {...})
+  ↓
+Backend: openSession(auth) → Verify, create session token
+  ← { sessionToken, expiresAt }
+  ↓
+Transport: subscribe({ for, sessionToken, onMessage })
+  ↓
+Backend: Watch messages table, filter by recpAid
+  ← Stream of EncryptedMessage via Convex subscriptions
+  ↓
+CLI: onMessage(msg) → Display → Return true (auto-ack)
+  ↓
+Backend: Mark message as retrieved via session token
 ```
 
-### Group Message Fanout
+### 3. Send Group Message
 
 ```
-Alice                  GroupApi            Convex Backend
-  |                     |                        |
-  | sendGroupMessage()  |                        |
-  |-------------------->|                        |
-  |                     | mutation(api.groups.sendGroupMessage)
-  |                     |----------------------->|
-  |                     |                        | verifyAuth()
-  |                     |                        | checkMembership()
-  |                     |                        | insertGroupLog(seqNum)
-  |                     |                        |
-  |                     |                        | FOR EACH member (except sender):
-  |                     |                        |   insertMessage(to: member)
-  |                     |                        |
-  |                     |                        | updateFanoutStatus()
-  |                     |<-----------------------|
-  |<--------------------|                        |
-  |                     |                        |
-  |                     |                        ▼
-  |                     |              [Bob receives via subscribe]
-  |                     |              [Carol receives via subscribe]
-  |                     |              [Dave receives via subscribe]
+CLI: merits send <group-id> --message "Hello team"
+  ↓
+SDK: Detect group ID (not an AID) → Route to group.sendGroupMessage
+  ↓
+SDK: client.createAuth(identity, "sendGroup", {...})
+  ↓
+GroupApi: sendGroupMessage({ groupId, ct, auth })
+  ↓
+Backend: verifyAuth(auth, purpose="sendGroup")
+Backend: Check sender is group member
+Backend: Insert into groupLog (seqNum, audit trail)
+Backend: Fan out to members:
+  For each member (except sender):
+    - Insert into messages table
+    - Re-encrypt ct for member's keys (stub encryption in v0.1.0)
+  ← { messageId }
 ```
-
-## Security Model
-
-### Authentication Flow
-1. Every operation requires `AuthProof`
-2. Proof contains `challengeId` + signatures + KSN
-3. Server verifies:
-   - Challenge exists and not used
-   - Challenge not expired
-   - Purpose matches operation
-   - Args hash matches (prevents tampering)
-   - Signatures meet threshold
-   - KSN matches current state
-
-### Authorization
-- Transport: Sender can send to any AID
-- Receive: Only recipient can receive their messages
-- Groups: Only admins/owners can modify membership
-- Router: Application-level (your handlers decide)
-
-### Data Integrity
-- Content hash (ctHash) binds auth to specific message
-- Envelope hash provides audit anchor
-- Sequence numbers prevent gaps/reordering
-- Signatures are indexed (multi-sig support)
 
 ## Testing Strategy
 
-### Unit Tests (51 tests)
-- Test business logic in isolation
-- No backend required
-- Fast (< 100ms total)
+### Unit Tests (`tests/unit/`)
 
-### Integration Tests
-- Test against live Convex backend
-- Require CONVEX_URL environment variable
-- Use `eventually()` pattern (no arbitrary sleeps)
+**Fast tests, no backend**:
+- Crypto primitives (`crypto.test.ts`)
+- Message routing (`router.test.ts`)
+- Auth logic (isolated, mocked)
 
-### Test Helpers
-```typescript
-// tests/helpers/crypto-utils.ts
-export { generateKeyPair, sign, verify } from "../../core/crypto";
+**Run**: `make test-unit` (< 1s)
 
-// tests/helpers/eventually.ts
-export async function eventually(condition, options);
-export async function eventuallyValue(getValue, options);
-```
+### Integration Tests (`tests/integration/`)
 
-## Deployment
+**Real backend (Convex)**:
+- End-to-end messaging flows (`messaging-flow.test.ts`)
+- Group fanout (`group-integration.test.ts`)
+- Auth challenge/response (`identity-auth-interface.test.ts`)
+- SDK convenience methods (`sdk-integration.test.ts`)
 
-### Client-Side
-```typescript
-import { createMeritsClient } from "./src/client";
+**Run**: `CONVEX_URL=... make test-integration` (5-10s)
 
-const client = createMeritsClient(process.env.CONVEX_URL!);
-```
+### CLI Tests (`tests/cli/`)
 
-### Server-Side (Convex)
-```bash
-npx convex dev  # Development
-npx convex deploy  # Production
-```
+**CLI command execution**:
+- Unit tests for vault, formatters
+- Integration tests for send/receive/group workflows
 
-### Environment Variables
-```bash
-CONVEX_URL=https://your-deployment.convex.cloud
-```
+**Run**: `CONVEX_URL=... make test-cli`
 
-## Future Backends
+## Extension Points
 
-Adding a new backend is straightforward:
+### Adding a New Backend
 
-1. Implement adapters:
+1. Create adapter directory: `<backend>/adapters/`
+2. Implement interfaces:
+   - `<Backend>IdentityAuth implements IdentityAuth`
+   - `<Backend>Transport implements Transport`
+   - `<Backend>GroupApi implements GroupApi`
+3. Update `src/client.ts` to support new backend
+4. Write backend-specific mutations/queries
+
+**No changes to core/ required**.
+
+### Adding a New Message Type
+
+1. Register handler in router:
    ```typescript
-   class FirebaseIdentityAuth implements IdentityAuth { ... }
-   class FirebaseTransport implements Transport { ... }
-   class FirebaseGroupApi implements GroupApi { ... }
+   router.register("my.type.v1", async (ctx, msg) => {
+     const plaintext = decrypt(msg.ct);
+     // Handle message
+   });
    ```
+2. Send messages with `typ: "my.type.v1"`
+3. Router dispatches to your handler automatically
 
-2. Create factory:
-   ```typescript
-   export function createMeritsClient(config: FirebaseConfig): MeritsClient {
-     return {
-       identity: new FirebaseIdentityAuth(config),
-       transport: new FirebaseTransport(config),
-       group: new FirebaseGroupApi(config),
-       router: createMessageRouter(),
-       // ... helpers
-     };
-   }
-   ```
+### Adding a New CLI Command
 
-3. Application code **unchanged** (uses interfaces).
+1. Create `cli/commands/mycommand.ts`
+2. Use `CLIContext` to access client, vault, config
+3. Register in `cli/index.ts` with Commander.js
+4. Use `getAuthProof()` helper for auth
 
-## Performance Characteristics
+## Security Considerations (v0.1.0)
 
-| Operation | Complexity | Notes |
-|-----------|------------|-------|
-| Send message | O(1) | Single mutation |
-| Receive messages | O(N) | N = unread messages |
-| Group create | O(1) | Single insert |
-| Group send | O(M) | M = member count (fanout) |
-| Subscribe | O(1) | Real-time push |
-| Router dispatch | O(1) | Hash map lookup |
+### ✅ What's Secure
 
-## File Structure
+- Ed25519 signatures (via @noble/ed25519)
+- Challenge/response prevents replay attacks
+- Args hash binds auth to specific operation
+- Single-use challenges (consumed on first verify)
+- Threshold signature support (crypto layer)
 
-```
-merits/
-├── core/
-│   ├── crypto.ts              # @noble-based crypto
-│   ├── types.ts               # Common types (AID, AuthProof, etc.)
-│   ├── interfaces/
-│   │   ├── IdentityAuth.ts    # Challenge/response
-│   │   ├── Transport.ts       # Send/receive/ack/subscribe
-│   │   └── GroupApi.ts        # Groups
-│   └── runtime/
-│       └── router.ts          # Message routing
-├── convex/
-│   ├── adapters/
-│   │   ├── ConvexIdentityAuth.ts
-│   │   ├── ConvexTransport.ts
-│   │   └── ConvexGroupApi.ts
-│   ├── auth.ts                # Mutations/queries
-│   ├── messages.ts
-│   ├── groups.ts
-│   └── schema.ts
-├── src/
-│   └── client.ts              # Unified SDK
-├── tests/
-│   ├── unit/                  # Fast, isolated tests
-│   ├── integration/           # Live backend tests
-│   └── helpers/               # Test utilities
-└── docs/
-    ├── architecture.md        # THIS FILE
-    ├── api-reference.md
-    └── migration-plan.md
-```
+### ⚠️ What's NOT Secure (Yet)
 
-## Summary
+- **Encryption**: Base64 stub, not ECDH-ES + AES-GCM
+- **Key Storage**: Filesystem encryption weak (future: OS keychain)
+- **MITM**: No TLS validation in Convex client (relies on Convex security)
+- **Rate Limiting**: Structure exists, not enforced
+- **Message Expiry**: Old messages never cleaned up
 
-Merits uses a **layered, interface-based architecture** that separates:
-- **Core** (backend-agnostic interfaces + crypto)
-- **Adapters** (backend-specific implementations)
-- **SDK** (unified entry point with helpers)
+**See**: [docs/future-work.md](./future-work.md) for security roadmap.
 
-This design enables portability, testability, and maintainability while providing a clean developer experience.
+## References
+
+- **[Core Interfaces](../core/interfaces/)** - Interface definitions
+- **[Convex Backend](../convex/)** - Implementation
+- **[SDK Client](../src/client.ts)** - Unified client
+- **[CLI](../cli/)** - Command-line tool
+- **[Tests](../tests/)** - Usage examples
