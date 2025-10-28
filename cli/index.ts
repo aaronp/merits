@@ -112,6 +112,14 @@ import { sendMessage } from "./commands/send";
 import { receiveMessages } from "./commands/receive";
 import { ackMessage } from "./commands/ack";
 import { watchMessages } from "./commands/watch";
+import {
+  createGroup,
+  listGroups,
+  groupInfo,
+  addGroupMember,
+  removeGroupMember,
+  leaveGroup,
+} from "./commands/group";
 
 // Init command (first-time setup)
 program
@@ -209,16 +217,50 @@ program
   .option("--from <identity>", "Identity acknowledging (default: config.defaultIdentity)")
   .action(ackMessage);
 
-program
+// Group command group (Phase 4)
+const groupCmd = program
   .command("group")
-  .description("Manage groups")
-  .action(() => {
-    console.log("Group commands coming in Milestone 3!");
-    console.log("  merits group create      - Create group");
-    console.log("  merits group list        - List groups");
-    console.log("  merits group add-member  - Add member to group");
-    console.log("  merits group send        - Send group message");
-  });
+  .description("Manage groups");
+
+groupCmd
+  .command("create <name>")
+  .description("Create a new group")
+  .option("--from <identity>", "Identity creating the group (default: config.defaultIdentity)")
+  .option("--description <text>", "Group description")
+  .action(createGroup);
+
+groupCmd
+  .command("list")
+  .description("List all groups (owned, admin, or member)")
+  .option("--from <identity>", "Identity to list groups for (default: config.defaultIdentity)")
+  .option("--format <type>", "Output format (json|text|compact)")
+  .action(listGroups);
+
+groupCmd
+  .command("info <group-id>")
+  .description("Show detailed group information")
+  .option("--from <identity>", "Identity requesting info (default: config.defaultIdentity)")
+  .option("--format <type>", "Output format (json|text)")
+  .action(groupInfo);
+
+groupCmd
+  .command("add <group-id> <member-aid>")
+  .description("Add member to group")
+  .option("--from <identity>", "Identity performing action (default: config.defaultIdentity)")
+  .option("--role <type>", "Member role (member|admin)", "member")
+  .action(addGroupMember);
+
+groupCmd
+  .command("remove <group-id> <member-aid>")
+  .description("Remove member from group")
+  .option("--from <identity>", "Identity performing action (default: config.defaultIdentity)")
+  .action(removeGroupMember);
+
+groupCmd
+  .command("leave <group-id>")
+  .description("Leave a group")
+  .option("--from <identity>", "Identity leaving (default: config.defaultIdentity)")
+  .action(leaveGroup);
 
 // Watch command (Phase 4: Real-time streaming with session tokens)
 program

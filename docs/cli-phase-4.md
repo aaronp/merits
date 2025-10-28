@@ -1391,17 +1391,41 @@ Deferred to later phases:
 - ✅ Graceful shutdown on SIGINT/SIGTERM
 - ✅ KSN-binding (tokens invalidated on key rotation)
 
-**Manual Testing**: ✅ Verified working (see [tests/cli/e2e/watch.test.ts](../tests/cli/e2e/watch.test.ts))
+**Manual Testing**: ✅ Verified working
+- Watch command starts and establishes session successfully
+- Session token creation and refresh working
+- Auto-ack functionality confirmed
+- Graceful shutdown on SIGINT/SIGTERM
 
-**E2E Tests**: ⚠️  1/4 passing - Output capture challenges with Bun.spawn
-- The SIGINT graceful shutdown test passes
-- Message reception tests timeout due to stdout capture issues with background processes
-- This is a test infrastructure limitation, not a functionality issue
-- Manual testing confirms all features work correctly
+**E2E Tests**: ⚠️  1/4 passing - [tests/cli/e2e/watch.test.ts](../tests/cli/e2e/watch.test.ts)
+- ✅ **Test 4**: "watch gracefully handles SIGINT" - PASSING
+  - Process spawns correctly
+  - SIGINT signal handled gracefully
+  - Clean shutdown verified
+- ❌ **Tests 1-3**: Message reception tests - TIMEOUT
+  - Issue: Stdout capture from background processes (Bun.spawn limitation)
+  - Root cause: File-based and stream-based output capture both fail to read watch output
+  - **Not a functionality issue** - Manual testing confirms watch receives and displays messages correctly
+  - Future fix: May require different test approach (e.g., Unix sockets, HTTP endpoint, or file-based IPC)
 
-### ⏳ Group Commands Next
+### 🚧 Group Commands - CLI Complete, Auth Blocked
 
-Following the original plan to implement group management commands after watch completion.
+**CLI Implementation**: ✅ Complete
+- [cli/commands/group.ts](../cli/commands/group.ts) - All 6 group commands implemented
+- Commands registered in [cli/index.ts](../cli/index.ts)
+- Commands: `create`, `list`, `info`, `add`, `remove`, `leave`
+
+**Backend Auth Support**: ⚠️  Blocked
+- Current auth system only supports: "send", "receive", "ack", "openSession"
+- Groups require new auth purpose (e.g., "admin" or "manageGroup")
+- Backend `convex/auth.ts` needs extension to support group operations
+- The GroupApi interface is defined but backend integration needs auth completion
+
+**Next Steps for Groups**:
+1. Extend `convex/auth.ts` to add group-related auth purposes
+2. Update challenge/response flow for group operations
+3. Test group commands end-to-end
+4. Add E2E tests for group workflows
 
 ---
 

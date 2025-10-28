@@ -1,4 +1,4 @@
-.PHONY: install typecheck test coverage clean check help summarise
+.PHONY: install typecheck test coverage clean check help summarise package
 
 # Default target
 .DEFAULT_GOAL := check
@@ -12,6 +12,7 @@ help:
 	@echo "  make coverage       - Run tests with HTML coverage report"
 	@echo "  make typecheck      - Run TypeScript type checks"
 	@echo "  make install        - Install dependencies"
+	@echo "  make package        - Compile CLI to standalone binary"
 	@echo "  make clean          - Remove generated files"
 	@echo "  make summarise      - Generate CLI summary and copy to clipboard"
 	@echo ""
@@ -49,11 +50,23 @@ coverage: install
 # Run all checks (tests + coverage)
 check: test coverage
 
+# Compile CLI to standalone binary
+package: install
+	@echo "📦 Compiling CLI to standalone binary..."
+	@cd .. && bun build cli/index.ts --compile --outfile merits
+	@echo "✅ Standalone binary created: ./merits"
+	@echo ""
+	@echo "Usage:"
+	@echo "  ./merits --help"
+	@echo "  ./merits identity new alice"
+	@echo "  ./merits send <aid> --message \"Hello\""
+
 # Clean up generated files
 clean:
 	rm -rf ../coverage
 	rm -rf ../node_modules
 	rm -f ../cli-summary.txt
+	rm -f ../merits
 
 # Generate CLI summary and copy to clipboard
 summarise:

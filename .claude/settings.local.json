@@ -33,7 +33,11 @@
       "Bash(export MERITS_VAULT_QUIET=1)",
       "Bash(timeout:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/cli/e2e/watch.test.ts --timeout 60000)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(bunx convex logs:*)",
+      "Bash(./merits:*)",
+      "Bash(./test-merits:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/cli/e2e/watch.test.ts --timeout 20000)"
     ],
     "deny": [],
     "ask": []
