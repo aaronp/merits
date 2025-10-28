@@ -63,35 +63,58 @@ async function runCLI(
 }
 
 /**
- * Spawn watch command in background and collect output to a temp file
+ * Spawn watch command in background and collect output
  */
 function spawnWatch(dataDir: string, identity: string): {
   process: any;
   getOutput: () => string;
-  outputFile: string;
 } {
-  const outputFile = path.join(TEST_ROOT, `watch-output-${Date.now()}.txt`);
-
-  // Use shell to redirect output
-  const command = `bun run cli/index.ts --data-dir ${dataDir} --convex-url ${CONVEX_URL} watch --from ${identity} --plaintext --format json > ${outputFile} 2>&1`;
+  const cliArgs = [
+    "bun",
+    "run",
+    "cli/index.ts",
+    "--data-dir",
+    dataDir,
+    "--convex-url",
+    CONVEX_URL,
+    "watch",
+    "--from",
+    identity,
+    "--plaintext",
+    "--format",
+    "json",
+  ];
 
   const env = { ...process.env, MERITS_VAULT_QUIET: "1" };
 
-  const proc = Bun.spawn(["sh", "-c", command], {
+  const proc = Bun.spawn(cliArgs, {
     env,
-    stdio: ["ignore", "pipe", "pipe"],
+    stdout: "pipe",
+    stderr: "pipe",
   });
+
+  // Collect output in memory as it arrives
+  let outputBuffer = "";
+
+  // Read stdout asynchronously
+  (async () => {
+    const reader = proc.stdout.getReader();
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        const chunk = decoder.decode(value, { stream: true });
+        outputBuffer += chunk;
+      }
+    } catch (e) {
+      // Process killed or error
+    }
+  })();
 
   return {
     process: proc,
-    outputFile,
-    getOutput: () => {
-      try {
-        return fs.readFileSync(outputFile, "utf-8");
-      } catch (e) {
-        return "";
-      }
-    },
+    getOutput: () => outputBuffer,
   };
 }
 
@@ -223,22 +246,47 @@ describe("E2E Watch Command (Phase 4)", () => {
 
   test("watch with --no-auto-ack leaves messages unread", async () => {
     // Start Bob watching WITHOUT auto-ack
-    const outputFile = path.join(TEST_ROOT, `watch-noack-${Date.now()}.txt`);
-    const command = `bun run cli/index.ts --data-dir ${BOB_DIR} --convex-url ${CONVEX_URL} watch --from bob --no-auto-ack --plaintext --format json > ${outputFile} 2>&1`;
+    const cliArgs = [
+      "bun",
+      "run",
+      "cli/index.ts",
+      "--data-dir",
+      BOB_DIR,
+      "--convex-url",
+      CONVEX_URL,
+      "watch",
+      "--from",
+      "bob",
+      "--no-auto-ack",
+      "--plaintext",
+      "--format",
+      "json",
+    ];
 
     const env = { ...process.env, MERITS_VAULT_QUIET: "1" };
-    const proc = Bun.spawn(["sh", "-c", command], {
+    const proc = Bun.spawn(cliArgs, {
       env,
-      stdio: ["ignore", "pipe", "pipe"],
+      stdout: "pipe",
+      stderr: "pipe",
     });
 
-    const getOutput = () => {
+    // Collect output
+    let outputBuffer = "";
+    (async () => {
+      const reader = proc.stdout.getReader();
+      const decoder = new TextDecoder();
       try {
-        return fs.readFileSync(outputFile, "utf-8");
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          outputBuffer += decoder.decode(value, { stream: true });
+        }
       } catch (e) {
-        return "";
+        // Ignore
       }
-    };
+    })();
+
+    const getOutput = () => outputBuffer;
 
     try {
       // Wait for watch to initialize

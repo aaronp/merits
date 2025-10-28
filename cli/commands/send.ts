@@ -40,6 +40,26 @@ export async function sendMessage(
 
   const identity = await ctx.vault.getIdentity(fromIdentity);
 
+  // Detect recipient type: AID (starts with 'D' or 'E') vs group ID
+  const isDirectMessage = isValidAID(recipient);
+
+  if (isDirectMessage) {
+    await sendDirectMessage(ctx, identity, recipient, fromIdentity, opts);
+  } else {
+    await sendGroupMessage(ctx, identity, recipient, fromIdentity, opts);
+  }
+}
+
+/**
+ * Send direct message to an AID
+ */
+async function sendDirectMessage(
+  ctx: CLIContext,
+  identity: any,
+  recipientAid: string,
+  fromIdentity: string,
+  opts: SendOptions
+): Promise<void> {
   // Get message content
   let plaintext: string | undefined;
   let ct: string | undefined;
@@ -56,7 +76,7 @@ export async function sendMessage(
 
   // Encrypt if plaintext provided
   if (plaintext) {
-    const encryptionTarget = opts.encryptFor || recipient;
+    const encryptionTarget = opts.encryptFor || recipientAid;
 
     // Get recipient's public key
     const recipientPublicKey = await fetchPublicKeyFor(ctx, encryptionTarget);
@@ -82,7 +102,7 @@ export async function sendMessage(
     identityName: fromIdentity,
     purpose: "send",
     args: {
-      recpAid: recipient, // Match backend: recpAid not 'to'
+      recpAid: recipientAid, // Match backend: recpAid not 'to'
       ctHash,
       ttl: ttlMs, // Match backend: ttl not 'ttlMs'
       alg: opts.alg ?? "",
@@ -92,13 +112,13 @@ export async function sendMessage(
 
   // Silent in JSON mode
   if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
-    console.log(`Sending message to ${recipient}...`);
+    console.log(`Sending message to ${recipientAid}...`);
   }
 
   // Send via backend-agnostic transport interface
   // IMPORTANT: Interface expects { to, ct, ttlMs, auth } and returns { messageId }
   const result = await ctx.client.transport.sendMessage({
-    to: recipient, // NOT recpAid!
+    to: recipientAid, // NOT recpAid!
     ct,
     typ: opts.typ,
     ek: opts.ek,
@@ -112,12 +132,98 @@ export async function sendMessage(
   // Output result
   if (opts.format === "json" || ctx.config.outputFormat === "json") {
     console.log(
-      JSON.stringify({ messageId, recipient, sentAt: Date.now() }, null, 2)
+      JSON.stringify({ messageId, recipient: recipientAid, sentAt: Date.now() }, null, 2)
     );
   } else {
     console.log(`✅ Message sent successfully!`);
     console.log(`   Message ID: ${messageId}`);
   }
+}
+
+/**
+ * Send group message (Phase 4)
+ * Backend handles fanout to all members
+ */
+async function sendGroupMessage(
+  ctx: CLIContext,
+  identity: any,
+  groupId: string,
+  fromIdentity: string,
+  opts: SendOptions
+): Promise<void> {
+  // Get message content (same as direct send)
+  let plaintext: string | undefined;
+  let ct: string | undefined;
+
+  if (opts.ct) {
+    ct = opts.ct;
+  } else if (opts.message) {
+    plaintext = opts.message;
+  } else {
+    plaintext = await readStdin();
+  }
+
+  // For group messages, we encrypt with placeholder key
+  // Backend will re-encrypt for each member
+  if (plaintext) {
+    // Use sender's own public key as placeholder
+    const recipientPublicKey = await ctx.vault.getPublicKey(fromIdentity);
+    ct = await encryptMessage(plaintext, recipientPublicKey);
+  }
+
+  if (!ct) {
+    throw new Error("No message content provided");
+  }
+
+  const ctHash = sha256Hex(new TextEncoder().encode(ct));
+  const ttlMs = opts.ttl ?? 24 * 60 * 60 * 1000;
+
+  // Auth proof with purpose "sendGroup" (Phase 4)
+  const auth = await getAuthProof({
+    client: ctx.client,
+    vault: ctx.vault,
+    identityName: fromIdentity,
+    purpose: "sendGroup",
+    args: {
+      groupId,
+      ctHash,
+      ttl: ttlMs,
+    },
+  });
+
+  // Silent in JSON mode
+  if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+    console.log(`Sending message to group ${groupId}...`);
+  }
+
+  // Send via GroupApi interface
+  const result = await ctx.client.group.sendGroupMessage({
+    groupId,
+    ct,
+    typ: opts.typ,
+    ttlMs,
+    auth,
+  });
+
+  // Output result
+  if (opts.format === "json" || ctx.config.outputFormat === "json") {
+    console.log(
+      JSON.stringify({ messageId: result.messageId, groupId, sentAt: Date.now() }, null, 2)
+    );
+  } else {
+    console.log(`✅ Message sent to group!`);
+    console.log(`   Message ID: ${result.messageId}`);
+  }
+}
+
+/**
+ * Check if recipient is a valid AID (CESR-encoded identifier)
+ * AIDs typically start with 'D' (SHA256 digest) or 'E' (Ed25519 public key)
+ */
+function isValidAID(recipient: string): boolean {
+  // KERI AIDs are CESR-encoded and typically start with 'D' or 'E'
+  // Basic check: starts with capital letter and is ~44 chars (base64url)
+  return /^[DE][A-Za-z0-9_-]{42,}$/.test(recipient);
 }
 
 /**

@@ -70,16 +70,15 @@ export async function createGroup(
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: {
       action: "createGroup",
       name: groupName,
-      description: opts.description,
     },
   });
 
   // Create group via GroupApi
-  const group = await ctx.client.group.createGroup({
+  const result = await ctx.client.group.createGroup({
     name: groupName,
     initialMembers: [], // Start with just the owner
     auth,
@@ -88,15 +87,12 @@ export async function createGroup(
   const isJsonMode = ctx.config.outputFormat === "json";
 
   if (isJsonMode) {
-    console.log(JSON.stringify(group, null, 2));
+    console.log(JSON.stringify({ groupId: result.groupId, name: groupName }, null, 2));
   } else {
     console.log(chalk.green("✅ Group created successfully!"));
     console.log(chalk.cyan(`\n📋 Group Details:`));
-    console.log(`   ID: ${chalk.bold(group.id)}`);
+    console.log(`   ID: ${chalk.bold(result.groupId)}`);
     console.log(`   Name: ${chalk.bold(groupName)}`);
-    if (opts.description) {
-      console.log(`   Description: ${opts.description}`);
-    }
     console.log(`   Owner: ${identity.aid}`);
     console.log(`   Members: 1 (owner)`);
   }
@@ -120,13 +116,13 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: { action: "listGroups" },
   });
 
   // List groups via GroupApi
   const groups = await ctx.client.group.listGroups({
-    forAid: identity.aid,
+    for: identity.aid,
     auth,
   });
 
@@ -136,7 +132,10 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
     console.log(JSON.stringify(groups, null, 2));
   } else if (format === "compact") {
     for (const group of groups) {
-      console.log(`${group.id}\t${group.name}\t${group.role}`);
+      // Find user's role in this group
+      const userMember = group.members.find((m) => m.aid === identity.aid);
+      const role = userMember?.role || "member";
+      console.log(`${group.id}\t${group.name}\t${role}`);
     }
   } else {
     // text format (default)
@@ -148,13 +147,14 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
     console.log(chalk.cyan(`\n📋 Groups for ${identityName}:\n`));
 
     for (const group of groups) {
-      const roleIcon = group.role === "owner" ? "👑" : group.role === "admin" ? "⚙️" : "👤";
-      console.log(`${roleIcon} ${chalk.bold(group.name)} (${group.role})`);
+      // Find user's role in this group
+      const userMember = group.members.find((m) => m.aid === identity.aid);
+      const role = userMember?.role || "member";
+      const roleIcon = role === "owner" ? "👑" : role === "admin" ? "⚙️" : "👤";
+
+      console.log(`${roleIcon} ${chalk.bold(group.name)} (${role})`);
       console.log(`   ID: ${group.id}`);
-      if (group.description) {
-        console.log(`   Description: ${group.description}`);
-      }
-      console.log(`   Members: ${group.memberCount}`);
+      console.log(`   Members: ${group.members.length}`);
       console.log();
     }
   }
@@ -179,7 +179,7 @@ export async function groupInfo(
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: { action: "info", groupId },
   });
 
@@ -197,10 +197,7 @@ export async function groupInfo(
     console.log(chalk.cyan(`\n📋 Group Information:\n`));
     console.log(`   Name: ${chalk.bold(group.name)}`);
     console.log(`   ID: ${group.id}`);
-    if (group.description) {
-      console.log(`   Description: ${group.description}`);
-    }
-    console.log(`   Owner: ${group.ownerAid}`);
+    console.log(`   Created by: ${group.createdBy}`);
     console.log(`   Created: ${new Date(group.createdAt).toLocaleString()}`);
     console.log();
 
@@ -229,40 +226,33 @@ export async function addGroupMember(
     throw new Error("No identity specified. Use --from or set a default identity.");
   }
 
-  const role = opts.role || "member";
-
-  // Validate role
-  if (!["member", "admin"].includes(role)) {
-    throw new Error(`Invalid role: ${role}. Must be 'member' or 'admin'.`);
-  }
-
   // Get auth proof
   const auth = await getAuthProof({
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: {
-      action: "addMember",
+      action: "addMembers",
       groupId,
-      members: [{ aid: memberAid, role }],
+      members: [memberAid],
     },
   });
 
-  // Add member
+  // Add member (always added as "member" role - backend limitation)
   await ctx.client.group.addMembers({
     groupId,
-    members: [{ aid: memberAid, role }],
+    members: [memberAid],
     auth,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
 
   if (isJsonMode) {
-    console.log(JSON.stringify({ success: true, groupId, memberAid, role }, null, 2));
+    console.log(JSON.stringify({ success: true, groupId, memberAid, role: "member" }, null, 2));
   } else {
     console.log(chalk.green(`✅ Added ${memberAid} to group ${groupId}`));
-    console.log(`   Role: ${role}`);
+    console.log(`   Role: member`);
   }
 }
 
@@ -286,9 +276,9 @@ export async function removeGroupMember(
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: {
-      action: "removeMember",
+      action: "removeMembers",
       groupId,
       members: [memberAid],
     },
@@ -331,9 +321,9 @@ export async function leaveGroup(
     client: ctx.client,
     vault: ctx.vault,
     identityName,
-    purpose: "admin",
+    purpose: "manageGroup",
     args: {
-      action: "leave",
+      action: "leaveGroup",
       groupId,
     },
   });

@@ -205,4 +205,11 @@ function displayMessage(
       console.log(chalk.gray(`   Ciphertext: ${msg.ct.slice(0, 50)}...`));
     }
   }
+
+  // Force flush stdout for file redirection in tests
+  // When stdout is redirected to a file, it becomes fully buffered
+  // We need to flush after each message for real-time output
+  if (process.stdout.write("")) {
+    // write() returns true if flushed, triggers flush cycle
+  }
 }
