@@ -78,10 +78,32 @@ program.hook("preAction", (thisCommand, actionCommand) => {
   const ctx: CLIContext = { config, vault, client };
   actionCommand.setOptionValue("_ctx", ctx);
 
+  // Inject global options into command (so they're accessible in command handlers)
+  if (mergedOpts.token !== undefined) {
+    actionCommand.setOptionValue("token", mergedOpts.token);
+  }
+  if (mergedOpts.format !== undefined) {
+    actionCommand.setOptionValue("format", mergedOpts.format);
+  }
+  if (mergedOpts.noBanner !== undefined) {
+    actionCommand.setOptionValue("noBanner", mergedOpts.noBanner);
+  }
+  if (mergedOpts.verbose !== undefined) {
+    actionCommand.setOptionValue("verbose", mergedOpts.verbose);
+  }
+  if (mergedOpts.debug !== undefined) {
+    actionCommand.setOptionValue("debug", mergedOpts.debug);
+  }
+
   // Debug logging
-  if (opts.debug) {
+  if (mergedOpts.debug) {
     console.error("[DEBUG] Config:", config);
     console.error("[DEBUG] Vault type: OS Keychain");
+    console.error("[DEBUG] Global options:", {
+      token: mergedOpts.token,
+      format: mergedOpts.format,
+      noBanner: mergedOpts.noBanner
+    });
   }
 });
 
@@ -111,10 +133,11 @@ import { sign } from "./commands/sign";
 import { confirmChallenge } from "./commands/confirm-challenge";
 import { signIn } from "./commands/sign-in";
 import { whoami } from "./commands/whoami";
+import { listUnread } from "./commands/list-unread";
+import { unread } from "./commands/unread";
+import { markAsRead } from "./commands/mark-as-read";
+import { extractIds } from "./commands/extract-ids";
 import { sendMessage } from "./commands/send";
-import { receiveMessages } from "./commands/receive";
-import { ackMessage } from "./commands/ack";
-import { watchMessages } from "./commands/watch";
 import { rolesCreate, permissionsCreate, rolesAddPermission, usersGrantRole, bootstrapOnboardingCmd } from "./commands/rbac";
 import {
   createGroup,
@@ -124,6 +147,11 @@ import {
   removeGroupMember,
   leaveGroup,
 } from "./commands/group";
+
+// Old messaging commands (to be removed in Phase 9)
+import { receiveMessages } from "./commands/receive";
+import { ackMessage } from "./commands/ack";
+import { watchMessages } from "./commands/watch";
 
 // Old commands (to be removed in Phase 9)
 import { newIdentity } from "./commands/identity/new";
@@ -181,6 +209,34 @@ program
   .command("whoami")
   .description("Display current session information")
   .action(whoami);
+
+// Messaging commands
+program
+  .command("list-unread")
+  .description("List unread message counts per sender/group")
+  .option("--from <senders>", "Comma-separated list of sender AIDs to filter by")
+  .action(listUnread);
+
+program
+  .command("unread")
+  .description("Retrieve unread messages")
+  .option("--from <sender>", "Filter messages by sender")
+  .option("--watch", "Stream messages in real-time (continuous mode)")
+  .option("--since <timestamp>", "Replay messages after this timestamp", parseInt)
+  .action(unread);
+
+program
+  .command("mark-as-read")
+  .description("Mark messages as read (acknowledges and deletes them)")
+  .option("--ids <ids>", "Comma-separated message IDs")
+  .option("--ids-data <file>", "Path to JSON file with message IDs")
+  .action(markAsRead);
+
+program
+  .command("extract-ids")
+  .description("Extract message IDs from message list (utility for piping)")
+  .requiredOption("--file <path>", "Path to messages file")
+  .action(extractIds);
 
 // --- Old Identity Commands (to be removed in Phase 9) ---
 
