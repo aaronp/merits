@@ -263,49 +263,54 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 ## Phase 5: Group Encryption Mechanism
 
 ### 5.1 Implement X25519 Key Conversion
-* [ ] Create `cli/lib/crypto-group.ts`:
-  * [ ] Import from `cli/lib/crypto-constants.ts`
-  * [ ] Function: `ed25519ToX25519(ed25519PrivateKey, ed25519PublicKey)`
-  * [ ] Converts Ed25519 keys to X25519 for Diffie-Hellman
-  * [ ] Uses @noble/ed25519 and @noble/curve25519
-  * [ ] Document cryptographic primitives explicitly in code comments
+* [x] Create `cli/lib/crypto-group.ts`:
+  * [x] Import from `cli/lib/crypto-constants.ts`
+  * [x] Function: `ed25519PrivateKeyToX25519(ed25519PrivateKey)` and `ed25519PublicKeyToX25519(ed25519PublicKey)`
+  * [x] Converts Ed25519 keys to X25519 for Diffie-Hellman
+  * [x] Uses @noble/curves/ed25519 with `toMontgomerySecret()` and `toMontgomery()`
+  * [x] Document cryptographic primitives explicitly in code comments
+* **Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L466-L495](tests/cli/e2e/new-cli-spec.test.ts#L466-L495)
 
 ### 5.2 Implement Shared Secret Derivation
-* [ ] In `cli/lib/crypto-group.ts`:
-  * [ ] Function: `deriveSharedSecret(ourX25519PrivateKey, theirX25519PublicKey)`
-  * [ ] Performs X25519 key exchange
-  * [ ] Returns shared secret bytes
-  * [ ] Use HKDF-SHA256 from constants
+* [x] In `cli/lib/crypto-group.ts`:
+  * [x] Function: `deriveSharedSecret(ourX25519PrivateKey, theirX25519PublicKey)`
+  * [x] Performs X25519 key exchange using `x25519.getSharedSecret()`
+  * [x] Returns shared secret bytes
+  * [x] Verified bidirectional symmetry (Alice→Bob = Bob→Alice)
+* **Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L497-L532](tests/cli/e2e/new-cli-spec.test.ts#L497-L532)
 
 ### 5.3 Implement Group Key Derivation
-* [ ] In `cli/lib/crypto-group.ts`:
-  * [ ] Function: `deriveGroupKey(sharedSecrets: Uint8Array[])`
-  * [ ] Uses HKDF-SHA256 (from constants) to combine multiple shared secrets
-  * [ ] Returns symmetric group key
-  * [ ] Document KDF choice and rationale
+* [x] In `cli/lib/crypto-group.ts`:
+  * [x] Function: `deriveGroupKey(sharedSecrets: Uint8Array[])`
+  * [x] Uses HKDF-SHA256 (from @noble/hashes) to combine multiple shared secrets
+  * [x] Returns symmetric group key
+  * [x] Document KDF choice and rationale
+* **Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L534-L553](tests/cli/e2e/new-cli-spec.test.ts#L534-L553)
 
 ### 5.4 Implement Group Encryption
-* [ ] In `cli/lib/crypto-group.ts`:
-  * [ ] Function: `encryptForGroup(message: string, memberPublicKeys: string[], ourPrivateKey: Uint8Array)`
-  * [ ] Generates random group key
-  * [ ] Encrypts message with group key (AES-256-GCM from constants)
-  * [ ] Includes nonce and AAD fields in payload for forward compatibility
-  * [ ] For each member:
-    * [ ] Converts their Ed25519 public key to X25519
-    * [ ] Derives shared secret
-    * [ ] Encrypts group key with shared secret (AES-256-GCM)
-  * [ ] Returns encrypted group message structure
-  * [ ] **Critical**: Store derived group keys only in-memory; never persist even temporarily
+* [x] In `cli/lib/crypto-group.ts`:
+  * [x] Function: `encryptForGroup(message: string, memberPublicKeys: Record<string, string>, ourPrivateKey: Uint8Array, groupId: string, senderAid: string)`
+  * [x] Generates random group key
+  * [x] Encrypts message with group key (AES-256-GCM via Web Crypto API)
+  * [x] Includes nonce and AAD fields in payload for forward compatibility
+  * [x] For each member:
+    * [x] Converts their Ed25519 public key to X25519
+    * [x] Derives shared secret
+    * [x] Encrypts group key with shared secret (AES-256-GCM)
+  * [x] Returns encrypted group message structure
+  * [x] **Critical**: Store derived group keys only in-memory; clears keys with `fill(0)` after use
+* **Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L590-L841](tests/cli/e2e/new-cli-spec.test.ts#L590-L841) (multiple test scenarios including single-member, large groups, empty messages, unicode)
 
 ### 5.5 Implement Group Decryption
-* [ ] In `cli/lib/crypto-group.ts`:
-  * [ ] Function: `decryptGroupMessage(encryptedMessage: GroupMessage, ourPrivateKey: Uint8Array, senderPublicKey: string)`
-  * [ ] Finds our encrypted group key in message
-  * [ ] Derives shared secret with sender
-  * [ ] Decrypts group key
-  * [ ] Decrypts message content with group key (AES-256-GCM)
-  * [ ] Returns plaintext
-  * [ ] Handle nonce and AAD fields from payload
+* [x] In `cli/lib/crypto-group.ts`:
+  * [x] Function: `decryptGroupMessage(groupMessage: GroupMessage, ourPrivateKey: Uint8Array, ourAid: string, senderPublicKey: string)`
+  * [x] Finds our encrypted group key in message
+  * [x] Derives shared secret with sender
+  * [x] Decrypts group key
+  * [x] Decrypts message content with group key (AES-256-GCM)
+  * [x] Returns plaintext
+  * [x] Handle nonce and AAD fields from payload
+* **Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L590-L841](tests/cli/e2e/new-cli-spec.test.ts#L590-L841) (full encryption/decryption workflow tests)
 
 ### 5.6 Integrate Group Encryption into `send`
 * [ ] Update `send` command:
