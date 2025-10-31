@@ -28,30 +28,30 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 ## Phase 1: Output Format & Global Options
 
 ### 1.1 Create Shared Options Module
-* [ ] Create `cli/lib/options.ts`:
-  * [ ] Function: `withGlobalOptions<T>(handler: (opts: GlobalOptions & T) => Promise<void>)`
-  * [ ] Wraps command handlers to inject global options
-  * [ ] Handles format normalization (default: `json`)
-  * [ ] Provides `--no-banner` flag for scripting contexts
-* [ ] Export `GlobalOptions` type with all standard flags
+* [x] Create `cli/lib/options.ts`:
+  * [x] Function: `withGlobalOptions<T>(handler: (opts: GlobalOptions & T) => Promise<void>)`
+  * [x] Wraps command handlers to inject global options
+  * [x] Handles format normalization (default: `json`)
+  * [x] Provides `--no-banner` flag for scripting contexts
+* [x] Export `GlobalOptions` type with all standard flags
 
 ### 1.2 Update Output Format System
-* [ ] Change default `--format` from `text` to `json`
-* [ ] Replace `compact` format with `pretty` (indented JSON) and `raw` (minimal/no formatting)
-* [ ] Update `cli/lib/formatters.ts`:
-  * [ ] Rename `compact` to `pretty`
-  * [ ] Add `raw` format option (minimal JSON, no indentation)
-  * [ ] Ensure JSON is default output
-  * [ ] Use RFC8785 canonicalized JSON for deterministic test snapshots
+* [x] Change default `--format` from `text` to `json`
+* [x] Replace `compact` format with `pretty` (indented JSON) and `raw` (minimal/no formatting)
+* [x] Update `cli/lib/formatters.ts`:
+  * [x] Rename `compact` to `pretty`
+  * [x] Add `raw` format option (minimal JSON, no indentation)
+  * [x] Ensure JSON is default output
+  * [x] Use RFC8785 canonicalized JSON for deterministic test snapshots
 * [ ] Update all commands to use `withGlobalOptions()` wrapper
 * [ ] Update all commands to use new format options
 
 ### 1.3 Standardize Global Options
-* [ ] Align global options with `cli.md`:
-  * [ ] `--format <json|pretty|raw>` (default: `json`)
-  * [ ] `--token <path>` (session token file, default: `.merits/session.json`)
-  * [ ] `--no-banner` (suppress welcome/status messages for scripting)
-  * [ ] Keep `--verbose`, `--config`, `--convex-url`, `--no-color`, `--debug`
+* [x] Align global options with `cli.md`:
+  * [x] `--format <json|pretty|raw>` (default: `json`)
+  * [x] `--token <path>` (session token file, default: `.merits/session.json`)
+  * [x] `--no-banner` (suppress welcome/status messages for scripting)
+  * [x] Keep `--verbose`, `--config`, `--convex-url`, `--no-color`, `--debug`
 * [ ] Update `cli/index.ts` to use shared options module
 * [ ] Add JSON schema validation for CLI args using TypeBox (runtime validation)
 

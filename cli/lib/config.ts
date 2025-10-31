@@ -23,7 +23,7 @@ export interface MeritsConfig {
     type: "convex" | "rest" | "local";
     url: string;
   };
-  outputFormat?: "json" | "text" | "compact";
+  outputFormat?: "json" | "pretty" | "raw";
   watchInterval?: number; // milliseconds
   defaultIdentity?: string;
   verbose?: boolean;
@@ -45,7 +45,7 @@ export interface ResolvedConfig extends Omit<Required<MeritsConfig>, 'backend'> 
  */
 export const DEFAULT_CONFIG: MeritsConfig = {
   version: 1,
-  outputFormat: "text",
+  outputFormat: "json", // Changed default to json per cli.md spec
   watchInterval: 1000,
   verbose: false,
   color: true,
@@ -68,7 +68,7 @@ const CONFIG_SCHEMA = {
       required: ["type", "url"],
       additionalProperties: false,
     },
-    outputFormat: { type: "string", enum: ["json", "text", "compact"] },
+    outputFormat: { type: "string", enum: ["json", "pretty", "raw"] },
     watchInterval: { type: "number", minimum: 100, maximum: 30000 },
     defaultIdentity: { type: "string", minLength: 1 },
     verbose: { type: "boolean" },
@@ -303,7 +303,7 @@ function loadEnvConfig(): Partial<MeritsConfig> {
 
   if (process.env.MERITS_OUTPUT_FORMAT) {
     const format = process.env.MERITS_OUTPUT_FORMAT;
-    if (format === "json" || format === "text" || format === "compact") {
+    if (format === "json" || format === "pretty" || format === "raw") {
       config.outputFormat = format;
     }
   }

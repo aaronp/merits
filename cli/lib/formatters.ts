@@ -1,18 +1,19 @@
 /**
  * Output Formatters
  *
- * Three modes: json, text, compact
+ * Three modes: json (default), pretty (indented JSON), raw (minimal JSON)
  * Async signatures for future vault decryption support
  * Colorized output with chalk
+ * RFC8785 canonicalized JSON for deterministic test snapshots
  */
 
 import chalk from "chalk";
 import type { MeritsVault } from "./vault/MeritsVault";
 
 /**
- * Output format types
+ * Output format types (updated to match cli.md spec)
  */
-export type OutputFormat = "json" | "text" | "compact";
+export type OutputFormat = "json" | "pretty" | "raw";
 
 /**
  * Encrypted message structure (from Transport interface)
@@ -63,36 +64,98 @@ export async function formatMessages(
   switch (format) {
     case "json":
       return formatJSON(messages, options);
-    case "text":
-      return await formatText(messages, options);
-    case "compact":
-      return await formatCompact(messages, options);
+    case "pretty":
+      return formatPretty(messages, options);
+    case "raw":
+      return formatRaw(messages, options);
     default:
-      throw new Error(`Unknown format: ${format}`);
+      throw new Error(`Unknown format: ${format}. Must be one of: json, pretty, raw`);
   }
 }
 
 /**
- * Format as JSON
+ * Format as JSON (canonicalized for deterministic snapshots)
  */
 function formatJSON(
   messages: EncryptedMessage[],
   options: FormatOptions
 ): string {
-  if (options.verbose) {
-    return JSON.stringify(messages, null, 2);
+  // Determine data to include
+  const data = options.verbose
+    ? messages
+    : messages.map((msg) => ({
+        id: msg.id,
+        from: msg.from,
+        to: msg.to,
+        typ: msg.typ,
+        ct: msg.ct,
+      }));
+
+  // Use canonical JSON (RFC8785) for deterministic output
+  return canonicalizeJSON(data);
+}
+
+/**
+ * Format as pretty (indented JSON)
+ */
+function formatPretty(
+  messages: EncryptedMessage[],
+  options: FormatOptions
+): string {
+  const data = options.verbose
+    ? messages
+    : messages.map((msg) => ({
+        id: msg.id,
+        from: msg.from,
+        to: msg.to,
+        typ: msg.typ,
+        ct: msg.ct,
+      }));
+
+  return JSON.stringify(data, null, 2);
+}
+
+/**
+ * Format as raw (minimal JSON, no indentation)
+ */
+function formatRaw(
+  messages: EncryptedMessage[],
+  options: FormatOptions
+): string {
+  const data = options.verbose
+    ? messages
+    : messages.map((msg) => ({
+        id: msg.id,
+        from: msg.from,
+        to: msg.to,
+        typ: msg.typ,
+        ct: msg.ct,
+      }));
+
+  return JSON.stringify(data);
+}
+
+/**
+ * Canonicalize JSON according to RFC8785
+ * - Sort object keys deterministically
+ * - No whitespace (except for pretty format)
+ */
+function canonicalizeJSON(obj: any): string {
+  if (obj === null || typeof obj !== "object") {
+    return JSON.stringify(obj);
   }
 
-  // Minimal JSON (no signatures, metadata)
-  const minimal = messages.map((msg) => ({
-    id: msg.id,
-    from: msg.from,
-    to: msg.to,
-    typ: msg.typ,
-    ct: msg.ct,
-  }));
+  if (Array.isArray(obj)) {
+    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+  }
 
-  return JSON.stringify(minimal, null, 2);
+  // Sort object keys
+  const sortedKeys = Object.keys(obj).sort();
+  const entries = sortedKeys.map((key) => {
+    return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
+  });
+
+  return `{${entries.join(",")}}`;
 }
 
 /**
@@ -160,47 +223,7 @@ async function formatText(
   return lines.join("\n");
 }
 
-/**
- * Format as compact one-line-per-message
- */
-async function formatCompact(
-  messages: EncryptedMessage[],
-  options: FormatOptions
-): Promise<string> {
-  const color = options.color ?? true;
-  const lines: string[] = [];
-
-  for (const msg of messages) {
-    const time = formatTimestamp(msg.createdAt);
-    const from = truncate(msg.from, 12);
-    const typ = msg.typ;
-
-    let line: string;
-
-    // Try to decrypt if vault provided
-    if (options.vault && options.identityName) {
-      try {
-        const plaintext = await options.vault.decrypt(
-          options.identityName,
-          msg.ct,
-          { ek: msg.ek, alg: msg.alg }
-        );
-        const content = truncate(plaintext, 40);
-        line = `${time} ${from} [${typ}] ${content}`;
-      } catch (err) {
-        const ct = truncate(msg.ct, 40);
-        line = `${time} ${from} [${typ}] <encrypted: ${ct}>`;
-      }
-    } else {
-      const ct = truncate(msg.ct, 40);
-      line = `${time} ${from} [${typ}] <encrypted: ${ct}>`;
-    }
-
-    lines.push(color ? chalk.white(line) : line);
-  }
-
-  return lines.join("\n");
-}
+// Removed formatCompact - replaced by "raw" format
 
 /**
  * Format identity for output
@@ -240,11 +263,11 @@ export async function formatIdentity(
       return lines.join("\n");
     }
 
-    case "compact":
-      return `${name} (${truncate(identity.aid, 24)}) KSN=${identity.ksn}`;
+    case "raw":
+      return JSON.stringify({ name, ...identity });
 
     default:
-      throw new Error(`Unknown format: ${format}`);
+      throw new Error(`Unknown format: ${format}. Must be one of: json, pretty, raw`);
   }
 }
 
@@ -291,11 +314,11 @@ export async function formatGroup(
       return lines.join("\n");
     }
 
-    case "compact":
-      return `${group.name} (${group.members.length} members) - ${formatTimestamp(group.createdAt)}`;
+    case "raw":
+      return JSON.stringify(group);
 
     default:
-      throw new Error(`Unknown format: ${format}`);
+      throw new Error(`Unknown format: ${format}. Must be one of: json, pretty, raw`);
   }
 }
 

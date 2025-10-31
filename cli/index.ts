@@ -33,12 +33,13 @@ program
   .description("Merits messaging CLI - KERI-authenticated secure messaging")
   .version("0.1.0");
 
-// Global options
+// Global options (updated to match cli.md spec)
 program
   .option("--data-dir <path>", "Data directory (overrides ~/.merits/)")
-  .option("--format <type>", "Output format (json|text|compact)", "text")
+  .option("--format <type>", "Output format (json|pretty|raw)", "json")
+  .option("--token <path>", "Session token file path (default: .merits/session.json)")
+  .option("--no-banner", "Suppress welcome/status messages (for scripting)")
   .option("--verbose", "Show detailed envelope data", false)
-  .option("--from <aid>", "Identity to use")
   .option("--config <path>", "Config file path")
   .option("--convex-url <url>", "Convex deployment URL")
   .option("--no-color", "Disable colored output")
