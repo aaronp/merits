@@ -1,268 +1,342 @@
-# CLI
+# Merits CLI
 
-`merits` is the application entry point, built via `make compile`.
+`merits` is the command-line entry point for the **Merits system**.  
+It provides a secure messaging and group coordination layer on top of authenticated, ephemeral communication — designed to align with the [KERI](https://github.com/WebOfTrust/keri) ecosystem while remaining standalone.
 
+Build locally via:
 
-
-# User Management
-
-User Ids (AIDs) and their public keys are specified and controlled by the end user.
-
-Users can use any ID they choose, but they should be the AID generated from incepting a new kerits identity.
-
-
-*Note:*
-```
-There is no dependency on kerits from merits, however, and the ID is simply plain text.
-
-If you don't use a keri AID, however, the only thing new users can do is message the onboarding team,
-who will want to verify your KERI AID, and so using other IDs (such as a UUID) is of little use.
-
-Still, it's great for testing scenarios in demo environments.
+```bash
+make compile
 ```
 
-## Creating a new key-pair
+---
 
-Users in merits require cryptographic key-pairs for authentication.
+## Table of Contents
 
-For users who which to use merits outside of keri or kerits, you can create a new ED25519 key pair like this:
+- [Introduction and Overview](#introduction-and-overview)
+- [Global Options](#global-options)
+- [User Management](#user-management)
+  - [Creating a New Key-Pair](#creating-a-new-key-pair)
+  - [Creating a New User](#creating-a-new-user)
+  - [Logging In](#logging-in)
+  - [Updating Your Key Pair](#updating-your-key-pair)
+- [Messaging](#sending-messages)
+  - [Encrypting Messages](#encrypting-messages)
+  - [Receiving Messages](#receiving-messages)
+  - [Marking Messages as Read](#marking-messages-as-read)
+- [Groups](#groups)
+- [Controls](#controls)
+- [Command Summary](#command-summary)
+- [Session Tokens](#session-tokens)
+- [Security Notes](#security-notes)
 
-```sh
-# --seed is an optional entropy value, used to create idempotent keys
+---
+
+## Introduction and Overview
+
+`merits` acts as the secure messaging and coordination layer of the **Kerits** ecosystem.  
+It handles authenticated key management, encrypted messaging, and group collaboration through a CLI designed for both developers and test harness automation.
+
+> **Note:** Merits does not depend on Kerits or KERI, but interoperates with them.  
+> IDs may be any text string, though KERI AIDs are recommended for interoperability.
+
+---
+
+## Global Options
+
+All commands support a `--format` option to control output format:
+
+| Format | Description |
+|---------|--------------|
+| `json` *(default)* | Machine-readable JSON output |
+| `pretty` | Indented, human-readable JSON |
+| `raw` | Raw text or binary data, if applicable |
+
+Example:
+```bash
+merits list-unread --token ${TOKEN} --format pretty
+```
+
+---
+
+## User Management
+
+User IDs (AIDs) and their public keys are controlled by the end user.  
+A typical user lifecycle includes creating a key pair, registering it, authenticating via challenge–response, and rotating keys as needed.
+
+### Creating a New Key-Pair
+
+Users require cryptographic key-pairs for authentication.
+
+```bash
+# --seed is optional and allows deterministic key generation for testing
 merits gen-key --seed 1234
 ```
 
-This will output a new private and public keys in json format.
+This outputs a JSON object containing the private and public keys.
 
-You can pipe this to a file, write it down, etc. 
+> ⚠️ **Important:** Keep your private key safe. Never share it or commit it to a repository.
 
-** Note: ** Keep it safe if you're going to use it for anything important!
+---
 
-## Creating new user
+### Creating a New User
 
-The Merits server needs to know you control the private key for a key-pair. It does this through a challenge-response mechanism, where upon creating new users, the server asks the new client to sign some random challenge with their private key, and then submit that challenge back to the server to prove they are the owner of the public key.
+Merits verifies ownership of a key-pair through a **challenge–response** ceremony.
 
-```sh
-
-# from step 1, creating a new key:
-merits gen-key >  alice-keys.json
-
+```bash
+# Step 1: Generate keys
+merits gen-key > alice-keys.json
 export PUBLIC_KEY=$(jq -r '.publicKey' alice-keys.json)
 
-# initialiate the challenge. The output is the challenge sent from the server. Here we save it in a 'challenge.json' file.
-# the challenge response contains the userId, a random 'nonce' value, and the public key submitted.
-merits create-user -id alice -publicKey ${PUBLIC_KEY} > challenge.json
+# Step 2: Initiate challenge
+merits create-user --id alice --public-key ${PUBLIC_KEY} > challenge.json
 
-# sign the challenge. here we show it saved to a file
-merits sign -file challenge.json -keys alice-keys.json > challenge-response.json
+# Step 3: Sign the challenge
+merits sign --file challenge.json --keys alice-keys.json > challenge-response.json
 
-# submit the challenge response:
-merits confirm-challenge -file challenge-response.json > session-token.json
-
+# Step 4: Confirm challenge and obtain a session token
+merits confirm-challenge --file challenge-response.json > session-token.json
 ```
 
-Note: "alice" is not a valid SAID, but is used here as an example.
+> Example: “alice” is a placeholder, not a valid SAID.
 
-If a user with the Id 'alice' already existed, or we took too long to submit the challenge response, or our signature was invalid, then the `confirm-challenge` would fail with a non-zero exit code and error message
+On success, a `session-token.json` is returned, which authenticates future operations.
 
-On success, it returns a session token we can use for subsequent actions
+---
 
-## Logging in
+### Logging In
 
-The log-in flow looks similar to the 'create-user' flow in that we need to complete a challenge. Instead of `merits create-user`, however, we use `sign-in` with the userId like this:
-```sh
-merits sign-in -id alice > challenge.json
+The login flow mirrors `create-user`, but uses the existing ID:
 
-# sign the challenge. here we show it saved to a file
-merits sign -file challenge.json -keys alice-keys.json > challenge-response.json
-
-# submit the challenge response:
-merits confirm-challenge -file challenge-response.json > session-token.json
+```bash
+merits sign-in --id alice > challenge.json
+merits sign --file challenge.json --keys alice-keys.json > challenge-response.json
+merits confirm-challenge --file challenge-response.json > session-token.json
 ```
 
-Merits already knows the public key for 'alice', and here we prove we have the private key.
+Merits already knows the registered public key for `alice`; the signed challenge proves control of the private key.
 
-## Updating your key pair
+---
 
-If your key pair is compromised (or you just practice regular key rotation as a security practice), you will want to update the public key merits has on record.
+### Updating Your Key Pair
 
-This flow goes through a similar challenge process, but requires an authenticated session token:
+When rotating keys (due to compromise or good practice), use:
 
-```sh
-merits gen-key >  alice-keys-next.json
+```bash
+merits gen-key > alice-keys-next.json
 export NEW_PUBLIC_KEY=$(jq -r '.publicKey' alice-keys-next.json)
 
-# we assume TOKEN is an env variable set with the value from `merits confirm-challenge`
-merits rotate-key -token ${TOKEN} -publicKey ${NEW_PUBLIC_KEY}
+# Request rotation
+merits rotate-key --token ${TOKEN} --public-key ${NEW_PUBLIC_KEY} > challenge.json
 
-# sign the challenge. here we show it saved to a file
-merits sign -file challenge.json -keys alice-keys-next.json > challenge-response.json
-
-# submit the challenge response:
-merits confirm-challenge -file challenge-response.json > session-token.json
+# Sign and confirm as before
+merits sign --file challenge.json --keys alice-keys-next.json > challenge-response.json
+merits confirm-challenge --file challenge-response.json > session-token.json
 ```
 
-On success, the merits server will now use the new key-pair to authenticate the 'alice' user
+After success, future operations require the new key-pair.
 
-# Sending Messages
+---
 
-We can send plain text simply by specifying a recipient ID, our session token from authenticating, and the type and message
+## Sending Messages
 
-```sh
-# type is optional
-merits send -to bob -token ${TOKEN} --type 'text' -message 'hi bob'
+Send plaintext messages using a recipient ID and session token:
+
+```bash
+merits send --to bob --token ${TOKEN} --type text --message "hi bob"
 ```
 
-We don't want our un-encrypted data on the merits server, however, so we should encrypt our message to bob with Bob's public key (so bob can read it)
+### Encrypting Messages
 
-We could do manually ourselves by asking merits for Bob's public key:
-```sh
-# save the public key on file for bob against bobsKey.json, again, authenticating with our ${TOKEN}
-merits key-for -user bob -token ${TOKEN} >  bobsKey.json
+Messages should generally be encrypted to the recipient’s public key.
 
-# use bob's public key in bobsKey.json to encrypt a message using our own tools
+#### Manual Encryption
+
+```bash
+# Retrieve recipient’s public key
+merits key-for --user bob --token ${TOKEN} > bobs-key.json
+
+# Encrypt message manually
+merits encrypt --public-key-file bobs-key.json --message "hi bob" > encrypted.json
+
+# Send encrypted payload
+merits send --to bob --token ${TOKEN} --type encrypted --message-data ./encrypted.json
 ```
 
-Or we can just use `merits encrypt` as a convenience to do that for us
-```sh
-merits encrypt -user bob -token ${TOKEN} -message 'hi bob' > encryptedMessageToBob.json
+#### Automatic Encryption
+
+To simplify, use the `--encrypted` flag:
+
+```bash
+merits send --to bob --token ${TOKEN} --message "hi bob" --encrypted
 ```
 
-And now send bob the encrypted message:
-```sh
-merits send -to bob -token ${TOKEN} --type 'encrypted' -messageData ./encryptedMessageToBob.json
+Merits fetches the recipient’s public key and handles encryption automatically.
 
-# we could also send it all in one line with -message rather than -messageData like this:
-export MSG=`cat ./encryptedMessageToBob.json`
-merits send -to bob -token ${TOKEN} --type 'encrypted' -messageData ${MSG}
+> **Permissions:** Sending requires that `bob` exists, `alice` has not been blocked, and messaging is permitted by group or policy rules.
+
+---
+
+## Listing Unread Messages
+
+List unread message counts:
+
+```bash
+merits list-unread --token ${TOKEN}
 ```
 
-We can also save on that two-step process using the -encrypted flag:
-```sh
-merits send -to bob -token ${TOKEN} -message 'hi bob' -encrypted
+Example output:
+```json
+{ "bob": 4, "joe": 2 }
 ```
 
-That simply performs the steps for us above automatically
-
-**Note**:
-Merits manages groups, permissions and rate limits. All the above assumes that bob exists, has not blocked alice, and alice has the requisite permissions to message bob
-
-# Listing Messages
-
-To receive messages, we can use 'list-unread' to get a summary of the userIDs and counts of messages we have yet to receive:
-
-```sh
-## returns a json response of userIds to their unread count. e.g. { "bob" : 4, "joe" : 4 }
-merits list-unread -token ${TOKEN}
+Filter by sender:
+```bash
+merits list-unread --token ${TOKEN} --from bob,sue
 ```
 
-We can ask for unread from one or more specific users:
-```sh
-## returns a json response of userIds to their unread count. e.g. { "bob" : 4 }
-merits list-unread -token ${TOKEN} -from bob,sue
+---
 
-# in this example, sue may not be included, as she may not exist, or may not have any unread messages from sue
+## Receiving Messages
+
+Retrieve unread messages:
+
+```bash
+merits unread --token ${TOKEN} > all-unread.json
+merits unread --token ${TOKEN} --from bob > bob-unread.json
 ```
 
-# Receiving Messages
+> ⚠️ **Important:**  
+> Once marked as read, messages are **deleted** from the Merits server.  
+> Ensure you’ve decrypted or stored them locally before acknowledging.
 
-By design, merits only keeps data as long as it takes for the recipient to acknowledge that they've received it.
+To stream incoming messages continuously:
 
-```sh
-## returns a json response of message payloads for all users 
-merits unread -token ${TOKEN} > allUnread.json
-
-## returns a json response of message payloads from specific users
-merits unread -token ${TOKEN} -from bob > bobUnread.json
+```bash
+merits unread --token ${TOKEN} --watch
 ```
 
-Now that we've saved the messages locally, we can tell merits to mark them as read, which (!!!!) deletes them on the merits server (so be sure you've finished processing, or otherwise backed them up first!)
+---
 
+## Marking Messages as Read
 
-To continue to watch for new messages, you can specify the `--watch` flag, which keeps the connection open and streams the incoming messages to standard output:
+Mark messages as received (and delete them server-side):
 
-```sh
-merits unread -token ${TOKEN} -from bob --watch
+```bash
+merits extract-ids --file all-unread.json > message-ids.json
+merits mark-as-read --token ${TOKEN} --ids-data ./message-ids.json
 ```
 
-# Marking messages as read
-```sh
-## convenience function for getting a json array of the messageIds
-merits extract-ids -file allUnread.json > messageIds.json
+Or explicitly:
 
-##  marks the messages as read
-merits mark-as-read -token ${TOKEN} -idsData ./messageIds.json
-
-# we can also explicitly specify individual Ids as a comma-separated list
-merits mark-as-read -token ${TOKEN} -ids abc,def
-
+```bash
+merits mark-as-read --token ${TOKEN} --ids abc,def
 ```
 
-## Note: message data is likely encrypted with your public key.
-The Merits CLI will automatically decrypte 'encrypted' message types with your public key.
-The received messages also contain 'publicKey' fields which specify the public key with which they were encrypted.
-This allows you to decrypt messages sent with your previous keys (keys you had before rotating them)
+> The CLI automatically decrypts messages encrypted to your public key, including with prior keys after rotation.
 
+---
 
-# Groups
+## Groups
 
-## Creating Groups
+### Creating Groups
 
-If you've been granted permission to create groups (you have that role), you can create new groups to message.
+Authorized users can create new groups:
 
-```sh
-merits create-group -name my-group -members alice,bob,carol -token ${TOKEN} > newGroupId1.json
-
-# or alternatively from a json list of member Ids:
-merits create-group -name "another group" -memberList members.json -token ${TOKEN} > newGroupId2.json
+```bash
+merits create-group --name my-group --members alice,bob,carol --token ${TOKEN} > new-group.json
 ```
 
-Group names are namespaced to the creator, so the same group name created by different users will not collide, as both will have unique group IDs
+Or from a JSON file:
 
-The group is created on the merits server, and sends (or tries to send, subject to recipient permissions) a message to all members with a json payload encoded with the recipients' public keys. That payload contains the groupId, group name, and member list of the userIds and public keys.
-
-
-### Detail: How Secure Groups works
-
-1. Key Conversion: Your Ed25519 private key is converted into an X25519 private key. Similarly, the other person's Ed25519 public key is converted into an X25519 public key.
-
-2. Shared Secret Derivation: You use your X25519 private key and their X25519 public key to perform a Diffie-Hellman key exchange operation. This operation securely derives a shared secret that both parties can calculate independently, but which a third party cannot determine from the public keys alone.
-
-3. Symmetric Key Generation: The resulting shared secret is a raw value. You should run this value through a Key Derivation Function (KDF), such as a hash function (e.g., SHA-256 or similar), to produce the final, robust symmetric key for encryption (e.g., for AES or ChaCha20-Poly1305).
-
-4. Group Messaging: For secure group messaging, this pairwise key exchange forms the basis. The group initiator generates an ephemeral (single-use) key pair, derive a unique shared secret with each recipient, and use those secrets to securely transmit a single group symmetric key (which was randomly generated) to all members.
-
-Summary of the process for two people:
- * Alice (You) has an Ed25519 key pair (Priv_A, Pub_A) and converts them to X25519 keys (XPriv_A, XPub_A).
- * Bob has an Ed25519 key pair (Priv_B, Pub_B) and converts them to X25519 keys (XPriv_B, XPub_B).
- * Alice and Bob exchange their public keys (Pub_A and Pub_B, or directly XPub_A and XPub_B).
- * Alice computes SharedSecret = ECDH(XPriv_A, XPub_B).
- * Bob computes SharedSecret = ECDH(XPriv_B, XPub_A).
- * Both end up with the same SharedSecret.
- * They then apply a KDF to SharedSecret to get the final symmetric key.
-
-
-## Messaging Groups
-
-Messaging groups behaves the same as messaging an individual - you simply specify the groupId as the '-to' recipient, and the group appears in the `list-unread` operation
-
-## Leaving Groups
-
-Any member can leave a group using the `leave` command:
-
-```sh
-merits leave -id group-id -token ${TOKEN}
+```bash
+merits create-group --name "another group" --member-list members.json --token ${TOKEN} > new-group.json
 ```
 
-# Controls
+Group names are namespaced per creator; identical names from different users yield unique group IDs.
 
-You can avoid spam by updating your "allow-list" and "deny-list":
+---
 
-```sh
-merits allow-list -add foo,bar -remove fizz -token ${TOKEN}
+### How Secure Groups Work
+
+1. **Key Conversion:**  
+   Each Ed25519 key is converted to X25519 form for Diffie–Hellman.
+2. **Shared Secret:**  
+   Participants derive a shared secret using X25519 private/public key exchange.
+3. **KDF:**  
+   A Key Derivation Function (e.g., SHA-256) strengthens the shared secret into a symmetric key.
+4. **Group Encryption:**  
+   The initiator encrypts a randomly generated group key for each recipient using their derived secret.
+
+> 🔐 Members can verify group integrity by re-deriving the shared secret using their own private key and the initiator’s public key.
+
+---
+
+### Messaging Groups
+
+Send to a group by specifying its ID:
+
+```bash
+merits send --to <group-id> --token ${TOKEN} --message "team update" --encrypted
 ```
 
-You can check your current allow or deny list with the `-list` option:
-```sh
-merits allow-list -list -token ${TOKEN} > myControls.json
+Group messages appear under `list-unread` and `unread`.
+
+---
+
+### Leaving Groups
+
+```bash
+merits leave --id <group-id> --token ${TOKEN}
 ```
+
+---
+
+## Controls
+
+Control who can message you:
+
+```bash
+merits allow-list --add foo,bar --remove fizz --token ${TOKEN}
+```
+
+View your lists:
+
+```bash
+merits allow-list --list --token ${TOKEN} > my-controls.json
+```
+
+---
+
+## Command Summary
+
+| Category | Command | Purpose |
+|-----------|----------|----------|
+| Keys | `gen-key` | Generate a new key pair |
+| Users | `create-user`, `sign-in`, `rotate-key` | Manage identity lifecycle |
+| Messaging | `send`, `list-unread`, `unread`, `mark-as-read` | Send, read, or acknowledge messages |
+| Groups | `create-group`, `leave` | Manage group communication |
+| Controls | `allow-list` | Manage allow/deny lists |
+| Utilities | `sign`, `encrypt`, `extract-ids` | Sign or process message data |
+
+---
+
+## Session Tokens
+
+Session tokens are short-lived and bound to your current public key.  
+They can be stored locally in `.merits/session.json` or passed explicitly with `--token`.
+
+> **Note:** Future versions may automatically refresh tokens and support multiple profiles.
+
+---
+
+## Security Notes
+
+- Merits never stores private keys — all signing occurs client-side.  
+- Use air-gapped environments for high-security ceremonies.  
+- Always back up keys securely before rotation.  
+- Messages are ephemeral: once acknowledged, they are permanently deleted.
+
+---
+
+© 2025 Kind Services – Merits CLI Specification v1.0
