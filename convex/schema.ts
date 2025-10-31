@@ -48,61 +48,54 @@ export default defineSchema({
     updatedAt: v.number(),
   }).index("by_aid", ["aid"]),
 
-  // Admin Roles - AIDs that can perform admin operations
-  adminRoles: defineTable({
-    aid: v.string(), // Admin AID
-    role: v.string(), // "onboarding_admin" | "super_admin"
-    grantedBy: v.optional(v.string()), // Who granted this role
-    grantedAt: v.number(),
-    active: v.boolean(),
-  })
-    .index("by_aid", ["aid"])
-    .index("by_role", ["role"])
-    .index("by_active", ["active"]),
-
-  // Tier Configurations - Define permissions and rules for each tier
-  tierConfigs: defineTable({
-    name: v.string(), // "unknown", "known", "verified", "test", etc.
-    priority: v.number(), // For pattern matching (higher = checked first)
-    isDefault: v.boolean(), // Auto-assign to AIDs with no explicit tier
-    aidPatterns: v.array(v.string()), // Regex patterns for auto-assignment (checked on sender)
-    requiresPromotion: v.boolean(), // Must be assigned by admin
-    canMessageTiers: v.array(v.string()), // Which tiers can receive messages
-    canMessageAnyone: v.boolean(), // Bypass tier checks
-    messagesPerWindow: v.number(), // Rate limit
-    windowMs: v.number(), // Rate limit window duration
-    description: v.string(),
-    createdBy: v.string(), // Admin AID or "SYSTEM"
+  // Users - Registered users with public keys
+  users: defineTable({
+    aid: v.string(),
+    publicKey: v.string(),
     createdAt: v.number(),
-    active: v.boolean(),
   })
-    .index("by_priority", ["active", "priority"])
-    .index("by_name", ["name", "active"]),
+    .index("by_aid", ["aid"]),
 
-  // AID → Tier Assignments
-  aidTiers: defineTable({
-    aid: v.string(),
-    tierName: v.string(), // References tierConfigs.name
-    assignedBy: v.string(), // "SYSTEM" | admin AID
-    assignedAt: v.number(),
-    promotionProof: v.optional(v.string()), // SAID reference for audit
-    kycStatus: v.optional(v.string()), // For verified tier
-    kycProvider: v.optional(v.string()),
-    kycTimestamp: v.optional(v.number()),
-    notes: v.optional(v.string()),
+  // Roles - Available roles
+  roles: defineTable({
+    roleName: v.string(),
+    adminAID: v.string(),
+    actionSAID: v.string(),
+    timestamp: v.number(),
   })
-    .index("by_aid", ["aid"])
-    .index("by_tier", ["tierName"]),
+    .index("by_roleName", ["roleName"]),
 
-  // Rate limits per AID (tracks actual usage)
-  rateLimits: defineTable({
-    aid: v.string(),
-    tierName: v.string(), // Current tier (for audit)
-    windowStart: v.number(), // Start of current window
-    windowDuration: v.number(), // Duration in ms
-    messagesInWindow: v.number(), // Count in current window
-    limit: v.number(), // Max messages per window (from tier config)
-  }).index("by_aid", ["aid"]),
+  // Permissions - Permission keys and optional data payload
+  permissions: defineTable({
+    key: v.string(),
+    data: v.optional(v.any()),
+    adminAID: v.string(),
+    actionSAID: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_key", ["key"]),
+
+  // RolePermissions - mapping roles to permissions
+  rolePermissions: defineTable({
+    roleId: v.id("roles"),
+    permissionId: v.id("permissions"),
+    adminAID: v.string(),
+    actionSAID: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_role", ["roleId"]) 
+    .index("by_permission", ["permissionId"]),
+
+  // UserRoles - mapping users to roles
+  userRoles: defineTable({
+    userAID: v.string(),
+    roleId: v.id("roles"),
+    adminAID: v.string(),
+    actionSAID: v.string(),
+    timestamp: v.number(),
+  })
+    .index("by_user", ["userAID"]) 
+    .index("by_role", ["roleId"]),
 
   // GroupChat - Represents a group conversation with linear message history
   groupChats: defineTable({
@@ -164,6 +157,12 @@ export default defineSchema({
     aid: v.string(), // AID this token is bound to
     ksn: v.number(), // Key sequence number at token issuance (invalidated on rotation)
     scopes: v.array(v.string()), // Operations allowed: ["receive", "ack"]
+    claims: v.array(
+      v.object({
+        key: v.string(),
+        data: v.optional(v.any()),
+      })
+    ),
     createdAt: v.number(), // Token creation timestamp
     expiresAt: v.number(), // Token expiry (max 60s from creation)
     usedChallengeId: v.id("challenges"), // Challenge that authorized token creation

@@ -11,6 +11,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAuth } from "./auth";
+import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
 import type { Id } from "./_generated/dataModel";
 
 /**
@@ -47,6 +48,12 @@ export const createGroupChat = mutation({
     );
 
     const creatorAid = verified.aid;
+
+    // RBAC: require permission to create groups
+    const claims = await resolveUserClaims(ctx, creatorAid);
+    if (!claimsInclude(claims, PERMISSIONS.CAN_CREATE_GROUPS)) {
+      throw new Error("Not permitted to create groups");
+    }
 
     // Create the group chat
     const groupChatId = await ctx.db.insert("groupChats", {
@@ -107,7 +114,18 @@ export const sendGroupMessage = mutation({
 
     const senderAid = verified.aid;
 
-    // Verify sender is a member
+    // RBAC: require permission to message this group
+    const claims = await resolveUserClaims(ctx, senderAid);
+    const canMessage = claimsInclude(
+      claims,
+      PERMISSIONS.CAN_MESSAGE_GROUPS,
+      (data) => Array.isArray(data) && data.includes(args.groupChatId)
+    );
+    if (!canMessage) {
+      throw new Error("Not permitted to send messages to this group");
+    }
+
+    // Verify sender membership OR explicit permission to message this group
     const membership = await ctx.db
       .query("groupMembers")
       .withIndex("by_group_aid", (q) =>
@@ -116,7 +134,15 @@ export const sendGroupMessage = mutation({
       .first();
 
     if (!membership) {
-      throw new Error("Sender is not a member of this group");
+      const claimsNoMember = await resolveUserClaims(ctx, senderAid);
+      const allowedNoMember = claimsInclude(
+        claimsNoMember,
+        PERMISSIONS.CAN_MESSAGE_GROUPS,
+        (data) => Array.isArray(data) && data.includes(args.groupChatId)
+      );
+      if (!allowedNoMember) {
+        throw new Error("Sender is not a member of this group");
+      }
     }
 
     // Get the group chat for TTL
@@ -171,6 +197,17 @@ export const getGroupMessages = query({
     callerAid: v.string(), // AID requesting messages
   },
   handler: async (ctx, args) => {
+    // RBAC: must have read permission for this group
+    const claims = await resolveUserClaims(ctx, args.callerAid);
+    const canRead = claimsInclude(
+      claims,
+      PERMISSIONS.CAN_READ_GROUPS,
+      (data) => Array.isArray(data) && data.includes(args.groupChatId)
+    );
+    if (!canRead) {
+      throw new Error("Not permitted to read this group");
+    }
+
     // Verify caller is a member
     const membership = await ctx.db
       .query("groupMembers")

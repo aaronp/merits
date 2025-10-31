@@ -112,6 +112,10 @@ import { sendMessage } from "./commands/send";
 import { receiveMessages } from "./commands/receive";
 import { ackMessage } from "./commands/ack";
 import { watchMessages } from "./commands/watch";
+import { genUser } from "./commands/gen-user";
+import { createUser } from "./commands/create";
+import { signChallenge } from "./commands/sign-challenge";
+import { rolesCreate, permissionsCreate, rolesAddPermission, usersGrantRole, bootstrapOnboardingCmd } from "./commands/rbac";
 import {
   createGroup,
   listGroups,
@@ -197,6 +201,73 @@ program
   .option("--alg <algorithm>", "Encryption algorithm")
   .option("--format <type>", "Output format (json|text|compact)")
   .action(sendMessage);
+
+// Registration helper commands
+program
+  .command("gen-user")
+  .description("Generate a new user keypair (prints JSON with aid/publicKey/secretKey)")
+  .action((_opts, cmd) => genUser(cmd.opts()));
+
+program
+  .command("create")
+  .description("Create registration challenge for an AID")
+  .requiredOption("-aid <aid>", "User AID")
+  .requiredOption("-publicKey <publicKey>", "User public key (CESR or base64url)")
+  .action((opts) => createUser(opts));
+
+program
+  .command("sign-challenge")
+  .description("Submit signed registration challenge to create user")
+  .requiredOption("-aid <aid>", "User AID")
+  .requiredOption("-publicKey <publicKey>", "User public key")
+  .requiredOption("--challenge-id <id>", "Challenge ID returned by create")
+  .option("--sigs <list>", "Comma-separated indexed signatures (idx-b64,idx-b64,...)")
+  .option("--ksn <num>", "Key sequence number", (v) => parseInt(v, 10))
+  .option("--from <identity>", "Sign locally using this identity from vault")
+  .action((opts) => signChallenge(opts));
+
+// RBAC admin commands
+const rolesCmd = program
+  .command("roles")
+  .description("Manage roles");
+
+rolesCmd
+  .command("create <roleName>")
+  .requiredOption("--adminAID <aid>", "Admin AID performing the change")
+  .requiredOption("--actionSAID <said>", "Reference to governance action")
+  .action(rolesCreate);
+
+rolesCmd
+  .command("add-permission <roleName> <key>")
+  .requiredOption("--adminAID <aid>", "Admin AID performing the change")
+  .requiredOption("--actionSAID <said>", "Reference to governance action")
+  .action(rolesAddPermission);
+
+const permsCmd = program
+  .command("permissions")
+  .description("Manage permissions");
+
+permsCmd
+  .command("create <key>")
+  .option("--data <json>", "JSON-encoded data payload")
+  .requiredOption("--adminAID <aid>", "Admin AID performing the change")
+  .requiredOption("--actionSAID <said>", "Reference to governance action")
+  .action(permissionsCreate);
+
+const usersCmd = program
+  .command("users")
+  .description("Manage users");
+
+usersCmd
+  .command("grant-role <aid> <roleName>")
+  .requiredOption("--adminAID <aid>", "Admin AID performing the change")
+  .requiredOption("--actionSAID <said>", "Reference to governance action")
+  .action(usersGrantRole);
+
+program
+  .command("rbac:bootstrap-onboarding")
+  .description("Bootstrap onboarding group, anon role, and permission mapping")
+  .action((opts) => bootstrapOnboardingCmd(opts));
 
 // Receive command
 program

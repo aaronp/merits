@@ -14,6 +14,7 @@
 import { mutation, query, internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 import { verifyAuth } from "./auth";
+import { resolveUserClaims } from "./permissions";
 
 /**
  * Generate cryptographically secure random token
@@ -92,12 +93,16 @@ export const openSession = mutation({
     const token = generateSecureToken();
     const expiresAt = now + ttlMs;
 
-    // Store token in database
+    // Resolve and embed claims
+    const claims = await resolveUserClaims(ctx, verified.aid);
+
+    // Store token in database with claims
     await ctx.db.insert("sessionTokens", {
       token,
       aid: verified.aid,
       ksn: verified.ksn,
       scopes,
+      claims,
       createdAt: now,
       expiresAt,
       usedChallengeId: auth.challengeId,
@@ -137,6 +142,7 @@ export async function validateSessionToken(
   aid: string;
   ksn: number;
   sessionId: any;
+  claims: { key: string; data?: any }[];
 }> {
   const now = Date.now();
 
@@ -189,6 +195,7 @@ export async function validateSessionToken(
     aid: session.aid,
     ksn: session.ksn,
     sessionId: session._id,
+    claims: session.claims ?? [],
   };
 }
 

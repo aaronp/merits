@@ -461,6 +461,63 @@ export const cleanupExpiredChallenges = mutation({
 });
 
 /**
+ * Register a new user (AID + publicKey) after proving control via challenge
+ */
+export const registerUser = mutation({
+  args: {
+    aid: v.string(),
+    publicKey: v.string(),
+    auth: v.object({
+      challengeId: v.id("challenges"),
+      sigs: v.array(v.string()),
+      ksn: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Verify authentication with purpose "registerUser"
+    await verifyAuth(ctx as any, args.auth, "registerUser", {
+      aid: args.aid,
+      publicKey: args.publicKey,
+    });
+
+    // Ensure user doesn't already exist
+    const existing = await ctx.db
+      .query("users")
+      .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+      .first();
+    if (existing) {
+      throw new Error("User already exists");
+    }
+
+    // Insert user
+    await ctx.db.insert("users", {
+      aid: args.aid,
+      publicKey: args.publicKey,
+      createdAt: now,
+    });
+
+    // Best-effort: assign default role 'anon' if present
+    const anonRole = await ctx.db
+      .query("roles")
+      .withIndex("by_roleName", (q) => q.eq("roleName", "anon"))
+      .first();
+    if (anonRole) {
+      await ctx.db.insert("userRoles", {
+        userAID: args.aid,
+        roleId: anonRole._id,
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/auto-assign",
+        timestamp: now,
+      });
+    }
+
+    return { aid: args.aid };
+  },
+});
+
+/**
  * Helper query: get AID for a given challengeId
  *
  * Note: This does NOT verify signatures or mark the challenge as used.

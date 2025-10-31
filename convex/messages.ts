@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAuth, computeCtHash, computeEnvelopeHash } from "./auth";
-import { canSend } from "./authorization";
+import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
 
 /**
  * Send a message to a recipient (authenticated)
@@ -63,12 +63,19 @@ export const send = mutation({
     // SECURITY: Use server-verified AID, NEVER trust client!
     const senderAid = verified.aid;
 
-    // AUTHORIZATION: Server-side enforcement (defense in depth)
-    const msgType = args.typ ?? "app.message"; // Default to generic message type
-    const authz = await canSend(ctx, senderAid, args.recpAid, msgType, true); // incrementRate=true
+    // AUTHORIZATION: RBAC permission check for direct user messaging
+    const claims = await resolveUserClaims(ctx, senderAid);
+    const allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
+      if (data === undefined || data === null) return true; // global allow
+      if (Array.isArray(data)) return data.includes(args.recpAid);
+      if (typeof data === "object" && Array.isArray((data as any).aids)) {
+        return (data as any).aids.includes(args.recpAid);
+      }
+      return false;
+    });
 
-    if (!authz.allowed) {
-      throw new Error(`Authorization failed: ${authz.reason}`);
+    if (!allowed) {
+      throw new Error("Not permitted to message this recipient");
     }
 
     // Compute envelope hash (audit anchor)
