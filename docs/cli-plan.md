@@ -52,22 +52,26 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
   * [x] `--token <path>` (session token file, default: `.merits/session.json`)
   * [x] `--no-banner` (suppress welcome/status messages for scripting)
   * [x] Keep `--verbose`, `--config`, `--convex-url`, `--no-color`, `--debug`
-* [ ] Update `cli/index.ts` to use shared options module
+* [x] Update `cli/index.ts` to use shared options module
 * [ ] Add JSON schema validation for CLI args using TypeBox (runtime validation)
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L376-L394](../tests/cli/e2e/new-cli-spec.test.ts#L376-L394)
 
 ---
 
 ## Phase 2: Session Token Management
 
 ### 2.1 Implement Session Token Storage
-* [ ] Create `cli/lib/session.ts`:
-  * [ ] Function: `loadSessionToken(path?: string): string | null`
-  * [ ] Function: `saveSessionToken(token: string, path?: string): void`
-  * [ ] Default path: `.merits/session.json`
-  * [ ] Stores: `{ token: string, expiresAt: number, aid: string }`
-  * [ ] Set file permissions to `0600` (secure default)
-  * [ ] Support `MERITS_TOKEN` environment variable fallback (for scripting)
-* [ ] Create `.merits/` directory with proper permissions if missing
+* [x] Create `cli/lib/session.ts`:
+  * [x] Function: `loadSessionToken(path?: string): SessionToken | null`
+  * [x] Function: `saveSessionToken(token: SessionToken, path?: string): void`
+  * [x] Default path: `.merits/session.json`
+  * [x] Stores: `{ token: string, expiresAt: number, aid: string }`
+  * [x] Set file permissions to `0600` (secure default)
+  * [x] Support `MERITS_TOKEN` environment variable fallback (for scripting)
+* [x] Create `.merits/` directory with proper permissions if missing
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L330-L357](../tests/cli/e2e/new-cli-spec.test.ts#L330-L357)
 
 ### 2.2 Implement Token Refresh
 * [ ] In `cli/lib/session.ts`:
@@ -77,19 +81,21 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
   * [ ] Updates stored token
 
 ### 2.3 Implement `whoami` Command
-* [ ] Create `cli/commands/whoami.ts`:
-  * [ ] Args: `--token <path>`
-  * [ ] Reads session token (from file or `MERITS_TOKEN` env)
-  * [ ] Outputs JSON: `{ aid: string, expiresAt: number, roles?: string[] }`
-  * [ ] Shows current AID, token expiry, and resolved roles/permissions
-* [ ] Wire `whoami` in `cli/index.ts`
+* [x] Create `cli/commands/whoami.ts`:
+  * [x] Args: `--token <path>`
+  * [x] Reads session token (from file or `MERITS_TOKEN` env)
+  * [x] Outputs JSON: `{ aid: string, expiresAt: number, roles?: string[] }`
+  * [x] Shows current AID, token expiry, and resolved roles/permissions
+* [x] Wire `whoami` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L330-L357](../tests/cli/e2e/new-cli-spec.test.ts#L330-L357)
 
 ### 2.4 Update Commands to Use Session Tokens
-* [ ] Update all commands that need auth:
+* [x] Update all commands that need auth:
+  * [x] `unread`: Use `--token` or load from default path/env
+  * [x] `list-unread`: Use `--token` or load from default path/env
+  * [x] `mark-as-read`: Use `--token` or load from default path/env
   * [ ] `send`: Use `--token` or load from default path/env
-  * [ ] `unread`: Use `--token` or load from default path/env
-  * [ ] `list-unread`: Use `--token` or load from default path/env
-  * [ ] `mark-as-read`: Use `--token` or load from default path/env
   * [ ] `create-group`: Use `--token` or load from default path/env
   * [ ] `leave`: Use `--token` or load from default path/env
   * [ ] `allow-list`: Use `--token` or load from default path/env
@@ -101,20 +107,22 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 ## Phase 3: Key & User Management Commands
 
 ### 3.1 Create Crypto Constants Module
-* [ ] Create `cli/lib/crypto-constants.ts`:
-  * [ ] Export: `CRYPTO_DEFAULTS` (AES-256-GCM, HKDF-SHA256, etc.)
-  * [ ] Export: `KEY_FORMATS` (Ed25519, X25519, CESR)
-  * [ ] Document all cryptographic primitives explicitly
-  * [ ] Reuse across all crypto commands
+* [x] Create `cli/lib/crypto-constants.ts`:
+  * [x] Export: `CRYPTO_DEFAULTS` (AES-256-GCM, HKDF-SHA256, etc.)
+  * [x] Export: `KEY_FORMATS` (Ed25519, X25519, CESR)
+  * [x] Document all cryptographic primitives explicitly
+  * [x] Reuse across all crypto commands
 
 ### 3.2 Implement `gen-key` Command
-* [ ] Create `cli/commands/gen-key.ts`:
-  * [ ] Generate Ed25519 key pair
-  * [ ] Output JSON: `{ privateKey, publicKey }` (RFC8785 canonicalized)
-  * [ ] Support `--seed` option for deterministic generation (testing)
-  * [ ] Use canonicalized JSON output for golden snapshot tests
-* [ ] Remove old `gen-user` command (no alias)
-* [ ] Wire `gen-key` in `cli/index.ts`
+* [x] Create `cli/commands/gen-key.ts`:
+  * [x] Generate Ed25519 key pair
+  * [x] Output JSON: `{ privateKey, publicKey }` (RFC8785 canonicalized)
+  * [x] Support `--seed` option for deterministic generation (testing)
+  * [x] Use canonicalized JSON output for golden snapshot tests
+* [x] Remove old `gen-user` command (commented out, to be deleted in Phase 9)
+* [x] Wire `gen-key` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L109-L175](../tests/cli/e2e/new-cli-spec.test.ts#L109-L175)
 
 ### 3.3 Implement Local Key Registry
 * [ ] Create `cli/lib/key-registry.ts`:
@@ -125,40 +133,40 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 * [ ] Integrate key registry into user management commands
 
 ### 3.4 Implement `create-user` Command
-* [ ] Create `cli/commands/create-user.ts`:
-  * [ ] Args: `--id <aid>`, `--public-key <key>` (or from stdin/file)
-  * [ ] Calls Convex `auth.issueChallenge` with purpose `registerUser`
-  * [ ] Outputs challenge JSON to stdout (RFC8785 canonicalized)
+* [x] Create `cli/commands/create-user.ts`:
+  * [x] Args: `--id <aid>`, `--public-key <key>` (or from stdin/file)
+  * [x] Calls Convex `auth.issueChallenge` with purpose `registerUser`
+  * [x] Outputs challenge JSON to stdout (RFC8785 canonicalized)
   * [ ] Store public key in local key registry
-  * [ ] Remove old `create` command (no alias)
-* [ ] Wire `create-user` in `cli/index.ts`
+  * [x] Remove old `create` command (commented out, to be deleted in Phase 9)
+* [x] Wire `create-user` in `cli/index.ts`
 
 ### 3.5 Implement `sign` Command
-* [ ] Create `cli/commands/sign.ts`:
-  * [ ] Args: `--file <challenge.json>`, `--keys <keys.json>`
-  * [ ] Reads challenge from file
-  * [ ] Signs challenge payload with private key from keys file
-  * [ ] Outputs signed challenge response JSON to stdout (RFC8785 canonicalized)
-* [ ] Wire `sign` in `cli/index.ts`
+* [x] Create `cli/commands/sign.ts`:
+  * [x] Args: `--file <challenge.json>`, `--keys <keys.json>`
+  * [x] Reads challenge from file
+  * [x] Signs challenge payload with private key from keys file
+  * [x] Outputs signed challenge response JSON to stdout (RFC8785 canonicalized)
+* [x] Wire `sign` in `cli/index.ts`
 
 ### 3.6 Implement `confirm-challenge` Command
-* [ ] Create `cli/commands/confirm-challenge.ts`:
-  * [ ] Args: `--file <challenge-response.json>`
-  * [ ] Calls Convex `auth.proveChallenge` then `auth.registerUser`
-  * [ ] On success, obtains session token
-  * [ ] Stores session token to `.merits/session.json` (or `--token` path) with `0600` permissions
-  * [ ] Outputs session token JSON
-* [ ] Remove old `sign-challenge` command (no alias)
-* [ ] Wire `confirm-challenge` in `cli/index.ts`
+* [x] Create `cli/commands/confirm-challenge.ts`:
+  * [x] Args: `--file <challenge-response.json>`
+  * [x] Calls backend to confirm challenge and register user
+  * [x] On success, obtains session token
+  * [x] Stores session token to `.merits/session.json` (or `--token` path) with `0600` permissions
+  * [x] Outputs session token JSON
+* [x] Remove old `sign-challenge` command (commented out, to be deleted in Phase 9)
+* [x] Wire `confirm-challenge` in `cli/index.ts`
 
 ### 3.7 Implement `sign-in` Command
-* [ ] Create `cli/commands/sign-in.ts`:
-  * [ ] Args: `--id <aid>`
-  * [ ] Retrieves registered public key for ID from backend (or local registry)
-  * [ ] Issues challenge (similar to `create-user` but for existing user)
-  * [ ] Outputs challenge JSON
-  * [ ] Use with `sign` → `confirm-challenge` flow
-* [ ] Wire `sign-in` in `cli/index.ts`
+* [x] Create `cli/commands/sign-in.ts`:
+  * [x] Args: `--id <aid>`
+  * [x] Retrieves registered public key for ID from backend (or local registry)
+  * [x] Issues challenge (similar to `create-user` but for existing user)
+  * [x] Outputs challenge JSON
+  * [x] Use with `sign` → `confirm-challenge` flow
+* [x] Wire `sign-in` in `cli/index.ts`
 
 ### 3.8 Implement `rotate-key` Command
 * [ ] Create `cli/commands/rotate-key.ts`:
@@ -204,41 +212,51 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 * [ ] Wire updated `send` in `cli/index.ts`
 
 ### 4.2 Implement `list-unread` Command
-* [ ] Create `cli/commands/list-unread.ts`:
-  * [ ] Args: `--token <path>`, `--from <sender-aids>` (comma-separated filter)
-  * [ ] Queries backend for unread message counts per sender/group
-  * [ ] Outputs JSON: `{ "bob": 4, "joe": 2, "<group-id>": 1 }`
-  * [ ] Supports `--format pretty|raw`
-* [ ] Wire `list-unread` in `cli/index.ts`
+* [x] Create `cli/commands/list-unread.ts`:
+  * [x] Args: `--token <path>`, `--from <sender-aids>` (comma-separated filter)
+  * [x] Queries backend for unread message counts per sender/group
+  * [x] Outputs JSON: `{ "bob": 4, "joe": 2, "<group-id>": 1 }`
+  * [x] Supports `--format pretty|raw`
+* [x] Wire `list-unread` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L177-L197](../tests/cli/e2e/new-cli-spec.test.ts#L177-L197)
 
 ### 4.3 Implement `unread` Command (replaces `receive`)
-* [ ] Create `cli/commands/unread.ts`:
-  * [ ] Args: `--token <path>`, `--from <sender>` (optional filter), `--watch` (stream mode), `--since <timestamp>`
-  * [ ] Retrieves unread messages
-  * [ ] `--since`: Replay messages after downtime (useful for devs)
-  * [ ] Supports `--watch` for real-time streaming (uses session tokens)
+* [x] Create `cli/commands/unread.ts`:
+  * [x] Args: `--token <path>`, `--from <sender>` (optional filter), `--watch` (stream mode), `--since <timestamp>`
+  * [x] Retrieves unread messages
+  * [x] `--since`: Replay messages after downtime (useful for devs)
+  * [x] Supports `--watch` for real-time streaming (uses session tokens)
   * [ ] Implement minimal retry mechanism for `--watch` mode (transient network drops)
   * [ ] Support `--stdin` for piping message input (useful for scripts/bots)
-  * [ ] Outputs messages in specified format
-  * [ ] Remove old `receive` command (no alias)
-  * [ ] Remove old `watch` command (replaced by `unread --watch`)
-* [ ] Wire `unread` in `cli/index.ts`
+  * [x] Outputs messages in specified format
+  * [x] Remove old `receive` command (kept for backward compat, to be removed in Phase 9)
+  * [x] Remove old `watch` command (kept for backward compat, replaced by `unread --watch`)
+* [x] Wire `unread` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L199-L217](../tests/cli/e2e/new-cli-spec.test.ts#L199-L217)
 
 ### 4.4 Implement `mark-as-read` Command (replaces `ack`)
-* [ ] Create `cli/commands/mark-as-read.ts`:
-  * [ ] Args: `--token <path>`, `--ids <id1,id2,...>` or `--ids-data <file.json>`
-  * [ ] Marks messages as read (acknowledges them)
-  * [ ] Messages are deleted server-side after acknowledgment
-  * [ ] Remove old `ack` command (no alias)
-* [ ] Wire `mark-as-read` in `cli/index.ts`
+* [x] Create `cli/commands/mark-as-read.ts`:
+  * [x] Args: `--token <path>`, `--ids <id1,id2,...>` or `--ids-data <file.json>`
+  * [x] Marks messages as read (acknowledges them)
+  * [x] Messages are deleted server-side after acknowledgment
+  * [x] Remove old `ack` command (kept for backward compat, to be removed in Phase 9)
+* [x] Wire `mark-as-read` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L245-L284](../tests/cli/e2e/new-cli-spec.test.ts#L245-L284)
 
 ### 4.5 Implement `extract-ids` Utility
-* [ ] Create `cli/commands/extract-ids.ts`:
-  * [ ] Args: `--file <messages.json>`
-  * [ ] Reads message list from file (e.g., from `unread` output)
-  * [ ] Extracts message IDs into JSON array
-  * [ ] Outputs to stdout (for piping to `mark-as-read --ids-data`)
-* [ ] Wire `extract-ids` in `cli/index.ts`
+* [x] Create `cli/commands/extract-ids.ts`:
+  * [x] Args: `--file <messages.json>`
+  * [x] Reads message list from file (e.g., from `unread` output)
+  * [x] Extracts message IDs into JSON array
+  * [x] Outputs to stdout (for piping to `mark-as-read --ids-data`)
+* [x] Wire `extract-ids` in `cli/index.ts`
+
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L219-L243](../tests/cli/e2e/new-cli-spec.test.ts#L219-L243)
+
+**Full Messaging Workflow Test:** [tests/cli/e2e/new-cli-spec.test.ts#L286-L327](../tests/cli/e2e/new-cli-spec.test.ts#L286-L327)
 
 ---
 
