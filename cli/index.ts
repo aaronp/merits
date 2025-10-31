@@ -53,15 +53,19 @@ program
  */
 program.hook("preAction", (thisCommand, actionCommand) => {
   const opts = program.opts();
+  const cmdOpts = actionCommand.opts();
+
+  // Merge program opts with command opts (command takes precedence)
+  const mergedOpts = { ...opts, ...cmdOpts };
 
   // Load config with 4-layer precedence
-  const config = loadConfig(opts.config, {
-    dataDir: opts.dataDir, // NEW: Data directory override
-    backend: opts.convexUrl ? { type: "convex", url: opts.convexUrl } : undefined,
-    outputFormat: opts.format,
-    verbose: opts.verbose,
-    color: opts.color,
-    defaultIdentity: opts.from,
+  const config = loadConfig(mergedOpts.config, {
+    dataDir: mergedOpts.dataDir, // NEW: Data directory override
+    backend: mergedOpts.convexUrl ? { type: "convex", url: mergedOpts.convexUrl } : undefined,
+    outputFormat: mergedOpts.format,
+    verbose: mergedOpts.verbose,
+    color: mergedOpts.color,
+    defaultIdentity: mergedOpts.from,
   });
 
   // Create vault (uses dataDir if set for FileVault)
@@ -99,23 +103,18 @@ program.hook("postAction", async (thisCommand, actionCommand) => {
 
 // --- Commands ---
 
-// Import commands
+// Import commands (new CLI spec from cli.md)
 import { initCommand } from "./commands/init";
-import { newIdentity } from "./commands/identity/new";
-import { listIdentities } from "./commands/identity/list";
-import { showIdentity } from "./commands/identity/show";
-import { registerIdentity } from "./commands/identity/register";
-import { setDefaultIdentity } from "./commands/identity/set-default";
-import { exportIdentity } from "./commands/identity/export";
-import { importIdentity } from "./commands/identity/import";
-import { deleteIdentity } from "./commands/identity/delete";
+import { genKey } from "./commands/gen-key";
+import { createUser } from "./commands/create-user";
+import { sign } from "./commands/sign";
+import { confirmChallenge } from "./commands/confirm-challenge";
+import { signIn } from "./commands/sign-in";
+import { whoami } from "./commands/whoami";
 import { sendMessage } from "./commands/send";
 import { receiveMessages } from "./commands/receive";
 import { ackMessage } from "./commands/ack";
 import { watchMessages } from "./commands/watch";
-import { genUser } from "./commands/gen-user";
-import { createUser } from "./commands/create";
-import { signChallenge } from "./commands/sign-challenge";
 import { rolesCreate, permissionsCreate, rolesAddPermission, usersGrantRole, bootstrapOnboardingCmd } from "./commands/rbac";
 import {
   createGroup,
@@ -126,11 +125,64 @@ import {
   leaveGroup,
 } from "./commands/group";
 
+// Old commands (to be removed in Phase 9)
+import { newIdentity } from "./commands/identity/new";
+import { listIdentities } from "./commands/identity/list";
+import { showIdentity } from "./commands/identity/show";
+import { registerIdentity } from "./commands/identity/register";
+import { setDefaultIdentity } from "./commands/identity/set-default";
+import { exportIdentity } from "./commands/identity/export";
+import { importIdentity } from "./commands/identity/import";
+import { deleteIdentity } from "./commands/identity/delete";
+
 // Init command (first-time setup)
 program
   .command("init")
   .description("First-time setup wizard")
   .action(initCommand);
+
+// --- New CLI Commands (cli.md spec) ---
+
+// Key generation
+program
+  .command("gen-key")
+  .description("Generate a new Ed25519 key pair")
+  .option("--seed <value>", "Deterministic seed for testing (not secure!)")
+  .action(genKey);
+
+// User management
+program
+  .command("create-user")
+  .description("Create a registration challenge for a new user")
+  .requiredOption("--id <aid>", "User AID (Agent Identifier)")
+  .requiredOption("--public-key <key>", "Base64url-encoded Ed25519 public key")
+  .action(createUser);
+
+program
+  .command("sign")
+  .description("Sign a challenge with a private key")
+  .requiredOption("--file <path>", "Path to challenge file")
+  .requiredOption("--keys <path>", "Path to keys file")
+  .action(sign);
+
+program
+  .command("confirm-challenge")
+  .description("Confirm a signed challenge and obtain session token")
+  .requiredOption("--file <path>", "Path to signed challenge response file")
+  .action(confirmChallenge);
+
+program
+  .command("sign-in")
+  .description("Create a sign-in challenge for an existing user")
+  .requiredOption("--id <aid>", "User AID (Agent Identifier)")
+  .action(signIn);
+
+program
+  .command("whoami")
+  .description("Display current session information")
+  .action(whoami);
+
+// --- Old Identity Commands (to be removed in Phase 9) ---
 
 // Identity command group
 const identityCmd = program
@@ -203,29 +255,30 @@ program
   .option("--format <type>", "Output format (json|text|compact)")
   .action(sendMessage);
 
-// Registration helper commands
-program
-  .command("gen-user")
-  .description("Generate a new user keypair (prints JSON with aid/publicKey/secretKey)")
-  .action((_opts, cmd) => genUser(cmd.opts()));
+// Old registration helper commands (replaced by gen-key, create-user, sign, confirm-challenge)
+// Commented out - to be removed in Phase 9
+// program
+//   .command("gen-user")
+//   .description("Generate a new user keypair (prints JSON with aid/publicKey/secretKey)")
+//   .action((_opts, cmd) => genUser(cmd.opts()));
 
-program
-  .command("create")
-  .description("Create registration challenge for an AID")
-  .requiredOption("-aid <aid>", "User AID")
-  .requiredOption("-publicKey <publicKey>", "User public key (CESR or base64url)")
-  .action((opts) => createUser(opts));
+// program
+//   .command("create")
+//   .description("Create registration challenge for an AID")
+//   .requiredOption("-aid <aid>", "User AID")
+//   .requiredOption("-publicKey <publicKey>", "User public key (CESR or base64url)")
+//   .action((opts) => createUser(opts));
 
-program
-  .command("sign-challenge")
-  .description("Submit signed registration challenge to create user")
-  .requiredOption("-aid <aid>", "User AID")
-  .requiredOption("-publicKey <publicKey>", "User public key")
-  .requiredOption("--challenge-id <id>", "Challenge ID returned by create")
-  .option("--sigs <list>", "Comma-separated indexed signatures (idx-b64,idx-b64,...)")
-  .option("--ksn <num>", "Key sequence number", (v) => parseInt(v, 10))
-  .option("--from <identity>", "Sign locally using this identity from vault")
-  .action((opts) => signChallenge(opts));
+// program
+//   .command("sign-challenge")
+//   .description("Submit signed registration challenge to create user")
+//   .requiredOption("-aid <aid>", "User AID")
+//   .requiredOption("-publicKey <publicKey>", "User public key")
+//   .requiredOption("--challenge-id <id>", "Challenge ID returned by create")
+//   .option("--sigs <list>", "Comma-separated indexed signatures (idx-b64,idx-b64,...)")
+//   .option("--ksn <num>", "Key sequence number", (v) => parseInt(v, 10))
+//   .option("--from <identity>", "Sign locally using this identity from vault")
+//   .action((opts) => signChallenge(opts));
 
 // RBAC admin commands
 const rolesCmd = program

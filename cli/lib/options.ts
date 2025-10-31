@@ -59,9 +59,6 @@ export function withGlobalOptions<T extends Record<string, any>>(
   handler: (opts: GlobalOptions & T) => Promise<void>
 ): (opts: GlobalOptions & T) => Promise<void> {
   return async (opts: GlobalOptions & T) => {
-    // Normalize format (ensure it's set and valid)
-    const normalizedFormat = normalizeFormat(opts.format);
-    
     // Ensure _ctx is present
     if (!opts._ctx) {
       throw new Error(
@@ -69,8 +66,12 @@ export function withGlobalOptions<T extends Record<string, any>>(
       );
     }
 
+    // Read format from config (config has precedence over opts.format)
+    const format = opts.format || opts._ctx.config.outputFormat;
+    const normalizedFormat = normalizeFormat(format);
+
     // Suppress banner if requested
-    if (!opts.noBanner && opts._ctx.config.outputFormat === "json") {
+    if (!opts.noBanner && normalizedFormat === "json") {
       opts.noBanner = true; // Suppress banners in JSON mode automatically
     }
 

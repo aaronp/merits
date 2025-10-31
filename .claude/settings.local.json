@@ -42,7 +42,8 @@
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration/group-chat.test.ts --timeout 20000)",
       "Bash(CONVEX_DEPLOYMENT=dev:accurate-penguin-901 bunx convex deploy --yes)",
       "Bash(export CONVEX_DEPLOYMENT=dev:accurate-penguin-901)",
-      "Bash(bunx convex env:*)"
+      "Bash(bunx convex env:*)",
+      "Bash(MERITS_VAULT_QUIET=1 bun cli/index.ts:*)"
     ],
     "deny": [],
     "ask": []
