@@ -15,6 +15,7 @@ import type {
 } from "convex/server";
 import type * as _test_helpers from "../_test_helpers.js";
 import type * as adapters_ConvexGroupApi from "../adapters/ConvexGroupApi.js";
+import type * as adapters_ConvexGroupChatApi from "../adapters/ConvexGroupChatApi.js";
 import type * as adapters_ConvexIdentityAuth from "../adapters/ConvexIdentityAuth.js";
 import type * as adapters_ConvexTransport from "../adapters/ConvexTransport.js";
 import type * as auth from "../auth.js";
@@ -35,6 +36,7 @@ import type * as sessions from "../sessions.js";
 declare const fullApi: ApiFromModules<{
   _test_helpers: typeof _test_helpers;
   "adapters/ConvexGroupApi": typeof adapters_ConvexGroupApi;
+  "adapters/ConvexGroupChatApi": typeof adapters_ConvexGroupChatApi;
   "adapters/ConvexIdentityAuth": typeof adapters_ConvexIdentityAuth;
   "adapters/ConvexTransport": typeof adapters_ConvexTransport;
   auth: typeof auth;

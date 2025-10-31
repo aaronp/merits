@@ -104,45 +104,59 @@ export default defineSchema({
     limit: v.number(), // Max messages per window (from tier config)
   }).index("by_aid", ["aid"]),
 
-  // Groups - collections of AIDs for server-side fanout messaging
-  groups: defineTable({
+  // GroupChat - Represents a group conversation with linear message history
+  groupChats: defineTable({
+    // Group identity and governance
+    ownerAid: v.string(), // AID of the KEL which owns this group
+    membershipSaid: v.string(), // SAID reference to membership TEL data
+
+    // Group metadata
     name: v.string(), // Human-readable group name
-    createdBy: v.string(), // Creator AID (initial owner)
+    maxTtl: v.number(), // Maximum TTL for messages (for cleanup)
     createdAt: v.number(),
-    // Members stored inline for fast access
-    members: v.array(
-      v.object({
-        aid: v.string(),
-        role: v.string(), // "owner" | "admin" | "member"
-        joinedAt: v.number(),
-      })
-    ),
+    createdBy: v.string(), // AID that created the group
   })
-    .index("by_member", ["members"]) // Find groups by member AID
+    .index("by_owner", ["ownerAid"])
     .index("by_created", ["createdAt"]),
 
-  // Group message log - maintains total ordering of group messages
-  groupLog: defineTable({
-    groupId: v.id("groups"),
-    senderAid: v.string(), // Verified sender AID
-    seqNum: v.number(), // Monotonic sequence number per group
-    ct: v.string(), // Original ciphertext (encrypted to group key)
-    ctHash: v.string(), // Hash of ct
-    typ: v.optional(v.string()), // Message type for routing
-    createdAt: v.number(),
-    expiresAt: v.number(),
-    senderSig: v.array(v.string()), // Sender's indexed sigs
-    senderKsn: v.number(),
-    senderEvtSaid: v.string(),
-    envelopeHash: v.string(), // Audit anchor
-    usedChallengeId: v.id("challenges"),
-    // Fan-out status - track which members have been notified
-    fanoutComplete: v.boolean(),
-    fanoutCount: v.number(), // Number of individual messages created
+  // GroupMessages - Linear history of messages within a group
+  groupMessages: defineTable({
+    groupChatId: v.id("groupChats"), // Foreign key to group chat
+
+    // Message content
+    encryptedMessage: v.string(), // Encrypted message content
+    messageType: v.string(), // Type of message (text, file, system, etc.)
+
+    // Sender information
+    senderAid: v.string(), // AID of message sender
+
+    // Ordering and timestamps
+    seqNo: v.number(), // Sequence number for message ordering
+    received: v.number(), // Timestamp when message was received by server
+
+    // Optional expiration for cleanup
+    expiresAt: v.optional(v.number()),
   })
-    .index("by_group", ["groupId", "seqNum"])
-    .index("by_group_time", ["groupId", "createdAt"])
+    .index("by_group_seq", ["groupChatId", "seqNo"])
+    .index("by_group_time", ["groupChatId", "received"])
+    .index("by_sender", ["senderAid", "received"])
     .index("by_expiration", ["expiresAt"]),
+
+  // GroupMembers - Track membership and sync state
+  groupMembers: defineTable({
+    groupChatId: v.id("groupChats"), // Foreign key to group chat
+    aid: v.string(), // AID of the member
+
+    // Sync tracking
+    latestSeqNo: v.number(), // Latest message seq number this user has received
+
+    // Membership metadata
+    joinedAt: v.number(),
+    role: v.string(), // "owner" | "admin" | "member"
+  })
+    .index("by_group", ["groupChatId"])
+    .index("by_aid", ["aid"])
+    .index("by_group_aid", ["groupChatId", "aid"]),
 
   // Phase 4: Session Tokens - Short-lived bearer tokens for streaming operations
   sessionTokens: defineTable({

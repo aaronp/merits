@@ -1,24 +1,90 @@
 /**
- * Groups: Server-side fanout messaging
+ * Groups: Linear message history with membership tracking
  *
- * Design: Server decrypts group message once, re-encrypts for each member.
- * For MVP, we'll use a simplified approach where the server handles plaintext
- * fanout (no group encryption key).
+ * This implementation provides:
+ * - Linear, persistent message history within groups
+ * - Membership tracking with sync state
+ * - Integration with KERI KEL/TEL for governance
+ * - No fan-out needed - messages stay in the group
  */
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAuth } from "./auth";
 import type { Id } from "./_generated/dataModel";
-import { sha256Hex } from "../core/crypto";
 
 /**
- * Create a new group
+ * Create a new group chat
  */
-export const createGroup = mutation({
+export const createGroupChat = mutation({
   args: {
     name: v.string(),
-    initialMembers: v.array(v.string()), // AIDs to add as members
+    ownerAid: v.string(), // AID of the KEL that owns this group
+    membershipSaid: v.string(), // SAID reference to TEL membership data
+    maxTtl: v.optional(v.number()), // Default 30 days
+    initialMembers: v.array(v.string()), // AIDs to add as initial members
+    auth: v.object({
+      challengeId: v.id("challenges"),
+      sigs: v.array(v.string()),
+      ksn: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const maxTtl = args.maxTtl ?? 30 * 24 * 60 * 60 * 1000; // Default 30 days
+
+    // Verify authentication
+    const verified = await verifyAuth(
+      ctx,
+      args.auth,
+      "createGroup",
+      {
+        name: args.name,
+        ownerAid: args.ownerAid,
+        membershipSaid: args.membershipSaid,
+        members: args.initialMembers.sort(),
+      }
+    );
+
+    const creatorAid = verified.aid;
+
+    // Create the group chat
+    const groupChatId = await ctx.db.insert("groupChats", {
+      ownerAid: args.ownerAid,
+      membershipSaid: args.membershipSaid,
+      name: args.name,
+      maxTtl,
+      createdAt: now,
+      createdBy: creatorAid,
+    });
+
+    // Add initial members including creator
+    const memberSet = new Set([creatorAid, ...args.initialMembers]);
+
+    for (const aid of memberSet) {
+      await ctx.db.insert("groupMembers", {
+        groupChatId,
+        aid,
+        latestSeqNo: -1, // No messages received yet
+        joinedAt: now,
+        role: aid === args.ownerAid ? "owner" :
+              aid === creatorAid ? "admin" : "member",
+      });
+    }
+
+    return { groupChatId };
+  },
+});
+
+/**
+ * Send a message to the group chat
+ * Messages are stored in linear order with sequence numbers
+ */
+export const sendGroupMessage = mutation({
+  args: {
+    groupChatId: v.id("groupChats"),
+    encryptedMessage: v.string(), // Message encrypted with group key
+    messageType: v.string(), // text, file, system, etc.
     auth: v.object({
       challengeId: v.id("challenges"),
       sigs: v.array(v.string()),
@@ -32,42 +98,268 @@ export const createGroup = mutation({
     const verified = await verifyAuth(
       ctx,
       args.auth,
-      "manageGroup",
+      "sendGroupMessage",
       {
-        action: "createGroup",
-        name: args.name,
-        members: args.initialMembers.sort(), // Sort for deterministic hashing
+        groupChatId: args.groupChatId,
+        messageType: args.messageType,
       }
     );
 
-    const creatorAid = verified.aid;
+    const senderAid = verified.aid;
 
-    // Ensure creator is included in members
-    const memberSet = new Set([creatorAid, ...args.initialMembers]);
-    const members = Array.from(memberSet).map((aid) => ({
-      aid,
-      role: aid === creatorAid ? "owner" : "member",
-      joinedAt: now,
-    }));
+    // Verify sender is a member
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", senderAid)
+      )
+      .first();
 
-    const groupId = await ctx.db.insert("groups", {
-      name: args.name,
-      createdBy: creatorAid,
-      createdAt: now,
-      members,
+    if (!membership) {
+      throw new Error("Sender is not a member of this group");
+    }
+
+    // Get the group chat for TTL
+    const groupChat = await ctx.db.get(args.groupChatId);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
+    }
+
+    // Get next sequence number
+    const lastMessage = await ctx.db
+      .query("groupMessages")
+      .withIndex("by_group_seq", (q) =>
+        q.eq("groupChatId", args.groupChatId)
+      )
+      .order("desc")
+      .first();
+
+    const seqNo = lastMessage ? lastMessage.seqNo + 1 : 0;
+
+    // Calculate expiration if TTL is set
+    const expiresAt = groupChat.maxTtl > 0
+      ? now + groupChat.maxTtl
+      : undefined;
+
+    // Insert the message
+    const messageId = await ctx.db.insert("groupMessages", {
+      groupChatId: args.groupChatId,
+      encryptedMessage: args.encryptedMessage,
+      messageType: args.messageType,
+      senderAid,
+      seqNo,
+      received: now,
+      expiresAt,
     });
 
-    return { groupId };
+    return {
+      messageId,
+      seqNo,
+    };
   },
 });
 
 /**
- * Add members to a group (requires admin or owner role)
+ * Get messages from a group chat
+ * Returns messages after a given sequence number for sync
  */
-export const addMembers = mutation({
+export const getGroupMessages = query({
   args: {
-    groupId: v.id("groups"),
-    members: v.array(v.string()),
+    groupChatId: v.id("groupChats"),
+    afterSeqNo: v.optional(v.number()), // Get messages after this seq number
+    limit: v.optional(v.number()), // Max messages to return
+    callerAid: v.string(), // AID requesting messages
+  },
+  handler: async (ctx, args) => {
+    // Verify caller is a member
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", args.callerAid)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("Caller is not a member of this group");
+    }
+
+    const afterSeqNo = args.afterSeqNo ?? -1;
+    const limit = args.limit ?? 100;
+
+    // Get messages after the specified sequence number
+    const messages = await ctx.db
+      .query("groupMessages")
+      .withIndex("by_group_seq", (q) =>
+        q.eq("groupChatId", args.groupChatId)
+      )
+      .filter((q) => q.gt(q.field("seqNo"), afterSeqNo))
+      .order("asc")
+      .take(limit);
+
+    return messages.map(msg => ({
+      id: msg._id,
+      encryptedMessage: msg.encryptedMessage,
+      messageType: msg.messageType,
+      senderAid: msg.senderAid,
+      seqNo: msg.seqNo,
+      received: msg.received,
+    }));
+  },
+});
+
+/**
+ * Update member's latest received sequence number
+ * Used for tracking sync state
+ */
+export const updateMemberSync = mutation({
+  args: {
+    groupChatId: v.id("groupChats"),
+    latestSeqNo: v.number(),
+    auth: v.object({
+      challengeId: v.id("challenges"),
+      sigs: v.array(v.string()),
+      ksn: v.number(),
+    }),
+  },
+  handler: async (ctx, args) => {
+    // Verify authentication
+    const verified = await verifyAuth(
+      ctx,
+      args.auth,
+      "updateSync",
+      {
+        groupChatId: args.groupChatId,
+        latestSeqNo: args.latestSeqNo,
+      }
+    );
+
+    const callerAid = verified.aid;
+
+    // Find membership record
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", callerAid)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("Caller is not a member of this group");
+    }
+
+    // Update sync state
+    await ctx.db.patch(membership._id, {
+      latestSeqNo: args.latestSeqNo,
+    });
+  },
+});
+
+/**
+ * Get group chat details including membership
+ */
+export const getGroupChat = query({
+  args: {
+    groupChatId: v.id("groupChats"),
+    callerAid: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Verify caller is a member
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", args.callerAid)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("Caller is not a member of this group");
+    }
+
+    const groupChat = await ctx.db.get(args.groupChatId);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
+    }
+
+    // Get all members
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group", (q) => q.eq("groupChatId", args.groupChatId))
+      .collect();
+
+    return {
+      id: groupChat._id,
+      ownerAid: groupChat.ownerAid,
+      membershipSaid: groupChat.membershipSaid,
+      name: groupChat.name,
+      maxTtl: groupChat.maxTtl,
+      createdAt: groupChat.createdAt,
+      createdBy: groupChat.createdBy,
+      members: members.map(m => ({
+        aid: m.aid,
+        role: m.role,
+        joinedAt: m.joinedAt,
+        latestSeqNo: m.latestSeqNo,
+      })),
+      callerSync: membership.latestSeqNo,
+    };
+  },
+});
+
+/**
+ * List all group chats for an AID
+ */
+export const listGroupChats = query({
+  args: {
+    aid: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Get all group memberships for this AID
+    const memberships = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+      .collect();
+
+    // Get group details for each membership
+    const groups = await Promise.all(
+      memberships.map(async (membership) => {
+        const group = await ctx.db.get(membership.groupChatId);
+        if (!group) return null;
+
+        // Get message count
+        const messageCount = await ctx.db
+          .query("groupMessages")
+          .withIndex("by_group_seq", (q) =>
+            q.eq("groupChatId", membership.groupChatId)
+          )
+          .collect()
+          .then(msgs => msgs.length);
+
+        return {
+          id: group._id,
+          name: group.name,
+          ownerAid: group.ownerAid,
+          membershipSaid: group.membershipSaid,
+          role: membership.role,
+          joinedAt: membership.joinedAt,
+          latestSeqNo: membership.latestSeqNo,
+          messageCount,
+          unreadCount: Math.max(0, messageCount - (membership.latestSeqNo + 1)),
+        };
+      })
+    );
+
+    return groups.filter(g => g !== null);
+  },
+});
+
+/**
+ * Add members to a group chat
+ * Requires admin or owner role
+ */
+export const addGroupMembers = mutation({
+  args: {
+    groupChatId: v.id("groupChats"),
+    members: v.array(v.string()), // AIDs to add
     auth: v.object({
       challengeId: v.id("challenges"),
       sigs: v.array(v.string()),
@@ -84,48 +376,57 @@ export const addMembers = mutation({
       "manageGroup",
       {
         action: "addMembers",
-        groupId: args.groupId,
+        groupChatId: args.groupChatId,
         members: args.members.sort(),
       }
     );
 
     const callerAid = verified.aid;
 
-    // Fetch group
-    const group = await ctx.db.get(args.groupId);
-    if (!group) {
-      throw new Error("Group not found");
-    }
+    // Check caller's role
+    const callerMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", callerAid)
+      )
+      .first();
 
-    // Check caller is admin or owner
-    const callerMember = group.members.find((m) => m.aid === callerAid);
-    if (!callerMember || (callerMember.role !== "admin" && callerMember.role !== "owner")) {
+    if (!callerMembership ||
+        (callerMembership.role !== "admin" && callerMembership.role !== "owner")) {
       throw new Error("Only admins or owners can add members");
     }
 
-    // Add new members (avoid duplicates)
-    const existingAids = new Set(group.members.map((m) => m.aid));
-    const newMembers = args.members
-      .filter((aid) => !existingAids.has(aid))
-      .map((aid) => ({
-        aid,
-        role: "member" as const,
-        joinedAt: now,
-      }));
+    // Get existing members
+    const existingMembers = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group", (q) => q.eq("groupChatId", args.groupChatId))
+      .collect();
 
-    await ctx.db.patch(args.groupId, {
-      members: [...group.members, ...newMembers],
-    });
+    const existingAids = new Set(existingMembers.map(m => m.aid));
+
+    // Add new members
+    for (const aid of args.members) {
+      if (!existingAids.has(aid)) {
+        await ctx.db.insert("groupMembers", {
+          groupChatId: args.groupChatId,
+          aid,
+          latestSeqNo: -1,
+          joinedAt: now,
+          role: "member",
+        });
+      }
+    }
   },
 });
 
 /**
- * Remove members from a group (requires admin or owner role)
+ * Remove members from a group chat
+ * Requires admin or owner role
  */
-export const removeMembers = mutation({
+export const removeGroupMembers = mutation({
   args: {
-    groupId: v.id("groups"),
-    members: v.array(v.string()),
+    groupChatId: v.id("groupChats"),
+    members: v.array(v.string()), // AIDs to remove
     auth: v.object({
       challengeId: v.id("challenges"),
       sigs: v.array(v.string()),
@@ -140,238 +441,61 @@ export const removeMembers = mutation({
       "manageGroup",
       {
         action: "removeMembers",
-        groupId: args.groupId,
+        groupChatId: args.groupChatId,
         members: args.members.sort(),
       }
     );
 
     const callerAid = verified.aid;
 
-    // Fetch group
-    const group = await ctx.db.get(args.groupId);
-    if (!group) {
-      throw new Error("Group not found");
-    }
+    // Check caller's role
+    const callerMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", callerAid)
+      )
+      .first();
 
-    // Check caller is admin or owner
-    const callerMember = group.members.find((m) => m.aid === callerAid);
-    if (!callerMember || (callerMember.role !== "admin" && callerMember.role !== "owner")) {
+    if (!callerMembership ||
+        (callerMembership.role !== "admin" && callerMembership.role !== "owner")) {
       throw new Error("Only admins or owners can remove members");
     }
 
-    // Prevent removing the last owner
-    const toRemove = new Set(args.members);
-    const remainingMembers = group.members.filter((m) => !toRemove.has(m.aid));
-    const hasOwner = remainingMembers.some((m) => m.role === "owner");
-
-    if (!hasOwner) {
-      throw new Error("Cannot remove last owner from group");
+    // Get group chat to check owner
+    const groupChat = await ctx.db.get(args.groupChatId);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
     }
 
-    await ctx.db.patch(args.groupId, {
-      members: remainingMembers,
-    });
-  },
-});
+    // Prevent removing the owner
+    if (args.members.includes(groupChat.ownerAid)) {
+      throw new Error("Cannot remove the group owner");
+    }
 
-/**
- * Send a message to all group members (server-side fanout)
- *
- * Simplified flow for MVP:
- * 1. Verify sender is group member
- * 2. Store message in groupLog with sequence number
- * 3. Create individual encrypted messages for each member
- * 4. Return messageId (groupLog entry)
- *
- * NOTE: In production, you'd decrypt ct with group key, then re-encrypt for each member.
- * For MVP, we assume ct is already suitable for fanout (e.g., plaintext JSON).
- */
-export const sendGroupMessage = mutation({
-  args: {
-    groupId: v.id("groups"),
-    ct: v.string(),
-    typ: v.optional(v.string()),
-    ttl: v.optional(v.number()),
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
-    }),
-  },
-  handler: async (ctx, args) => {
-    const now = Date.now();
-    const ttl = args.ttl ?? 24 * 60 * 60 * 1000; // Default 24 hours
-    const expiresAt = now + ttl;
+    // Remove members
+    for (const aid of args.members) {
+      const membership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group_aid", (q) =>
+          q.eq("groupChatId", args.groupChatId).eq("aid", aid)
+        )
+        .first();
 
-    // Compute ctHash
-    const encoder = new TextEncoder();
-    const data = encoder.encode(args.ct);
-    const ctHash = sha256Hex(data);
-
-    // Verify authentication
-    const verified = await verifyAuth(
-      ctx,
-      args.auth,
-      "sendGroup",
-      {
-        groupId: args.groupId,
-        ctHash,
-        ttl,
+      if (membership) {
+        await ctx.db.delete(membership._id);
       }
-    );
-
-    const senderAid = verified.aid;
-
-    // Fetch group
-    const group = await ctx.db.get(args.groupId);
-    if (!group) {
-      throw new Error("Group not found");
     }
-
-    // Verify sender is group member
-    const isMember = group.members.some((m) => m.aid === senderAid);
-    if (!isMember) {
-      throw new Error("Only group members can send messages");
-    }
-
-    // Get next sequence number for this group
-    const lastLog = await ctx.db
-      .query("groupLog")
-      .withIndex("by_group", (q) => q.eq("groupId", args.groupId))
-      .order("desc")
-      .first();
-
-    const seqNum = lastLog ? lastLog.seqNum + 1 : 0;
-
-    // Compute envelope hash
-    const envelope = {
-      ver: "group-envelope/1",
-      groupId: args.groupId,
-      senderAid,
-      ctHash,
-      seqNum,
-      createdAt: now,
-      expiresAt,
-    };
-    const canonical = JSON.stringify(envelope, Object.keys(envelope).sort());
-    const envelopeHash = sha256Hex(encoder.encode(canonical));
-
-    // Insert group log entry
-    const logId = await ctx.db.insert("groupLog", {
-      groupId: args.groupId,
-      senderAid,
-      seqNum,
-      ct: args.ct,
-      ctHash,
-      typ: args.typ,
-      createdAt: now,
-      expiresAt,
-      senderSig: args.auth.sigs,
-      senderKsn: verified.ksn,
-      senderEvtSaid: verified.evtSaid,
-      envelopeHash,
-      usedChallengeId: verified.challengeId,
-      fanoutComplete: false,
-      fanoutCount: 0,
-    });
-
-    // Fan out to all members (except sender)
-    let fanoutCount = 0;
-    for (const member of group.members) {
-      if (member.aid === senderAid) continue; // Don't send to self
-
-      // Create individual message for this member
-      // NOTE: In production, re-encrypt ct for member's keys here
-      await ctx.db.insert("messages", {
-        recpAid: member.aid,
-        senderAid,
-        ct: args.ct, // Simplified: use same ct (in production, re-encrypt)
-        ctHash,
-        typ: args.typ,
-        ek: undefined,
-        alg: "group-fanout",
-        createdAt: now,
-        expiresAt,
-        retrieved: false,
-        senderSig: args.auth.sigs,
-        senderKsn: verified.ksn,
-        senderEvtSaid: verified.evtSaid,
-        envelopeHash,
-        usedChallengeId: verified.challengeId,
-      });
-
-      fanoutCount++;
-    }
-
-    // Update fanout status
-    await ctx.db.patch(logId, {
-      fanoutComplete: true,
-      fanoutCount,
-    });
-
-    return { messageId: logId };
   },
 });
 
 /**
- * List all groups for an AID
+ * Update membership SAID reference
+ * Used when TEL membership data changes
  */
-export const listGroups = query({
+export const updateMembershipSaid = mutation({
   args: {
-    aid: v.string(),
-  },
-  handler: async (ctx, args) => {
-    // Query all groups and filter by membership
-    const allGroups = await ctx.db.query("groups").collect();
-
-    return allGroups
-      .filter((group) => group.members.some((m) => m.aid === args.aid))
-      .map((group) => ({
-        id: group._id,
-        name: group.name,
-        createdBy: group.createdBy,
-        createdAt: group.createdAt,
-        members: group.members,
-      }));
-  },
-});
-
-/**
- * Get group details (requires membership)
- */
-export const getGroup = query({
-  args: {
-    groupId: v.id("groups"),
-    callerAid: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const group = await ctx.db.get(args.groupId);
-    if (!group) {
-      throw new Error("Group not found");
-    }
-
-    // Verify caller is member
-    const isMember = group.members.some((m) => m.aid === args.callerAid);
-    if (!isMember) {
-      throw new Error("Only group members can view group details");
-    }
-
-    return {
-      id: group._id,
-      name: group.name,
-      createdBy: group.createdBy,
-      createdAt: group.createdAt,
-      members: group.members,
-    };
-  },
-});
-
-/**
- * Leave a group (members can leave, owners must transfer first)
- */
-export const leaveGroup = mutation({
-  args: {
-    groupId: v.id("groups"),
+    groupChatId: v.id("groupChats"),
+    membershipSaid: v.string(),
     auth: v.object({
       challengeId: v.id("challenges"),
       sigs: v.array(v.string()),
@@ -383,39 +507,29 @@ export const leaveGroup = mutation({
     const verified = await verifyAuth(
       ctx,
       args.auth,
-      "manageGroup",
+      "updateGroupGovernance",
       {
-        action: "leaveGroup",
-        groupId: args.groupId,
+        groupChatId: args.groupChatId,
+        membershipSaid: args.membershipSaid,
       }
     );
 
     const callerAid = verified.aid;
 
-    // Fetch group
-    const group = await ctx.db.get(args.groupId);
-    if (!group) {
-      throw new Error("Group not found");
+    // Get group chat
+    const groupChat = await ctx.db.get(args.groupChatId);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
     }
 
-    // Find caller's membership
-    const callerMember = group.members.find((m) => m.aid === callerAid);
-    if (!callerMember) {
-      throw new Error("Not a member of this group");
+    // Only owner can update membership SAID
+    if (callerAid !== groupChat.ownerAid) {
+      throw new Error("Only the group owner can update membership SAID");
     }
 
-    // Prevent last owner from leaving
-    if (callerMember.role === "owner") {
-      const ownerCount = group.members.filter((m) => m.role === "owner").length;
-      if (ownerCount === 1) {
-        throw new Error("Last owner cannot leave group. Transfer ownership first.");
-      }
-    }
-
-    // Remove member
-    const remainingMembers = group.members.filter((m) => m.aid !== callerAid);
-    await ctx.db.patch(args.groupId, {
-      members: remainingMembers,
+    // Update the membership SAID
+    await ctx.db.patch(args.groupChatId, {
+      membershipSaid: args.membershipSaid,
     });
   },
 });
