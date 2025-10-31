@@ -10,8 +10,9 @@
 import { getAuthProof } from "../lib/getAuthProof";
 import { sha256Hex } from "../../core/crypto";
 import type { CLIContext } from "../lib/context";
+import { normalizeFormat, type GlobalOptions } from "../lib/options";
 
-export interface SendOptions {
+export interface SendOptions extends GlobalOptions {
   message?: string;
   ct?: string;
   encryptFor?: string;
@@ -20,8 +21,6 @@ export interface SendOptions {
   typ?: string;
   ek?: string;
   alg?: string;
-  format?: "json" | "text" | "compact";
-  _ctx: CLIContext;
 }
 
 export async function sendMessage(
@@ -110,8 +109,12 @@ async function sendDirectMessage(
     },
   });
 
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
+  
   // Silent in JSON mode
-  if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+  if (format === "json" || format === "pretty" || format === "raw") {
+    // Silent for JSON formats
+  } else {
     console.log(`Sending message to ${recipientAid}...`);
   }
 
@@ -130,13 +133,23 @@ async function sendDirectMessage(
   const messageId = result.messageId;
 
   // Output result
-  if (opts.format === "json" || ctx.config.outputFormat === "json") {
-    console.log(
-      JSON.stringify({ messageId, recipient: recipientAid, sentAt: Date.now() }, null, 2)
-    );
+  const output = {
+    messageId,
+    recipient: recipientAid,
+    sentAt: Date.now(),
+  };
+
+  if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const canonical = JSON.stringify(output, Object.keys(output).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
+    console.log(JSON.stringify(output, null, 2));
+  } else if (format === "raw") {
+    console.log(JSON.stringify(output));
   } else {
-    console.log(`✅ Message sent successfully!`);
-    console.log(`   Message ID: ${messageId}`);
+    // Fallback to pretty
+    console.log(JSON.stringify(output, null, 2));
   }
 }
 
@@ -191,8 +204,12 @@ async function sendGroupMessage(
     },
   });
 
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
+  
   // Silent in JSON mode
-  if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+  if (format === "json" || format === "pretty" || format === "raw") {
+    // Silent for JSON formats
+  } else {
     console.log(`Sending message to group ${groupId}...`);
   }
 
@@ -206,13 +223,23 @@ async function sendGroupMessage(
   });
 
   // Output result
-  if (opts.format === "json" || ctx.config.outputFormat === "json") {
-    console.log(
-      JSON.stringify({ messageId: result.messageId, groupId, sentAt: Date.now() }, null, 2)
-    );
+  const output = {
+    groupId,
+    messageId: result.messageId,
+    sentAt: Date.now(),
+  };
+
+  if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const canonical = JSON.stringify(output, Object.keys(output).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
+    console.log(JSON.stringify(output, null, 2));
+  } else if (format === "raw") {
+    console.log(JSON.stringify(output));
   } else {
-    console.log(`✅ Message sent to group!`);
-    console.log(`   Message ID: ${result.messageId}`);
+    // Fallback to pretty
+    console.log(JSON.stringify(output, null, 2));
   }
 }
 

@@ -43,8 +43,8 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
   * [x] Add `raw` format option (minimal JSON, no indentation)
   * [x] Ensure JSON is default output
   * [x] Use RFC8785 canonicalized JSON for deterministic test snapshots
-* [ ] Update all commands to use `withGlobalOptions()` wrapper
-* [ ] Update all commands to use new format options
+* [x] Update all commands to use `withGlobalOptions()` wrapper (extended GlobalOptions interface)
+* [x] Update all commands to use new format options (json|pretty|raw)
 
 ### 1.3 Standardize Global Options
 * [x] Align global options with `cli.md`:

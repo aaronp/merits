@@ -14,18 +14,18 @@ import { getSessionToken } from "../lib/getAuthProof";
 import type { CLIContext } from "../lib/context";
 import chalk from "chalk";
 import type { EncryptedMessage } from "../../core/interfaces/Transport";
+import { normalizeFormat, type GlobalOptions } from "../lib/options";
 
-export interface WatchOptions {
+export interface WatchOptions extends GlobalOptions {
   from?: string;
   autoAck?: boolean;
   plaintext?: boolean;
-  format?: "json" | "text" | "compact";
   filter?: string;
-  _ctx: CLIContext;
 }
 
 export async function watchMessages(opts: WatchOptions): Promise<void> {
   const ctx = opts._ctx;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
   const identityName = opts.from || ctx.config.defaultIdentity;
 
   if (!identityName) {
@@ -37,7 +37,7 @@ export async function watchMessages(opts: WatchOptions): Promise<void> {
   const identity = await ctx.vault.getIdentity(identityName);
 
   // Silent in JSON mode (for scripting/logging)
-  const isJsonMode = opts.format === "json" || ctx.config.outputFormat === "json";
+  const isJsonMode = format === "json" || format === "pretty" || format === "raw";
 
   if (!isJsonMode) {
     console.log(chalk.cyan(`👀 Watching for messages as ${identityName}...`));
@@ -81,7 +81,7 @@ export async function watchMessages(opts: WatchOptions): Promise<void> {
       }
 
       // Display message
-      displayMessage(msg, plaintext, opts.format, isJsonMode);
+      displayMessage(msg, plaintext, format, isJsonMode);
 
       // Return true for server-side auto-ack
       // (Server will ack using session token, no client signing needed)
@@ -171,39 +171,30 @@ export async function watchMessages(opts: WatchOptions): Promise<void> {
 function displayMessage(
   msg: EncryptedMessage,
   plaintext: string | undefined,
-  format: string | undefined,
+  format: "json" | "pretty" | "raw",
   isJsonMode: boolean
 ) {
-  if (isJsonMode || format === "json") {
-    // Structured output for scripts/logs
-    console.log(
-      JSON.stringify(
-        {
-          id: msg.id,
-          from: msg.from,
-          to: msg.to,
-          ct: msg.ct,
-          plaintext,
-          createdAt: msg.createdAt,
-          expiresAt: msg.expiresAt,
-        },
-        null,
-        2
-      )
-    );
-  } else if (format === "compact") {
-    // Compact one-line format
-    const content = plaintext || `${msg.ct.slice(0, 20)}...`;
-    console.log(`${msg.id} | ${msg.from} | ${content}`);
+  const data = {
+    createdAt: msg.createdAt,
+    ct: msg.ct,
+    expiresAt: msg.expiresAt,
+    from: msg.from,
+    id: msg.id,
+    plaintext,
+    to: msg.to,
+  };
+
+  if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const canonical = JSON.stringify(data, Object.keys(data).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
+    console.log(JSON.stringify(data, null, 2));
+  } else if (format === "raw") {
+    console.log(JSON.stringify(data));
   } else {
-    // Human-friendly default format
-    console.log(chalk.bold(`\n📨 New message from ${msg.from}`));
-    console.log(chalk.gray(`   ID: ${msg.id}`));
-    if (plaintext) {
-      console.log(chalk.cyan(`   Message: ${plaintext}`));
-    } else {
-      console.log(chalk.gray(`   Ciphertext: ${msg.ct.slice(0, 50)}...`));
-    }
+    // Fallback to pretty
+    console.log(JSON.stringify(data, null, 2));
   }
 
   // Force flush stdout for file redirection in tests

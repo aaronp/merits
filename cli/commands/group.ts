@@ -13,6 +13,7 @@
 import chalk from "chalk";
 import type { CLIContext } from "../lib/context";
 import { getAuthProof } from "../lib/getAuthProof";
+import { normalizeFormat } from "../lib/options";
 
 interface GroupCreateOptions {
   from?: string;
@@ -126,37 +127,26 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
     auth,
   });
 
-  const format = opts.format || ctx.config.outputFormat;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
   if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const sorted = groups.map(g => ({
+      createdAt: g.createdAt,
+      createdBy: g.createdBy,
+      id: g.id,
+      members: g.members,
+      name: g.name,
+    }));
+    const canonical = JSON.stringify(sorted, Object.keys(sorted[0] || {}).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
     console.log(JSON.stringify(groups, null, 2));
-  } else if (format === "compact") {
-    for (const group of groups) {
-      // Find user's role in this group
-      const userMember = group.members.find((m) => m.aid === identity.aid);
-      const role = userMember?.role || "member";
-      console.log(`${group.id}\t${group.name}\t${role}`);
-    }
+  } else if (format === "raw") {
+    console.log(JSON.stringify(groups));
   } else {
-    // text format (default)
-    if (groups.length === 0) {
-      console.log(chalk.gray("No groups found."));
-      return;
-    }
-
-    console.log(chalk.cyan(`\n📋 Groups for ${identityName}:\n`));
-
-    for (const group of groups) {
-      // Find user's role in this group
-      const userMember = group.members.find((m) => m.aid === identity.aid);
-      const role = userMember?.role || "member";
-      const roleIcon = role === "owner" ? "👑" : role === "admin" ? "⚙️" : "👤";
-
-      console.log(`${roleIcon} ${chalk.bold(group.name)} (${role})`);
-      console.log(`   ID: ${group.id}`);
-      console.log(`   Members: ${group.members.length}`);
-      console.log();
-    }
+    // Fallback to pretty
+    console.log(JSON.stringify(groups, null, 2));
   }
 }
 
@@ -189,25 +179,26 @@ export async function groupInfo(
     auth,
   });
 
-  const format = opts.format || ctx.config.outputFormat;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
   if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const data = {
+      createdAt: group.createdAt,
+      createdBy: group.createdBy,
+      id: group.id,
+      members: group.members,
+      name: group.name,
+    };
+    const canonical = JSON.stringify(data, Object.keys(data).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
     console.log(JSON.stringify(group, null, 2));
+  } else if (format === "raw") {
+    console.log(JSON.stringify(group));
   } else {
-    console.log(chalk.cyan(`\n📋 Group Information:\n`));
-    console.log(`   Name: ${chalk.bold(group.name)}`);
-    console.log(`   ID: ${group.id}`);
-    console.log(`   Created by: ${group.createdBy}`);
-    console.log(`   Created: ${new Date(group.createdAt).toLocaleString()}`);
-    console.log();
-
-    if (group.members && group.members.length > 0) {
-      console.log(chalk.cyan("   Members:"));
-      for (const member of group.members) {
-        const roleIcon = member.role === "owner" ? "👑" : member.role === "admin" ? "⚙️" : "👤";
-        console.log(`   ${roleIcon} ${member.aid} (${member.role})`);
-      }
-    }
+    // Fallback to pretty
+    console.log(JSON.stringify(group, null, 2));
   }
 }
 

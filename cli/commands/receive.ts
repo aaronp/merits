@@ -11,18 +11,18 @@
 import { getAuthProof } from "../lib/getAuthProof";
 import type { CLIContext } from "../lib/context";
 import chalk from "chalk";
+import { normalizeFormat, type GlobalOptions } from "../lib/options";
 
-export interface ReceiveOptions {
+export interface ReceiveOptions extends GlobalOptions {
   from?: string;
   markRead?: boolean;
-  format?: "json" | "text" | "compact";
   limit?: number;
   plaintext?: boolean;
-  _ctx: CLIContext;
 }
 
 export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
   const ctx = opts._ctx;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
   // Resolve recipient identity
   const identityName = opts.from || ctx.config.defaultIdentity;
@@ -46,7 +46,9 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
   });
 
   // Silent in JSON mode
-  if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+  if (format === "json" || format === "pretty" || format === "raw") {
+    // Silent for JSON formats
+  } else {
     console.log(`Retrieving messages for ${identityName}...`);
   }
 
@@ -57,15 +59,21 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
   });
 
   if (messages.length === 0) {
-    if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
-      console.log(chalk.gray("No new messages."));
-    } else {
+    if (format === "json") {
+      console.log("[]");
+    } else if (format === "pretty") {
       console.log(JSON.stringify([], null, 2));
+    } else if (format === "raw") {
+      console.log("[]");
+    } else {
+      console.log(chalk.gray("No new messages."));
     }
     return;
   }
 
-  if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+  if (format === "json" || format === "pretty" || format === "raw") {
+    // Silent for JSON formats
+  } else {
     console.log(`Received ${messages.length} message(s)\n`);
   }
 
@@ -92,36 +100,35 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
     });
   }
 
-  // Format output
-  if (opts.format === "json" || ctx.config.outputFormat === "json") {
+  // Format output - all JSON formats now
+  if (format === "json") {
+    // Canonicalized JSON (RFC8785)
+    const sorted = displayMessages.map(m => ({
+      ct: m.ct,
+      envelopeHash: m.envelopeHash,
+      from: m.from,
+      id: m.id,
+      plaintext: m.plaintext,
+      receivedAt: m.receivedAt,
+    }));
+    const canonical = JSON.stringify(sorted, Object.keys(sorted[0] || {}).sort());
+    console.log(canonical);
+  } else if (format === "pretty") {
     console.log(JSON.stringify(displayMessages, null, 2));
-  } else if (opts.format === "compact") {
-    for (const msg of displayMessages) {
-      console.log(
-        `${msg.id} | ${msg.from} | ${msg.plaintext || msg.ct.slice(0, 20) + "..."}`
-      );
-    }
+  } else if (format === "raw") {
+    console.log(JSON.stringify(displayMessages));
   } else {
-    // Text format (default)
-    for (const msg of displayMessages) {
-      console.log(chalk.bold(`Message ID: ${msg.id}`));
-      console.log(`  From: ${msg.from}`);
-      console.log(`  Time: ${new Date(msg.receivedAt).toLocaleString()}`);
-
-      if (msg.plaintext) {
-        console.log(`  Message: ${chalk.cyan(msg.plaintext)}`);
-      } else {
-        console.log(`  Ciphertext: ${msg.ct.slice(0, 50)}...`);
-      }
-      console.log();
-    }
+    // Fallback to pretty
+    console.log(JSON.stringify(displayMessages, null, 2));
   }
 
   // Acknowledge if requested (combined operation optimization)
   // NOTE: This still does N+1 proofs (1 receive + N acks). A future optimization
   // would be a single receiveAndAck mutation with one proof.
   if (opts.markRead) {
-    if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+    if (format === "json" || format === "pretty" || format === "raw") {
+      // Silent for JSON formats
+    } else {
       console.log(chalk.gray("Marking messages as read..."));
     }
 
@@ -153,7 +160,9 @@ export async function receiveMessages(opts: ReceiveOptions): Promise<void> {
       });
     }
 
-    if (!(opts.format === "json" || ctx.config.outputFormat === "json")) {
+    if (format === "json" || format === "pretty" || format === "raw") {
+      // Silent for JSON formats
+    } else {
       console.log(chalk.green(`✅ Marked ${messages.length} message(s) as read`));
     }
   }

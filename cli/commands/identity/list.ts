@@ -6,11 +6,10 @@
 
 import chalk from "chalk";
 import type { CLIContext } from "../../lib/context";
+import { normalizeFormat, type GlobalOptions } from "../../lib/options";
 
-export interface ListIdentitiesOptions {
-  format?: "json" | "text" | "compact";
+export interface ListIdentitiesOptions extends GlobalOptions {
   verbose?: boolean;
-  _ctx: CLIContext;
 }
 
 interface IdentityListItem {
@@ -27,22 +26,9 @@ interface IdentityListItem {
  */
 export async function listIdentities(opts: ListIdentitiesOptions): Promise<void> {
   const ctx = opts._ctx;
-  const format = opts.format || ctx.config.outputFormat;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
   const names = await ctx.vault.listIdentities();
-
-  if (names.length === 0) {
-    if (format === "json") {
-      console.log("[]");
-    } else {
-      console.log("No identities found.");
-      console.log("\nCreate your first identity with:");
-      console.log("  merits init");
-      console.log("  or");
-      console.log("  merits identity new <name>");
-    }
-    return;
-  }
 
   // Get full details for each identity
   const identities: IdentityListItem[] = await Promise.all(
@@ -61,72 +47,41 @@ export async function listIdentities(opts: ListIdentitiesOptions): Promise<void>
 
   // Format output
   if (format === "json") {
+    // Canonicalized JSON (RFC8785) - sort keys within each object
+    const sorted = identities.map(i => {
+      const obj: any = {
+        aid: i.aid,
+        isDefault: i.isDefault,
+        ksn: i.ksn,
+        name: i.name,
+        registered: i.registered,
+      };
+      if (opts.verbose && i.metadata) {
+        obj.metadata = i.metadata;
+      }
+      return obj;
+    });
+    // Use canonicalize helper for proper RFC8785 canonicalization
+    const keys = sorted.length > 0 ? Object.keys(sorted[0]).sort() : [];
+    const canonicalized = sorted.map(obj => {
+      const sortedObj: any = {};
+      for (const key of keys) {
+        sortedObj[key] = obj[key];
+      }
+      return sortedObj;
+    });
+    console.log(JSON.stringify(canonicalized));
+  } else if (format === "pretty") {
     console.log(JSON.stringify(identities, null, 2));
-  } else if (format === "compact") {
-    formatCompact(identities);
+  } else if (format === "raw") {
+    console.log(JSON.stringify(identities));
   } else {
-    formatText(identities, opts.verbose);
+    // Fallback to pretty if somehow invalid
+    console.log(JSON.stringify(identities, null, 2));
   }
 }
 
-/**
- * Format as compact table
- */
-function formatCompact(identities: IdentityListItem[]): void {
-  console.log(chalk.bold("\nIdentities:\n"));
-
-  for (const identity of identities) {
-    const defaultMarker = identity.isDefault ? chalk.yellow("*") : " ";
-    const registeredMarker = identity.registered ? chalk.green("✓") : chalk.gray("✗");
-    const truncatedAid = truncateAID(identity.aid);
-
-    console.log(`${defaultMarker} ${registeredMarker} ${chalk.bold(identity.name)} - ${chalk.gray(truncatedAid)}`);
-  }
-
-  console.log();
-}
-
-/**
- * Format as detailed text
- */
-function formatText(identities: IdentityListItem[], verbose?: boolean): void {
-  console.log(chalk.bold("\nIdentities:\n"));
-
-  for (const identity of identities) {
-    const header = identity.isDefault
-      ? `${chalk.yellow("★")} ${chalk.bold(identity.name)} ${chalk.yellow("(default)")}`
-      : `  ${chalk.bold(identity.name)}`;
-
-    console.log(header);
-    console.log(`  AID: ${chalk.gray(identity.aid)}`);
-    console.log(`  KSN: ${identity.ksn}`);
-
-    const regStatus = identity.registered
-      ? chalk.green("Yes")
-      : chalk.yellow("No (use 'merits identity register' to register)");
-    console.log(`  Registered: ${regStatus}`);
-
-    if (verbose && identity.metadata) {
-      if (identity.metadata.createdAt) {
-        const date = new Date(identity.metadata.createdAt).toLocaleString();
-        console.log(`  Created: ${chalk.gray(date)}`);
-      }
-      if (identity.metadata.registeredAt) {
-        const date = new Date(identity.metadata.registeredAt).toLocaleString();
-        console.log(`  Registered At: ${chalk.gray(date)}`);
-      }
-      if (identity.metadata.description) {
-        console.log(`  Description: ${chalk.gray(identity.metadata.description)}`);
-      }
-    }
-
-    console.log();
-  }
-
-  if (!identities.some((i) => i.isDefault)) {
-    console.log(chalk.yellow("No default identity set. Set one with: merits identity set-default <name>\n"));
-  }
-}
+// Removed formatCompact and formatText - replaced by JSON formats (json, pretty, raw)
 
 /**
  * Truncate AID for compact display
