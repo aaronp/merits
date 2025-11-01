@@ -840,6 +840,248 @@ describe("E2E New CLI Specification", () => {
       expect(decrypted).toBe(unicodeMessage);
     });
   });
+
+  // ========================================================================
+  // Phase 7: Utility Commands
+  // ========================================================================
+
+  describe("Phase 7: Utility Commands", () => {
+    let testKeys: { privateKey: string; publicKey: string };
+    let testKeysPath: string;
+
+    beforeAll(async () => {
+      // Generate test keys for utility commands
+      const result = await runCLI(["gen-key", "--seed", "test-utility-commands"]);
+      testKeys = result;
+
+      // Save keys to temporary file
+      testKeysPath = ".merits/test-utility-keys.json";
+      await Bun.write(testKeysPath, JSON.stringify(testKeys));
+    });
+
+    test("encrypt: encrypts message with public key", async () => {
+      const result = await runCLI([
+        "encrypt",
+        "--message", "Hello, encryption!",
+        "--public-key-file", testKeysPath
+      ]);
+
+      expect(result).toHaveProperty("ciphertext");
+      expect(result).toHaveProperty("ephemeralPublicKey");
+      expect(result).toHaveProperty("nonce");
+      expect(typeof result.ciphertext).toBe("string");
+      expect(typeof result.ephemeralPublicKey).toBe("string");
+      expect(typeof result.nonce).toBe("string");
+    });
+
+    test("decrypt: decrypts message encrypted with encrypt command", async () => {
+      // First, encrypt a message
+      const encrypted = await runCLI([
+        "encrypt",
+        "--message", "Round-trip test message",
+        "--public-key-file", testKeysPath
+      ]);
+
+      // Save encrypted message to file
+      const encryptedPath = ".merits/test-encrypted-message.json";
+      await Bun.write(encryptedPath, JSON.stringify(encrypted));
+
+      // Decrypt it
+      const result = await runCLI([
+        "decrypt",
+        "--encrypted-file", encryptedPath,
+        "--keys-file", testKeysPath
+      ]);
+
+      expect(result).toHaveProperty("plaintext");
+      expect(result.plaintext).toBe("Round-trip test message");
+    });
+
+    test("decrypt with --format raw: outputs plaintext only", async () => {
+      // Encrypt a message
+      const encrypted = await runCLI([
+        "encrypt",
+        "--message", "Raw format test",
+        "--public-key-file", testKeysPath
+      ]);
+
+      const encryptedPath = ".merits/test-encrypted-raw.json";
+      await Bun.write(encryptedPath, JSON.stringify(encrypted));
+
+      // Decrypt with raw format (outputs plaintext without JSON wrapper)
+      const proc = Bun.spawn([
+        "bun", "run", "cli/index.ts",
+        "decrypt",
+        "--encrypted-file", encryptedPath,
+        "--keys-file", testKeysPath,
+        "--format", "raw"
+      ], {
+        env: { ...process.env, MERITS_VAULT_QUIET: "1" },
+        stdout: "pipe"
+      });
+
+      const output = await new Response(proc.stdout).text();
+      expect(output.trim()).toBe("Raw format test");
+    });
+
+    test("encrypt: different messages produce different ciphertexts", async () => {
+      const result1 = await runCLI([
+        "encrypt",
+        "--message", "Message 1",
+        "--public-key-file", testKeysPath
+      ]);
+
+      const result2 = await runCLI([
+        "encrypt",
+        "--message", "Message 2",
+        "--public-key-file", testKeysPath
+      ]);
+
+      expect(result1.ciphertext).not.toBe(result2.ciphertext);
+      expect(result1.nonce).not.toBe(result2.nonce);
+      expect(result1.ephemeralPublicKey).not.toBe(result2.ephemeralPublicKey);
+    });
+
+    test("encrypt: same message produces different ciphertexts (nonce randomness)", async () => {
+      const result1 = await runCLI([
+        "encrypt",
+        "--message", "Same message",
+        "--public-key-file", testKeysPath
+      ]);
+
+      const result2 = await runCLI([
+        "encrypt",
+        "--message", "Same message",
+        "--public-key-file", testKeysPath
+      ]);
+
+      // Due to random nonces and ephemeral keys, should get different results
+      expect(result1.ciphertext).not.toBe(result2.ciphertext);
+      expect(result1.nonce).not.toBe(result2.nonce);
+      expect(result1.ephemeralPublicKey).not.toBe(result2.ephemeralPublicKey);
+    });
+
+    test("verify-signature: verifies valid Ed25519 signature", async () => {
+      // Create a signed message using ed25519 library
+      const { ed25519 } = await import("@noble/curves/ed25519.js");
+
+      const privateKeyBytes = base64UrlToUint8Array(testKeys.privateKey);
+      const message = "Test signature verification";
+      const messageBytes = new TextEncoder().encode(message);
+      const signature = ed25519.sign(messageBytes, privateKeyBytes);
+
+      // Convert signature to base64url
+      const signatureB64 = uint8ArrayToBase64Url(signature);
+
+      const signedMessage = {
+        message,
+        signature: signatureB64,
+        publicKey: testKeys.publicKey
+      };
+
+      const signedPath = ".merits/test-signed-message.json";
+      await Bun.write(signedPath, JSON.stringify(signedMessage));
+
+      const result = await runCLI([
+        "verify-signature",
+        "--signed-file", signedPath
+      ]);
+
+      expect(result).toHaveProperty("valid");
+      expect(result.valid).toBe(true);
+    });
+
+    test("verify-signature: rejects invalid signature", async () => {
+      const signedMessage = {
+        message: "Test message",
+        signature: "INVALID_SIGNATURE_BASE64URL",
+        publicKey: testKeys.publicKey
+      };
+
+      const signedPath = ".merits/test-invalid-signature.json";
+      await Bun.write(signedPath, JSON.stringify(signedMessage));
+
+      // This should throw an error due to invalid signature format
+      await expect(async () => {
+        await runCLI([
+          "verify-signature",
+          "--signed-file", signedPath
+        ]);
+      }).toThrow();
+    });
+
+    test("verify-signature: rejects tampered message", async () => {
+      // Create a valid signed message
+      const { ed25519 } = await import("@noble/curves/ed25519.js");
+
+      const privateKeyBytes = base64UrlToUint8Array(testKeys.privateKey);
+      const originalMessage = "Original message";
+      const messageBytes = new TextEncoder().encode(originalMessage);
+      const signature = ed25519.sign(messageBytes, privateKeyBytes);
+
+      const signatureB64 = uint8ArrayToBase64Url(signature);
+
+      // Tamper with the message after signing
+      const tamperedMessage = {
+        message: "Tampered message",  // Changed!
+        signature: signatureB64,      // But signature is for "Original message"
+        publicKey: testKeys.publicKey
+      };
+
+      const tamperedPath = ".merits/test-tampered-message.json";
+      await Bun.write(tamperedPath, JSON.stringify(tamperedMessage));
+
+      const result = await runCLI([
+        "verify-signature",
+        "--signed-file", tamperedPath
+      ]);
+
+      expect(result).toHaveProperty("valid");
+      expect(result.valid).toBe(false);
+    });
+
+    test("encrypt handles unicode messages", async () => {
+      const unicodeMessage = "Hello 世界 🌍 مرحبا";
+
+      const encrypted = await runCLI([
+        "encrypt",
+        "--message", unicodeMessage,
+        "--public-key-file", testKeysPath
+      ]);
+
+      const encryptedPath = ".merits/test-unicode-encrypted.json";
+      await Bun.write(encryptedPath, JSON.stringify(encrypted));
+
+      const decrypted = await runCLI([
+        "decrypt",
+        "--encrypted-file", encryptedPath,
+        "--keys-file", testKeysPath
+      ]);
+
+      expect(decrypted.plaintext).toBe(unicodeMessage);
+    });
+
+    test("encrypt handles very short messages", async () => {
+      const shortMessage = "x";
+
+      const encrypted = await runCLI([
+        "encrypt",
+        "--message", shortMessage,
+        "--public-key-file", testKeysPath
+      ]);
+
+      const encryptedPath = ".merits/test-short-encrypted.json";
+      await Bun.write(encryptedPath, JSON.stringify(encrypted));
+
+      const decrypted = await runCLI([
+        "decrypt",
+        "--encrypted-file", encryptedPath,
+        "--keys-file", testKeysPath
+      ]);
+
+      expect(decrypted.plaintext).toBe(shortMessage);
+    });
+  });
 });
 
 /**
@@ -855,4 +1097,16 @@ function base64UrlToUint8Array(base64url: string): Uint8Array {
     bytes[i] = binaryString.charCodeAt(i);
   }
   return bytes;
+}
+
+/**
+ * Helper: Encode Uint8Array to base64url
+ */
+function uint8ArrayToBase64Url(bytes: Uint8Array): string {
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  const base64 = btoa(binary);
+  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }

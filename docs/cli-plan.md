@@ -322,12 +322,29 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
   * [ ] Update message handling to support group encryption format
   * [ ] In `--dry-run` mode, show encrypted payload structure
 
+**Status:** 🔄 Blocked by backend API
+**Crypto Implementation:** ✅ Complete ([cli/lib/crypto-group.ts](../cli/lib/crypto-group.ts))
+**Backend Required:**
+- `groups.getMembers(groupId)` - Fetch group member public keys
+- `groups.sendGroupMessage()` - Send encrypted GroupMessage
+- `identityRegistry.getPublicKey(aid)` - Fetch any user's public key
+
 ### 5.7 Integrate Group Decryption into `unread`
 * [ ] Update `unread` command:
   * [ ] Detect group messages
   * [ ] Use `decryptGroupMessage` to decrypt when possible
   * [ ] Handle decryption errors gracefully (show encrypted indicator)
   * [ ] Log cryptographic primitives used (debug mode)
+
+**Status:** 🔄 Blocked by backend API
+**Crypto Implementation:** ✅ Complete ([cli/lib/crypto-group.ts](../cli/lib/crypto-group.ts))
+**Backend Required:**
+- Update `messages.getUnread()` response format:
+  - Add `isGroupMessage` flag
+  - Add `senderPublicKey` field
+  - Support `GroupMessage` type in `ct` field
+
+**📄 Detailed Integration Plan:** [GROUP-ENCRYPTION-INTEGRATION.md](GROUP-ENCRYPTION-INTEGRATION.md)
 
 ---
 
@@ -385,6 +402,9 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
 ## Phase 7: Utility Commands
 
 ### 7.1 Implement `key-for` Command
+**Status:** 🔄 Blocked by backend API
+**Backend Required:** `identityRegistry.getPublicKey(aid)` - Fetch any user's public key
+
 * [ ] Create `cli/commands/key-for.ts`:
   * [ ] Args: `--user <aid>`, `--token <path>`
   * [ ] Queries backend for user's public key
@@ -392,31 +412,48 @@ Migrate from current identity-based CLI to the specification in `cli.md`:
   * [ ] Optionally stores in local key registry
 * [ ] Wire `key-for` in `cli/index.ts`
 
-### 7.2 Implement `encrypt` Command
-* [ ] Create `cli/commands/encrypt.ts`:
-  * [ ] Args: `--public-key-file <file.json>`, `--message <text>` or `--stdin` (for pipes)
-  * [ ] Reads recipient's public key from file (from `key-for` output)
-  * [ ] Encrypts message using X25519 key exchange + AES-256-GCM
-  * [ ] Outputs encrypted payload JSON to stdout
-* [ ] Wire `encrypt` in `cli/index.ts`
+### 7.2 Implement `encrypt` Command ✅
+**Status:** Complete (No backend required)
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L862-L962](../tests/cli/e2e/new-cli-spec.test.ts#L862-L962)
 
-### 7.3 Implement `decrypt` Command
-* [ ] Create `cli/commands/decrypt.ts`:
-  * [ ] Args: `--keys-file <file.json>`, `--file <encrypted.json>` or `--stdin`
-  * [ ] Decrypts message using private key from keys file
-  * [ ] Useful for parity and manual decryption testing
-  * [ ] Outputs plaintext to stdout
-* [ ] Wire `decrypt` in `cli/index.ts`
+* [x] Create `cli/commands/encrypt.ts`:
+  * [x] Args: `--public-key-file <file.json>`, `--message <text>` or stdin
+  * [x] Reads recipient's public key from file
+  * [x] Encrypts message using X25519 ECDH + AES-256-GCM
+  * [x] Generates ephemeral key pair for forward secrecy
+  * [x] Outputs encrypted payload JSON to stdout
+  * [x] Supports all output formats (json, pretty, raw)
+* [x] Wire `encrypt` in `cli/index.ts`
 
-### 7.4 Implement `verify-signature` Command
-* [ ] Create `cli/commands/verify-signature.ts`:
-  * [ ] Args: `--file <signed-message.json>`, `--public-key-file <file.json>`
-  * [ ] Verifies message signatures
-  * [ ] Assists testing multi-party ceremonies
-  * [ ] Outputs verification result JSON
-* [ ] Wire `verify-signature` in `cli/index.ts`
+### 7.3 Implement `decrypt` Command ✅
+**Status:** Complete (No backend required)
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L877-L925](../tests/cli/e2e/new-cli-spec.test.ts#L877-L925)
+
+* [x] Create `cli/commands/decrypt.ts`:
+  * [x] Args: `--keys-file <file.json>`, `--encrypted-file <encrypted.json>` or stdin
+  * [x] Decrypts message using private key from keys file
+  * [x] Derives shared secret from ephemeral public key
+  * [x] Useful for testing and manual decryption
+  * [x] Outputs plaintext to stdout
+  * [x] `--format raw` outputs plaintext without JSON wrapper
+* [x] Wire `decrypt` in `cli/index.ts`
+
+### 7.4 Implement `verify-signature` Command ✅
+**Status:** Complete (No backend required)
+**Tests:** [tests/cli/e2e/new-cli-spec.test.ts#L964-L1041](../tests/cli/e2e/new-cli-spec.test.ts#L964-L1041)
+
+* [x] Create `cli/commands/verify-signature.ts`:
+  * [x] Args: `--signed-file <signed-message.json>` or stdin
+  * [x] Verifies Ed25519 message signatures
+  * [x] Input format: `{ message, signature, publicKey }`
+  * [x] Assists testing multi-party ceremonies
+  * [x] Outputs verification result JSON: `{ valid: true/false }`
+  * [x] Tests include tampering detection
+* [x] Wire `verify-signature` in `cli/index.ts`
 
 ### 7.5 Clean Up Old Commands
+**Status:** Deferred to Phase 9
+
 * [ ] Remove `init` command → not in spec (or keep as convenience)
 * [ ] Review RBAC commands (`roles`, `permissions`, `users`) → move to admin namespace or remove if not in spec
 

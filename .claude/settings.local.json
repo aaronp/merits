@@ -45,7 +45,11 @@
       "Bash(bunx convex env:*)",
       "Bash(MERITS_VAULT_QUIET=1 bun cli/index.ts:*)",
       "Bash(.merits/test-messages.json)",
-      "Bash(.merits/test-ids.json)"
+      "Bash(.merits/test-ids.json)",
+      "Bash(MERITS_VAULT_QUIET=1 bun run:*)",
+      "Bash(.merits/test-keys.json)",
+      "Bash(.merits/test-encrypted.json)",
+      "Bash(MERITS_VAULT_QUIET=1 bun test:*)"
     ],
     "deny": [],
     "ask": []

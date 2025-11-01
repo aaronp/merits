@@ -138,6 +138,9 @@ import { unread } from "./commands/unread";
 import { markAsRead } from "./commands/mark-as-read";
 import { extractIds } from "./commands/extract-ids";
 import { sendMessage } from "./commands/send";
+import { encrypt } from "./commands/encrypt";
+import { decrypt } from "./commands/decrypt";
+import { verifySignature } from "./commands/verify-signature";
 import { rolesCreate, permissionsCreate, rolesAddPermission, usersGrantRole, bootstrapOnboardingCmd } from "./commands/rbac";
 import {
   createGroup,
@@ -237,6 +240,27 @@ program
   .description("Extract message IDs from message list (utility for piping)")
   .requiredOption("--file <path>", "Path to messages file")
   .action(extractIds);
+
+// Utility commands (Phase 7)
+program
+  .command("encrypt")
+  .description("Encrypt message for testing (standalone encryption)")
+  .option("--message <text>", "Message text (or use stdin)")
+  .requiredOption("--public-key-file <path>", "Path to JSON file with recipient's public key")
+  .action(encrypt);
+
+program
+  .command("decrypt")
+  .description("Decrypt message for testing (standalone decryption)")
+  .option("--encrypted-file <path>", "Path to encrypted message JSON (or use stdin)")
+  .requiredOption("--keys-file <path>", "Path to JSON file with private key")
+  .action(decrypt);
+
+program
+  .command("verify-signature")
+  .description("Verify Ed25519 signature")
+  .option("--signed-file <path>", "Path to signed message JSON (or use stdin)")
+  .action(verifySignature);
 
 // --- Old Identity Commands (to be removed in Phase 9) ---
 
