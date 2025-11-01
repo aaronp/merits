@@ -84,11 +84,15 @@ const cancel = await client.transport.subscribe({
 
 - ✅ **Challenge/Response Auth** - No passwords, prove AID control via Ed25519 signatures
 - ✅ **Direct Messaging** - 1:1 encrypted messages with ack/replay protection
-- ✅ **Group Messaging** - Server-side fanout with per-member encryption
+- ✅ **Zero-Knowledge Group Messaging** - End-to-end encrypted groups with ephemeral keys (NEW ✨)
+  - Backend cannot decrypt messages
+  - Forward secrecy via ephemeral AES-256-GCM keys
+  - Per-member key distribution via X25519 ECDH
+  - Automatic client-side decryption
 - ✅ **Real-Time Delivery** - Subscribe to messages with auto-ack
 - ✅ **Message Routing** - Type-based dispatch (`typ: "chat.text.v1"`)
 - ✅ **Backend-Agnostic** - Core interfaces + Convex adapter
-- ✅ **CLI** - Full-featured command-line tool for testing/operations
+- ✅ **CLI** - Full-featured command-line tool with comprehensive help text
 - ✅ **Portable Crypto** - [@noble/ed25519](https://github.com/paulmillr/noble-ed25519) + [@noble/hashes](https://github.com/paulmillr/noble-hashes) (no platform deps)
 
 ## Architecture
@@ -140,9 +144,30 @@ const cancel = await client.transport.subscribe({
 
 ## Documentation
 
+### Overview & Architecture
 - **[Architecture](docs/architecture.md)** - Codebase layout, design patterns, key assumptions
+- **[Group Messaging](docs/GROUP-MESSAGING-COMPLETE.md)** - Zero-knowledge group encryption implementation (NEW ✨)
+- **[Group Chat Design](docs/group-chat.md)** - Group chat architecture and message flow
+
+### Security & Authentication
 - **[Authentication](docs/auth.md)** - Challenge/response flow, signature verification, KSN binding
 - **[Permissions](docs/permissions.md)** - Who can message whom, admin controls, rate limiting
+
+### API & CLI Reference
+- **CLI Help** - Run `merits --help` for command overview
+  - `merits send --help` - Direct and group message sending
+  - `merits unread --help` - Message retrieval and decryption
+- **Code Documentation** - Comprehensive JSDoc comments in source files:
+  - [convex/schema.ts](convex/schema.ts) - Database schemas with security notes
+  - [convex/groups.ts](convex/groups.ts) - Group APIs (getMembers, sendGroupMessage)
+  - [convex/messages.ts](convex/messages.ts) - Message APIs (getUnread unified inbox)
+  - [convex/auth.ts](convex/auth.ts) - Authentication APIs (getPublicKey)
+  - [cli/commands/send.ts](cli/commands/send.ts) - Send command implementation
+  - [cli/commands/unread.ts](cli/commands/unread.ts) - Unread command implementation
+  - [cli/lib/crypto-group.ts](cli/lib/crypto-group.ts) - Group encryption library
+
+### Testing & Development
+- **[API Reference](docs/api-reference.md)** - Backend API contracts
 - **[Future Work](docs/future-work.md)** - Known limitations, deferred features, roadmap
 
 ## Project Structure

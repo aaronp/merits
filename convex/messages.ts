@@ -309,10 +309,65 @@ export const list = query({
 });
 
 /**
- * Get unread messages including both direct and group messages
+ * Get unread messages - Unified inbox for direct and group messages
  *
- * This is the unified inbox that the CLI uses to fetch all unread messages.
- * Returns both direct messages and group messages in a unified format.
+ * Returns all unread messages for a user in a unified format, including both:
+ * - Direct messages (encrypted peer-to-peer)
+ * - Group messages (encrypted with zero-knowledge group encryption)
+ *
+ * Message Types:
+ * 1. Direct Messages (typ: "encrypted"):
+ *    - ct: Ciphertext string
+ *    - from/to: Sender and recipient AIDs
+ *    - isGroupMessage: false
+ *
+ * 2. Group Messages (typ: "group-encrypted"):
+ *    - ct: Full GroupMessage object with encryptedContent and encryptedKeys
+ *    - senderPublicKey: Needed for ECDH decryption
+ *    - groupId: Group the message belongs to
+ *    - seqNo: Message sequence number
+ *    - isGroupMessage: true
+ *
+ * Unread Detection:
+ * - Direct messages: retrieved=false
+ * - Group messages: seqNo > membership.latestSeqNo
+ *
+ * Group Message Decryption Flow (client-side):
+ * 1. Client receives GroupMessage structure in ct field
+ * 2. Client looks up their encrypted key in ct.encryptedKeys[recipientAid]
+ * 3. Client performs ECDH with senderPublicKey to derive shared secret
+ * 4. Client decrypts ephemeral group key
+ * 5. Client decrypts message content with group key
+ *
+ * Expiration:
+ * - Only returns non-expired messages
+ * - Direct messages: expiresAt > now
+ * - Group messages: expiresAt > now or no expiration
+ *
+ * @param aid - User's AID to get unread messages for
+ * @param includeGroupMessages - Whether to include group messages (default: true)
+ *
+ * @returns Object containing messages array with:
+ *   Common fields:
+ *   - id: Message ID
+ *   - from: Sender AID
+ *   - to: Recipient AID
+ *   - typ: "encrypted" or "group-encrypted"
+ *   - createdAt: Message timestamp
+ *   - isGroupMessage: boolean
+ *
+ *   Direct message fields:
+ *   - ct: Ciphertext string
+ *
+ *   Group message fields:
+ *   - ct: GroupMessage object {encryptedContent, nonce, encryptedKeys, ...}
+ *   - groupId: Group chat ID
+ *   - senderPublicKey: Sender's Ed25519 public key (for ECDH)
+ *   - seqNo: Message sequence number
+ *
+ * @see schema.ts messages and groupMessages tables
+ * @see cli/commands/unread.ts for client-side decryption
+ * @see cli/lib/crypto-group.ts decryptGroupMessage() for group decryption
  */
 export const getUnread = query({
   args: {

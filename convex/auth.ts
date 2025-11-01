@@ -538,10 +538,45 @@ export const getAidForChallenge = query({
 });
 
 /**
- * Get public key for an AID
+ * Get public key for any AID
  *
- * This is required by the CLI to encrypt messages for recipients.
+ * Returns the Ed25519 public key for a given AID along with key state information.
  * Public keys are public information - no authentication required.
+ *
+ * Use Cases:
+ * 1. Direct message encryption: Fetch recipient's public key before sending
+ * 2. Signature verification: Verify signatures on messages
+ * 3. Key discovery: CLI `key-for` command to display user's public key
+ * 4. Group encryption: Already handled by groups.getMembers() for efficiency
+ *
+ * Public Key Usage:
+ * - Ed25519 public key in base64url format
+ * - Can be converted to X25519 for ECDH key agreement
+ * - Used for both encryption (via ECDH) and signature verification
+ *
+ * Key State:
+ * - ksn (Key Sequence Number): Tracks key rotations
+ * - updatedAt: Timestamp of last key update
+ * - If no key state exists, returns ksn=0 and createdAt timestamp
+ *
+ * Security:
+ * - No authentication required (public keys are public)
+ * - Returns current active key only (historical keys not exposed)
+ * - Key rotation tracked via KERI key events
+ *
+ * @param aid - The AID to get the public key for
+ *
+ * @returns Object containing:
+ *   - aid: The AID
+ *   - publicKey: Ed25519 public key (base64url)
+ *   - ksn: Key sequence number (0 if no rotations)
+ *   - updatedAt: Timestamp of last key update
+ *
+ * @throws Error if user not found for the given AID
+ *
+ * @see schema.ts users and keyStates tables
+ * @see registerUser() for key registration
+ * @see cli/lib/crypto-group.ts for key usage in encryption
  */
 export const getPublicKey = query({
   args: {

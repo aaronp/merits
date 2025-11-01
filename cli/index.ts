@@ -30,8 +30,28 @@ const program = new Command();
 
 program
   .name("merits")
-  .description("Merits messaging CLI - KERI-authenticated secure messaging")
-  .version("0.1.0");
+  .description("Merits messaging CLI - KERI-authenticated secure messaging with zero-knowledge group encryption")
+  .version("0.1.0")
+  .addHelpText("after", `
+Features:
+  - KERI-based authentication with challenge-response proofs
+  - End-to-end encrypted direct messaging
+  - Zero-knowledge group messaging (backend cannot decrypt)
+  - Role-based access control (RBAC)
+  - Session tokens for streaming operations
+
+Quick Start:
+  $ merits init                          # First-time setup
+  $ merits gen-key                       # Generate key pair
+  $ merits create-user --id <aid> --public-key <key>  # Register user
+  $ merits send <recipient> --message "Hello"         # Send message
+  $ merits unread --token $TOKEN         # Retrieve messages
+
+Documentation:
+  $ merits <command> --help              # Command-specific help
+  $ merits send --help                   # See group vs direct message formats
+  $ merits unread --help                 # See message types and formats
+  `);
 
 // Global options (updated to match cli.md spec)
 program
@@ -222,10 +242,27 @@ program
 
 program
   .command("unread")
-  .description("Retrieve unread messages")
+  .description("Retrieve and decrypt unread messages (direct and group)")
   .option("--from <sender>", "Filter messages by sender")
   .option("--watch", "Stream messages in real-time (continuous mode)")
   .option("--since <timestamp>", "Replay messages after this timestamp", parseInt)
+  .addHelpText("after", `
+Examples:
+  $ merits unread --token $TOKEN                    # Get all unread messages
+  $ merits unread --token $TOKEN --from alice       # Filter by sender
+  $ merits unread --token $TOKEN --format pretty    # Pretty-printed output
+  $ merits unread --token $TOKEN --since 1730476800000  # Messages after timestamp
+
+Message Types:
+  - Direct messages: Peer-to-peer encrypted (typ: "encrypted")
+  - Group messages: Zero-knowledge encrypted (typ: "group-encrypted")
+    Group messages are automatically decrypted client-side.
+
+Output Formats:
+  --format json   : RFC8785 canonical JSON (deterministic, sorted keys)
+  --format pretty : Pretty-printed JSON with summary
+  --format raw    : Minified JSON (no formatting)
+  `)
   .action(unread);
 
 program
@@ -323,9 +360,9 @@ identityCmd
 // Send command
 program
   .command("send <recipient>")
-  .description("Send encrypted message to recipient")
+  .description("Send encrypted message to recipient (direct or group)")
   .option("--message <text>", "Message text (or use stdin)")
-  .option("--ct <ciphertext>", "Pre-encrypted message (base64)")
+  .option("--ct <ciphertext>", "Pre-encrypted message (base64, direct messages only)")
   .option("--encrypt-for <aid>", "Encrypt for third party (forwarding)")
   .option("--from <identity>", "Sender identity (default: config.defaultIdentity)")
   .option("--ttl <ms>", "Time-to-live in milliseconds (default: 24h)", parseInt)
@@ -333,6 +370,38 @@ program
   .option("--ek <key>", "Ephemeral key")
   .option("--alg <algorithm>", "Encryption algorithm")
   .option("--format <type>", "Output format (json|text|compact)")
+  .addHelpText("after", `
+Recipient Format:
+  Direct message : AID starting with 'D' or 'E' (CESR-encoded identifier)
+  Group message  : Group ID (any other format)
+
+Examples:
+  # Send direct message
+  $ merits send Dabcd1234... --message "Hello Alice"
+
+  # Send group message
+  $ merits send group-123 --message "Hello team"
+
+  # Read from stdin
+  $ echo "Secret message" | merits send Dabcd1234...
+
+  # Pre-encrypted content (direct messages only)
+  $ merits send Dabcd1234... --ct <base64-ciphertext>
+
+Encryption:
+  Direct Messages:
+    - X25519-XChaCha20-Poly1305 encryption
+    - One-to-one encrypted communication
+
+  Group Messages:
+    - Ephemeral AES-256-GCM group encryption
+    - Message encrypted once, distributed to all members
+    - Each member receives separately encrypted key
+    - Zero-knowledge: Backend cannot decrypt
+
+Output:
+  Returns JSON with messageId, recipient/groupId, and sentAt timestamp
+  `)
   .action(sendMessage);
 
 // Old registration helper commands (replaced by gen-key, create-user, sign, confirm-challenge)

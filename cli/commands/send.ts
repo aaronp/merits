@@ -1,10 +1,34 @@
 /**
- * Send Command - Send encrypted message to recipient
+ * Send Command - Send encrypted message to recipient (direct or group)
  *
- * Usage:
- *   merits send <recipient> --message "Hello"
- *   echo "Hello" | merits send <recipient>
- *   merits send <recipient> --ct <base64-ciphertext>
+ * Supports both direct messages and group messages with end-to-end encryption.
+ *
+ * Direct Messages:
+ * - Recipient format: AID starting with 'D' or 'E' (CESR-encoded)
+ * - Uses X25519-XChaCha20-Poly1305 encryption
+ * - One-to-one encrypted communication
+ *
+ * Group Messages:
+ * - Recipient format: Group ID (not starting with 'D' or 'E')
+ * - Uses ephemeral AES-256-GCM group encryption
+ * - Encrypts once, distributes to all members
+ * - Zero-knowledge: Backend cannot decrypt
+ *
+ * Usage Examples:
+ *   # Direct message
+ *   merits send Dabcd1234... --message "Hello"
+ *
+ *   # Group message
+ *   merits send group-123 --message "Hello team"
+ *
+ *   # Read from stdin
+ *   echo "Hello" | merits send Dabcd1234...
+ *
+ *   # Pre-encrypted content (direct messages only)
+ *   merits send Dabcd1234... --ct <base64-ciphertext>
+ *
+ * @see sendDirectMessage() for direct message implementation
+ * @see sendGroupMessage() for group message implementation
  */
 
 import { getAuthProof } from "../lib/getAuthProof";
@@ -155,8 +179,41 @@ async function sendDirectMessage(
 }
 
 /**
- * Send group message with end-to-end encryption
- * Uses X25519 ECDH + AES-256-GCM for group encryption
+ * Send encrypted group message
+ *
+ * Implements zero-knowledge group encryption where the backend cannot decrypt messages.
+ * Uses ephemeral AES-256-GCM keys with per-member key distribution via X25519 ECDH.
+ *
+ * Encryption Flow:
+ * 1. Fetch all group members and their public keys from backend
+ * 2. Generate ephemeral AES-256-GCM key for this message
+ * 3. Encrypt message content with ephemeral key
+ * 4. For each member:
+ *    - Perform X25519 ECDH between sender's private key and member's public key
+ *    - Derive shared secret from ECDH
+ *    - Encrypt ephemeral key with shared secret
+ * 5. Send GroupMessage structure to backend with:
+ *    - Encrypted content
+ *    - Per-member encrypted keys
+ *    - Nonces and authentication data
+ *
+ * Security Properties:
+ * - Forward secrecy: New ephemeral key per message
+ * - Zero-knowledge: Backend stores encrypted data only
+ * - Per-recipient isolation: Each member has separate encrypted key
+ * - Authenticated encryption: AES-GCM provides authenticity
+ *
+ * @param ctx - CLI context with client and vault access
+ * @param identity - Sender's identity
+ * @param groupId - ID of the group to send to
+ * @param fromIdentity - Sender's identity name (for key lookup)
+ * @param opts - Send options including message content
+ *
+ * @throws Error if group not found, no members, or sender not a member
+ *
+ * @see encryptForGroup() in crypto-group.ts for encryption implementation
+ * @see groups.sendGroupMessage() backend API
+ * @see schema.ts groupMessages table
  */
 async function sendGroupMessage(
   ctx: CLIContext,

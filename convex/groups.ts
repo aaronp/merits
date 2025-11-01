@@ -84,10 +84,48 @@ export const createGroupChat = mutation({
 });
 
 /**
- * Send a message to the group chat
- * Messages are stored in linear order with sequence numbers
+ * Send an encrypted message to a group chat
  *
- * Updated to accept GroupMessage structure from CLI with end-to-end encryption.
+ * Accepts fully encrypted GroupMessage structure from CLI with zero-knowledge encryption.
+ * Backend stores encrypted message without ability to decrypt.
+ *
+ * Encryption Model:
+ * - Message encrypted with ephemeral AES-256-GCM key (client-side)
+ * - Ephemeral key encrypted separately for each member using X25519 ECDH
+ * - Backend stores encrypted content and per-member encrypted keys
+ * - Only group members can decrypt using their private keys
+ *
+ * Security Checks:
+ * 1. Challenge-response authentication (binds to content hash)
+ * 2. Verify senderAid matches authenticated AID
+ * 3. RBAC permission check (CAN_MESSAGE_GROUPS)
+ * 4. Membership verification (sender must be member or have explicit permission)
+ *
+ * Message Ordering:
+ * - Assigns monotonically increasing sequence number (seqNo)
+ * - Used for message ordering and sync tracking
+ * - Each member tracks their latestSeqNo for unread detection
+ *
+ * @param groupChatId - ID of the group to send message to
+ * @param groupMessage - Encrypted GroupMessage structure containing:
+ *   - encryptedContent: Message ciphertext (base64url)
+ *   - nonce: AES-GCM nonce (base64url)
+ *   - encryptedKeys: Map of {aid -> {encryptedKey, nonce}} for each member
+ *   - senderAid: Sender's AID (must match authenticated user)
+ *   - groupId: Group identifier
+ *   - aad: Optional Additional Authenticated Data
+ * @param auth - Challenge-response authentication proof
+ *
+ * @returns Object containing:
+ *   - messageId: Database ID of inserted message
+ *   - seqNo: Sequence number assigned to message
+ *   - sentAt: Timestamp when message was received
+ *
+ * @throws Error if sender not authenticated, not a member, or lacks permission
+ *
+ * @see schema.ts groupMessages table for storage structure
+ * @see cli/lib/crypto-group.ts encryptForGroup() for encryption implementation
+ * @see messages.ts getUnread() for retrieving messages
  */
 export const sendGroupMessage = mutation({
   args: {
@@ -374,10 +412,45 @@ export const getGroupChat = query({
 });
 
 /**
- * Get group members with their public keys (for encryption)
+ * Get group members with their public keys
  *
- * This is required by the CLI to encrypt group messages.
- * Returns member AIDs with their Ed25519 public keys.
+ * Returns all members of a group with their Ed25519 public keys.
+ * Required by CLI to encrypt group messages using zero-knowledge encryption.
+ *
+ * Use Case:
+ * 1. CLI calls this before sending group message
+ * 2. CLI receives all member AIDs and public keys
+ * 3. CLI encrypts message with ephemeral key
+ * 4. CLI encrypts ephemeral key separately for each member (using their public keys)
+ * 5. CLI sends encrypted GroupMessage via sendGroupMessage
+ *
+ * Public Keys:
+ * - Fetched from users table (registered during sign-up)
+ * - Ed25519 public keys in base64url format
+ * - Converted to X25519 for ECDH on client side
+ *
+ * Security:
+ * - Caller must be a member of the group (verified before returning data)
+ * - Public keys are public data (no sensitive information)
+ * - Zero-knowledge: Backend has no access to private keys or decrypted content
+ *
+ * @param groupChatId - ID of the group to get members for
+ * @param callerAid - AID of the user requesting member list (must be member)
+ *
+ * @returns Object containing:
+ *   - groupId: The group chat ID
+ *   - members: Array of members with:
+ *     - aid: Member's AID
+ *     - publicKey: Ed25519 public key (base64url)
+ *     - joinedAt: Timestamp when member joined
+ *   - createdBy: AID that created the group
+ *   - createdAt: Timestamp when group was created
+ *
+ * @throws Error if caller is not a member of the group
+ *
+ * @see schema.ts groupMembers and users tables
+ * @see cli/lib/crypto-group.ts encryptForGroup() for encryption usage
+ * @see sendGroupMessage() for sending encrypted messages
  */
 export const getMembers = query({
   args: {

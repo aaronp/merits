@@ -1,29 +1,72 @@
 /**
- * unread Command
+ * Unread Command - Retrieve and decrypt unread messages
  *
- * Retrieve unread messages (replaces `receive` command).
+ * Fetches all unread messages from the unified inbox (direct + group messages)
+ * and decrypts group messages client-side.
  *
- * Usage:
- *   merits unread --token ${TOKEN} > all-unread.json
- *   merits unread --token ${TOKEN} --from bob > bob-unread.json
- *   merits unread --token ${TOKEN} --watch  # Real-time streaming
- *   merits unread --token ${TOKEN} --since <timestamp>  # Replay after downtime
+ * Features:
+ * - Unified inbox: Both direct and group messages
+ * - Client-side decryption: Group messages decrypted using user's private key
+ * - Filtering: By sender (--from) or timestamp (--since)
+ * - Multiple formats: json, pretty, raw
+ * - Watch mode: Real-time streaming (coming soon)
  *
- * Output (RFC8785 canonicalized JSON):
+ * Message Types:
+ * 1. Direct Messages:
+ *    - typ: "encrypted"
+ *    - ct: Ciphertext string (not decrypted in this command)
+ *    - isGroupMessage: false
+ *
+ * 2. Group Messages:
+ *    - typ: "group-encrypted"
+ *    - ct: GroupMessage object with encryptedContent and encryptedKeys
+ *    - Automatically decrypted using recipient's private key
+ *    - message: Decrypted plaintext added to output
+ *    - isGroupMessage: true
+ *
+ * Group Message Decryption:
+ * 1. Extract encrypted key for this recipient from GroupMessage
+ * 2. Perform ECDH with sender's public key to derive shared secret
+ * 3. Decrypt ephemeral group key using shared secret
+ * 4. Decrypt message content using ephemeral group key
+ * 5. Return plaintext in "message" field
+ *
+ * Usage Examples:
+ *   # Get all unread messages
+ *   merits unread --token $TOKEN
+ *
+ *   # Filter by sender
+ *   merits unread --token $TOKEN --from alice
+ *
+ *   # Replay messages after downtime
+ *   merits unread --token $TOKEN --since 1730476800000
+ *
+ *   # Output formats
+ *   merits unread --token $TOKEN --format json   # RFC8785 canonical
+ *   merits unread --token $TOKEN --format pretty # Pretty-printed
+ *
+ *   # Watch mode (real-time streaming - coming soon)
+ *   merits unread --token $TOKEN --watch
+ *
+ * Output Format (RFC8785 canonicalized JSON):
  *   [
  *     {
  *       "id": "<message-id>",
- *       "from": "bob",
- *       "to": "alice",
- *       "ct": "<ciphertext>" | GroupMessage,
- *       "typ": "encrypted" | "group-encrypted",
- *       "createdAt": <timestamp>,
- *       "isGroupMessage": false | true,
- *       "groupId": "<group-id>" (if group message),
- *       "message": "<decrypted-plaintext>" (if decrypted)
+ *       "from": "alice-aid",
+ *       "to": "bob-aid",
+ *       "typ": "group-encrypted",
+ *       "createdAt": 1730476800000,
+ *       "isGroupMessage": true,
+ *       "groupId": "group-123",
+ *       "seqNo": 42,
+ *       "message": "Hello team!"  // Decrypted plaintext
  *     },
  *     ...
  *   ]
+ *
+ * @see fetchMessages() for message retrieval and decryption logic
+ * @see decryptGroupMessage() in crypto-group.ts for group decryption
+ * @see messages.getUnread() backend API
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
@@ -58,7 +101,39 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
 });
 
 /**
- * Fetch unread messages (one-time)
+ * Fetch and decrypt unread messages (one-time fetch)
+ *
+ * Retrieves all unread messages from the backend and decrypts group messages client-side.
+ * Direct messages are returned as-is (ciphertext) since direct message decryption
+ * is handled separately.
+ *
+ * Message Processing:
+ * 1. Call backend messages.getUnread() for unified inbox
+ * 2. Apply filters (--from sender, --since timestamp)
+ * 3. For each group message:
+ *    - Extract GroupMessage structure from ct field
+ *    - Get recipient's private key from vault
+ *    - Call decryptGroupMessage() to decrypt
+ *    - Add decrypted plaintext to "message" field
+ * 4. Return all messages in requested format
+ *
+ * Error Handling:
+ * - If group message decryption fails, returns message with error field
+ * - Direct messages are never decrypted (returned as-is)
+ * - Missing sender public keys cause decryption error
+ *
+ * Output Formats:
+ * - json: RFC8785 canonicalized JSON (deterministic, sorted keys, no whitespace)
+ * - pretty: Pretty-printed JSON with 2-space indentation and summary
+ * - raw: Minified JSON (no formatting)
+ *
+ * @param opts - Command options including filters and format
+ * @param session - Session token with user AID and identity
+ * @param ctx - CLI context with client and vault access
+ * @param format - Output format (json, pretty, or raw)
+ *
+ * @see messages.getUnread() backend API for message retrieval
+ * @see decryptGroupMessage() in crypto-group.ts for decryption
  */
 async function fetchMessages(
   opts: UnreadOptions,
