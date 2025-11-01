@@ -11,6 +11,7 @@ import { getAuthProof } from "../lib/getAuthProof";
 import { sha256Hex } from "../../core/crypto";
 import type { CLIContext } from "../lib/context";
 import { normalizeFormat, type GlobalOptions } from "../lib/options";
+import { encryptForGroup, type GroupMessage } from "../lib/crypto-group";
 
 export interface SendOptions extends GlobalOptions {
   message?: string;
@@ -154,8 +155,8 @@ async function sendDirectMessage(
 }
 
 /**
- * Send group message (Phase 4)
- * Backend handles fanout to all members
+ * Send group message with end-to-end encryption
+ * Uses X25519 ECDH + AES-256-GCM for group encryption
  */
 async function sendGroupMessage(
   ctx: CLIContext,
@@ -164,61 +165,86 @@ async function sendGroupMessage(
   fromIdentity: string,
   opts: SendOptions
 ): Promise<void> {
-  // Get message content (same as direct send)
+  // Get message content
   let plaintext: string | undefined;
-  let ct: string | undefined;
 
   if (opts.ct) {
-    ct = opts.ct;
+    throw new Error("Group messages do not support pre-encrypted content (--ct). Use --message instead.");
   } else if (opts.message) {
     plaintext = opts.message;
   } else {
     plaintext = await readStdin();
   }
 
-  // For group messages, we encrypt with placeholder key
-  // Backend will re-encrypt for each member
-  if (plaintext) {
-    // Use sender's own public key as placeholder
-    const recipientPublicKey = await ctx.vault.getPublicKey(fromIdentity);
-    ct = await encryptMessage(plaintext, recipientPublicKey);
-  }
-
-  if (!ct) {
+  if (!plaintext) {
     throw new Error("No message content provided");
   }
 
-  const ctHash = sha256Hex(new TextEncoder().encode(ct));
-  const ttlMs = opts.ttl ?? 24 * 60 * 60 * 1000;
+  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
-  // Auth proof with purpose "sendGroup" (Phase 4)
+  // Silent in JSON mode
+  if (format !== "json" && format !== "pretty" && format !== "raw") {
+    console.log(`Encrypting message for group ${groupId}...`);
+  }
+
+  // Step 1: Get group members with their public keys
+  const senderAid = identity.aid || identity.prefix;
+  const membersResponse = await ctx.client.query(ctx.api.groups.getMembers, {
+    groupChatId: groupId,
+    callerAid: senderAid,
+  });
+
+  if (!membersResponse || !membersResponse.members || membersResponse.members.length === 0) {
+    throw new Error(`No members found for group ${groupId}`);
+  }
+
+  // Convert members to the format expected by encryptForGroup
+  const members: Record<string, string> = {};
+  for (const member of membersResponse.members) {
+    if (!member.publicKey) {
+      throw new Error(`Member ${member.aid} has no public key`);
+    }
+    members[member.aid] = member.publicKey; // Ed25519 public keys in base64url
+  }
+
+  if (format !== "json" && format !== "pretty" && format !== "raw") {
+    console.log(`Found ${Object.keys(members).length} members, encrypting...`);
+  }
+
+  // Step 2: Get sender's private key
+  const senderPrivateKey = await ctx.vault.getPrivateKey(fromIdentity);
+
+  // Step 3: Encrypt message for all group members using group encryption
+  const groupMessage: GroupMessage = await encryptForGroup(
+    plaintext,
+    members,
+    senderPrivateKey,
+    groupId,
+    senderAid
+  );
+
+  // Step 4: Create auth proof for sending
+  // Bind to a hash of the encrypted content for integrity
+  const contentHash = groupMessage.encryptedContent.substring(0, 32);
   const auth = await getAuthProof({
     client: ctx.client,
     vault: ctx.vault,
     identityName: fromIdentity,
-    purpose: "sendGroup",
+    purpose: "sendGroupMessage",
     args: {
-      groupId,
-      ctHash,
-      ttl: ttlMs,
+      groupChatId: groupId,
+      contentHash,
     },
   });
 
-  const format = normalizeFormat(opts.format || ctx.config.outputFormat);
-  
-  // Silent in JSON mode
-  if (format === "json" || format === "pretty" || format === "raw") {
-    // Silent for JSON formats
-  } else {
-    console.log(`Sending message to group ${groupId}...`);
+  if (format !== "json" && format !== "pretty" && format !== "raw") {
+    console.log(`Sending encrypted message to group...`);
   }
 
-  // Send via GroupApi interface
-  const result = await ctx.client.group.sendGroupMessage({
-    groupId,
-    ct,
-    typ: opts.typ,
-    ttlMs,
+  // Step 5: Send encrypted GroupMessage to backend
+  const result = await ctx.client.mutation(ctx.api.groups.sendGroupMessage, {
+    groupChatId: groupId,
+    groupMessage,
     auth,
   });
 
@@ -226,7 +252,8 @@ async function sendGroupMessage(
   const output = {
     groupId,
     messageId: result.messageId,
-    sentAt: Date.now(),
+    seqNo: result.seqNo,
+    sentAt: result.sentAt || Date.now(),
   };
 
   if (format === "json") {
