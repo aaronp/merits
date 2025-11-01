@@ -19,10 +19,12 @@ import type * as adapters_ConvexGroupChatApi from "../adapters/ConvexGroupChatAp
 import type * as adapters_ConvexIdentityAuth from "../adapters/ConvexIdentityAuth.js";
 import type * as adapters_ConvexTransport from "../adapters/ConvexTransport.js";
 import type * as auth from "../auth.js";
-import type * as authorization from "../authorization.js";
+import type * as authorization_bootstrap from "../authorization_bootstrap.js";
 import type * as debug from "../debug.js";
 import type * as groups from "../groups.js";
 import type * as messages from "../messages.js";
+import type * as permissions from "../permissions.js";
+import type * as permissions_admin from "../permissions_admin.js";
 import type * as sessions from "../sessions.js";
 
 /**
@@ -40,10 +42,12 @@ declare const fullApi: ApiFromModules<{
   "adapters/ConvexIdentityAuth": typeof adapters_ConvexIdentityAuth;
   "adapters/ConvexTransport": typeof adapters_ConvexTransport;
   auth: typeof auth;
-  authorization: typeof authorization;
+  authorization_bootstrap: typeof authorization_bootstrap;
   debug: typeof debug;
   groups: typeof groups;
   messages: typeof messages;
+  permissions: typeof permissions;
+  permissions_admin: typeof permissions_admin;
   sessions: typeof sessions;
 }>;
 export declare const api: FilterApi<

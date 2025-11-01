@@ -536,3 +536,38 @@ export const getAidForChallenge = query({
     return { aid: challenge.aid };
   },
 });
+
+/**
+ * Get public key for an AID
+ *
+ * This is required by the CLI to encrypt messages for recipients.
+ * Public keys are public information - no authentication required.
+ */
+export const getPublicKey = query({
+  args: {
+    aid: v.string(),
+  },
+  handler: async (ctx, { aid }) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .first();
+
+    if (!user) {
+      throw new Error(`User not found for AID: ${aid}`);
+    }
+
+    // Also fetch key state for additional context
+    const keyState = await ctx.db
+      .query("keyStates")
+      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .first();
+
+    return {
+      aid: user.aid,
+      publicKey: user.publicKey, // Ed25519 public key (base64url)
+      ksn: keyState?.ksn ?? 0, // Key sequence number
+      updatedAt: keyState?.updatedAt ?? user.createdAt,
+    };
+  },
+});

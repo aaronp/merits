@@ -307,3 +307,104 @@ export const list = query({
     }));
   },
 });
+
+/**
+ * Get unread messages including both direct and group messages
+ *
+ * This is the unified inbox that the CLI uses to fetch all unread messages.
+ * Returns both direct messages and group messages in a unified format.
+ */
+export const getUnread = query({
+  args: {
+    aid: v.string(), // The user's AID
+    includeGroupMessages: v.optional(v.boolean()), // Whether to include group messages
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const includeGroups = args.includeGroupMessages ?? true;
+
+    // Get direct messages
+    const directMessages = await ctx.db
+      .query("messages")
+      .withIndex("by_recipient", (q) => q.eq("recpAid", args.aid))
+      .filter((q) =>
+        q.and(
+          q.gt(q.field("expiresAt"), now),
+          q.eq(q.field("retrieved"), false)
+        )
+      )
+      .collect();
+
+    const result: any[] = directMessages.map((msg) => ({
+      id: msg._id,
+      from: msg.senderAid,
+      to: msg.recpAid,
+      ct: msg.ct,
+      typ: msg.typ ?? "encrypted",
+      createdAt: msg.createdAt,
+      isGroupMessage: false,
+    }));
+
+    // Get group messages if requested
+    if (includeGroups) {
+      // Get all groups the user is a member of
+      const memberships = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+        .collect();
+
+      // For each group, get unread messages
+      for (const membership of memberships) {
+        const groupMessages = await ctx.db
+          .query("groupMessages")
+          .withIndex("by_group_seq", (q) =>
+            q.eq("groupChatId", membership.groupChatId)
+          )
+          .filter((q) =>
+            q.and(
+              q.gt(q.field("seqNo"), membership.latestSeqNo),
+              q.or(
+                q.eq(q.field("expiresAt"), undefined),
+                q.gt(q.field("expiresAt"), now)
+              )
+            )
+          )
+          .collect();
+
+        // Get sender public keys for decryption
+        for (const msg of groupMessages) {
+          const senderUser = await ctx.db
+            .query("users")
+            .withIndex("by_aid", (q) => q.eq("aid", msg.senderAid))
+            .first();
+
+          result.push({
+            id: msg._id,
+            from: msg.senderAid,
+            to: args.aid,
+            // Return the full GroupMessage structure
+            ct: {
+              encryptedContent: msg.encryptedContent,
+              nonce: msg.nonce,
+              encryptedKeys: msg.encryptedKeys,
+              senderAid: msg.senderAid,
+              groupId: membership.groupChatId,
+              aad: msg.aad,
+            },
+            typ: "group-encrypted",
+            createdAt: msg.received,
+            isGroupMessage: true,
+            groupId: membership.groupChatId,
+            senderPublicKey: senderUser?.publicKey,
+            seqNo: msg.seqNo,
+          });
+        }
+      }
+    }
+
+    // Sort by creation time (newest first)
+    result.sort((a, b) => b.createdAt - a.createdAt);
+
+    return { messages: result };
+  },
+});

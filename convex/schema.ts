@@ -116,9 +116,15 @@ export default defineSchema({
   groupMessages: defineTable({
     groupChatId: v.id("groupChats"), // Foreign key to group chat
 
-    // Message content
-    encryptedMessage: v.string(), // Encrypted message content
-    messageType: v.string(), // Type of message (text, file, system, etc.)
+    // GroupMessage structure (from CLI encryption)
+    encryptedContent: v.string(), // base64url - message encrypted with group key
+    nonce: v.string(), // base64url - AES-GCM nonce (96 bits)
+    encryptedKeys: v.any(), // Record<aid, {encryptedKey, nonce}> - per-recipient keys
+    aad: v.optional(v.string()), // base64url - Additional Authenticated Data
+
+    // Legacy fields for backwards compatibility
+    encryptedMessage: v.optional(v.string()), // Deprecated - use encryptedContent
+    messageType: v.optional(v.string()), // Type of message (text, file, system, etc.)
 
     // Sender information
     senderAid: v.string(), // AID of message sender

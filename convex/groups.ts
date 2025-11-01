@@ -86,12 +86,21 @@ export const createGroupChat = mutation({
 /**
  * Send a message to the group chat
  * Messages are stored in linear order with sequence numbers
+ *
+ * Updated to accept GroupMessage structure from CLI with end-to-end encryption.
  */
 export const sendGroupMessage = mutation({
   args: {
     groupChatId: v.id("groupChats"),
-    encryptedMessage: v.string(), // Message encrypted with group key
-    messageType: v.string(), // text, file, system, etc.
+    // GroupMessage structure from CLI (already encrypted)
+    groupMessage: v.object({
+      encryptedContent: v.string(), // base64url - message encrypted with group key
+      nonce: v.string(), // base64url - AES-GCM nonce
+      encryptedKeys: v.any(), // Record<aid, {encryptedKey, nonce}>
+      senderAid: v.string(),
+      groupId: v.string(),
+      aad: v.optional(v.string()), // base64url - Additional Authenticated Data
+    }),
     auth: v.object({
       challengeId: v.id("challenges"),
       sigs: v.array(v.string()),
@@ -108,11 +117,17 @@ export const sendGroupMessage = mutation({
       "sendGroupMessage",
       {
         groupChatId: args.groupChatId,
-        messageType: args.messageType,
+        // Bind to the encrypted content hash for integrity
+        contentHash: args.groupMessage.encryptedContent.substring(0, 32),
       }
     );
 
     const senderAid = verified.aid;
+
+    // SECURITY: Verify sender AID matches the one in the groupMessage
+    if (args.groupMessage.senderAid !== senderAid) {
+      throw new Error("Sender AID mismatch");
+    }
 
     // RBAC: require permission to message this group
     const claims = await resolveUserClaims(ctx, senderAid);
@@ -167,11 +182,16 @@ export const sendGroupMessage = mutation({
       ? now + groupChat.maxTtl
       : undefined;
 
-    // Insert the message
+    // Insert the message with new GroupMessage structure
     const messageId = await ctx.db.insert("groupMessages", {
       groupChatId: args.groupChatId,
-      encryptedMessage: args.encryptedMessage,
-      messageType: args.messageType,
+      // New GroupMessage fields
+      encryptedContent: args.groupMessage.encryptedContent,
+      nonce: args.groupMessage.nonce,
+      encryptedKeys: args.groupMessage.encryptedKeys,
+      aad: args.groupMessage.aad,
+      // Legacy fields (optional for backwards compatibility)
+      messageType: "group-encrypted",
       senderAid,
       seqNo,
       received: now,
@@ -181,6 +201,7 @@ export const sendGroupMessage = mutation({
     return {
       messageId,
       seqNo,
+      sentAt: now,
     };
   },
 });
@@ -235,6 +256,16 @@ export const getGroupMessages = query({
 
     return messages.map(msg => ({
       id: msg._id,
+      // Return GroupMessage structure if available
+      groupMessage: msg.encryptedContent ? {
+        encryptedContent: msg.encryptedContent,
+        nonce: msg.nonce,
+        encryptedKeys: msg.encryptedKeys,
+        senderAid: msg.senderAid,
+        groupId: args.groupChatId,
+        aad: msg.aad,
+      } : undefined,
+      // Legacy fields for backwards compatibility
       encryptedMessage: msg.encryptedMessage,
       messageType: msg.messageType,
       senderAid: msg.senderAid,
@@ -338,6 +369,67 @@ export const getGroupChat = query({
         latestSeqNo: m.latestSeqNo,
       })),
       callerSync: membership.latestSeqNo,
+    };
+  },
+});
+
+/**
+ * Get group members with their public keys (for encryption)
+ *
+ * This is required by the CLI to encrypt group messages.
+ * Returns member AIDs with their Ed25519 public keys.
+ */
+export const getMembers = query({
+  args: {
+    groupChatId: v.id("groupChats"),
+    callerAid: v.string(),
+  },
+  handler: async (ctx, args) => {
+    // Verify caller is a member of the group
+    const membership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupChatId).eq("aid", args.callerAid)
+      )
+      .first();
+
+    if (!membership) {
+      throw new Error("Caller is not a member of this group");
+    }
+
+    // Get the group chat
+    const groupChat = await ctx.db.get(args.groupChatId);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
+    }
+
+    // Get all members
+    const members = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group", (q) => q.eq("groupChatId", args.groupChatId))
+      .collect();
+
+    // Fetch public keys for each member from the users table
+    const membersWithKeys = await Promise.all(
+      members.map(async (member) => {
+        const user = await ctx.db
+          .query("users")
+          .withIndex("by_aid", (q) => q.eq("aid", member.aid))
+          .first();
+
+        return {
+          aid: member.aid,
+          publicKey: user?.publicKey ?? "", // Ed25519 public key (base64url)
+          joinedAt: member.joinedAt,
+        };
+      })
+    );
+
+    return {
+      groupId: args.groupChatId,
+      members: membersWithKeys,
+      createdBy: groupChat.createdBy,
+      createdAt: groupChat.createdAt,
     };
   },
 });
