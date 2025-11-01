@@ -51,7 +51,9 @@
       "Bash(.merits/test-encrypted.json)",
       "Bash(MERITS_VAULT_QUIET=1 bun test:*)",
       "Bash(MERITS_VAULT_QUIET=1 GOLDEN_UPDATE=1 bun test:*)",
-      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test:*)"
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex deploy:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bun test:*)"
     ],
     "deny": [],
     "ask": []

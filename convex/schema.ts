@@ -462,4 +462,65 @@ export default defineSchema({
     .index("by_token", ["token"]) // Fast lookup by token string
     .index("by_aid", ["aid"]) // Lookup all tokens for an AID
     .index("by_expiration", ["expiresAt"]), // Cleanup expired tokens
+
+  /**
+   * AllowList - Explicit list of AIDs allowed to message a user
+   *
+   * When active (non-empty), implements default-deny: only AIDs on this list can message the user.
+   * When inactive (empty), default behavior is allow-all.
+   *
+   * Use Cases:
+   * - Private/exclusive messaging
+   * - Whitelist-only communication
+   * - Protection against unsolicited messages
+   *
+   * Behavior:
+   * - Empty list: All senders allowed (default)
+   * - Non-empty list: Only listed senders allowed
+   * - Deny-list takes priority over allow-list
+   *
+   * @see denyList for blocking specific senders
+   * @see allowList.ts for management APIs
+   */
+  allowList: defineTable({
+    ownerAid: v.string(), // User who owns this allow-list
+    allowedAid: v.string(), // AID that is explicitly allowed to message owner
+    addedAt: v.number(), // Timestamp when added
+    note: v.optional(v.string()), // Optional note (e.g., "work colleague")
+  })
+    .index("by_owner", ["ownerAid"]) // Get all allowed AIDs for a user
+    .index("by_owner_allowed", ["ownerAid", "allowedAid"]), // Fast membership check
+
+  /**
+   * DenyList - Explicit list of AIDs blocked from messaging a user
+   *
+   * Implements blocklist functionality. Senders on this list cannot message the user.
+   * Takes priority over allow-list (if sender is on both, they are blocked).
+   *
+   * Use Cases:
+   * - Block spam/unwanted messages
+   * - Harassment protection
+   * - Temporary or permanent blocks
+   *
+   * Behavior:
+   * - Empty list: No one is blocked
+   * - Non-empty list: Listed senders are blocked
+   * - Takes priority over allow-list (deny wins)
+   *
+   * Priority Rules:
+   * 1. If sender in deny-list → BLOCK
+   * 2. Else if allow-list active → check allow-list
+   * 3. Else → ALLOW (default)
+   *
+   * @see allowList for whitelist functionality
+   * @see denyList.ts for management APIs
+   */
+  denyList: defineTable({
+    ownerAid: v.string(), // User who owns this deny-list
+    deniedAid: v.string(), // AID that is explicitly denied from messaging owner
+    addedAt: v.number(), // Timestamp when added
+    reason: v.optional(v.string()), // Optional reason (e.g., "spam", "harassment")
+  })
+    .index("by_owner", ["ownerAid"]) // Get all denied AIDs for a user
+    .index("by_owner_denied", ["ownerAid", "deniedAid"]), // Fast membership check
 });

@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { verifyAuth, computeCtHash, computeEnvelopeHash } from "./auth";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
+import { canMessage, canMessageBatch } from "./accessControl";
 
 /**
  * Send a message to a recipient (authenticated)
@@ -78,6 +79,12 @@ export const send = mutation({
       throw new Error("Not permitted to message this recipient");
     }
 
+    // ACCESS CONTROL: Check allow/deny lists
+    const access = await canMessage(ctx.db, senderAid, args.recpAid);
+    if (!access.allowed) {
+      throw new Error(`Cannot send message: ${access.reason}`);
+    }
+
     // Compute envelope hash (audit anchor)
     const envelopeHash = await computeEnvelopeHash(
       args.recpAid,
@@ -150,7 +157,15 @@ export const receive = mutation({
       .filter((q) => q.gt(q.field("expiresAt"), now))
       .collect();
 
-    return messages.map((msg) => ({
+    // ACCESS CONTROL: Filter out messages from blocked senders
+    const senderAids = [...new Set(messages.map((m) => m.senderAid))];
+    const accessMap = await canMessageBatch(ctx.db, senderAids, args.recpAid);
+    const filteredMessages = messages.filter((msg) => {
+      const access = accessMap.get(msg.senderAid);
+      return access?.allowed ?? true;
+    });
+
+    return filteredMessages.map((msg) => ({
       id: msg._id,
       senderAid: msg.senderAid,
       ct: msg.ct,
@@ -291,8 +306,16 @@ export const list = query({
       .order("desc") // Newest first
       .collect();
 
+    // ACCESS CONTROL: Filter out messages from blocked senders
+    const senderAids = [...new Set(messages.map((m) => m.senderAid))];
+    const accessMap = await canMessageBatch(ctx.db, senderAids, args.recpAid);
+    const filteredMessages = messages.filter((msg) => {
+      const access = accessMap.get(msg.senderAid);
+      return access?.allowed ?? true;
+    });
+
     // Return in the format expected by UI
-    return messages.map((msg) => ({
+    return filteredMessages.map((msg) => ({
       id: msg._id,
       senderAid: msg.senderAid,
       ct: msg.ct,
@@ -390,7 +413,15 @@ export const getUnread = query({
       )
       .collect();
 
-    const result: any[] = directMessages.map((msg) => ({
+    // ACCESS CONTROL: Filter out direct messages from blocked senders
+    const directSenderAids = [...new Set(directMessages.map((m) => m.senderAid))];
+    const directAccessMap = await canMessageBatch(ctx.db, directSenderAids, args.aid);
+    const filteredDirectMessages = directMessages.filter((msg) => {
+      const access = directAccessMap.get(msg.senderAid);
+      return access?.allowed ?? true;
+    });
+
+    const result: any[] = filteredDirectMessages.map((msg) => ({
       id: msg._id,
       from: msg.senderAid,
       to: msg.recpAid,
@@ -426,8 +457,17 @@ export const getUnread = query({
           )
           .collect();
 
+        // ACCESS CONTROL: Filter out group messages from blocked senders
+        const groupSenderAids = [...new Set(groupMessages.map((m) => m.senderAid))];
+        const groupAccessMap = await canMessageBatch(ctx.db, groupSenderAids, args.aid);
+
         // Get sender public keys for decryption
         for (const msg of groupMessages) {
+          // Check access control
+          const access = groupAccessMap.get(msg.senderAid);
+          if (!access?.allowed) {
+            continue; // Skip messages from blocked senders
+          }
           const senderUser = await ctx.db
             .query("users")
             .withIndex("by_aid", (q) => q.eq("aid", msg.senderAid))
