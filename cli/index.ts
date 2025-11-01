@@ -171,17 +171,12 @@ import {
   leaveGroup,
 } from "./commands/group";
 import {
-  allowListAdd,
-  allowListRemove,
-  allowListList,
-  allowListClear,
-} from "./commands/allow-list";
-import {
-  denyListAdd,
-  denyListRemove,
-  denyListList,
-  denyListClear,
-} from "./commands/deny-list";
+  accessAllow,
+  accessDeny,
+  accessRemove,
+  accessList,
+  accessClear,
+} from "./commands/access";
 
 // Old messaging commands (to be removed in Phase 9)
 import { receiveMessages } from "./commands/receive";
@@ -548,98 +543,135 @@ groupCmd
   .option("--from <identity>", "Identity leaving (default: config.defaultIdentity)")
   .action(leaveGroup);
 
-// Allow-list command group (Phase 6)
-const allowListCmd = program
-  .command("allow-list")
-  .description("Manage allow-list (whitelist) for messages");
-
-allowListCmd
-  .command("add <aid>")
-  .description("Add AID to allow-list (enable default-deny mode)")
-  .option("--note <text>", "Optional note describing this entry")
+// Access control command group (Phase 6)
+const accessCmd = program
+  .command("access")
+  .description("Manage message access control (allow/deny lists)")
   .addHelpText("after", `
-When active (non-empty), only AIDs on the allow-list can send you messages.
-Deny-list takes priority over allow-list.
+Access Control Overview:
+  Control who can send you messages using allow-lists and deny-lists.
 
-Example:
-  $ merits allow-list add alice-aid --note "work colleague" --token $TOKEN
+Priority Rules:
+  1. Deny-list always wins (blocks even if on allow-list)
+  2. Allow-list enables default-deny (only allowed AIDs can send)
+  3. Empty lists = allow all (default behavior)
+
+Examples:
+  # Block a spammer
+  $ merits access deny spammer-aid --note "spam" --token $TOKEN
+
+  # Enable private messaging (default-deny mode)
+  $ merits access allow alice-aid --note "work colleague" --token $TOKEN
+  $ merits access allow bob-aid --note "friend" --token $TOKEN
+
+  # View your lists
+  $ merits access list --allow --token $TOKEN
+  $ merits access list --deny --token $TOKEN
+
+  # Remove from lists
+  $ merits access remove alice-aid --allow --token $TOKEN
+  $ merits access remove spammer-aid --deny --token $TOKEN
+
+  # Clear all entries
+  $ merits access clear --allow --token $TOKEN
+  $ merits access clear --deny --token $TOKEN
+
+For detailed API documentation, see:
+  - docs/ALLOW-LIST-DESIGN.md
+  - Backend APIs: convex/allowList.ts, convex/denyList.ts
+  `);
+
+accessCmd
+  .command("allow <aid>")
+  .description("Add AID to allow-list (whitelist)")
+  .option("--note <text>", "Optional note (e.g., 'work colleague', 'friend')")
+  .addHelpText("after", `
+Allow-List Behavior:
+  When allow-list is active (non-empty), ONLY AIDs on the list can message you.
+  This enables default-deny mode for privacy and spam protection.
+
+  - Empty allow-list: All senders allowed (default)
+  - Non-empty allow-list: Only listed senders allowed
+  - Deny-list always takes priority
+
+Examples:
+  $ merits access allow alice-aid --note "work colleague" --token $TOKEN
+  $ merits access allow bob-aid --token $TOKEN
+
+After adding the first entry, allow-list becomes ACTIVE (default-deny mode).
   `)
-  .action(allowListAdd);
+  .action(accessAllow);
 
-allowListCmd
+accessCmd
+  .command("deny <aid>")
+  .description("Add AID to deny-list (blocklist)")
+  .option("--note <text>", "Optional note (e.g., 'spam', 'harassment')")
+  .addHelpText("after", `
+Deny-List Behavior:
+  Blocked AIDs cannot send you messages, even if on allow-list.
+  Deny-list takes priority over allow-list.
+
+  - Takes effect immediately
+  - Blocks all message types (direct and group)
+  - Can be temporary (remove later) or permanent
+
+Examples:
+  $ merits access deny spammer-aid --note "spam" --token $TOKEN
+  $ merits access deny harasser-aid --note "harassment" --token $TOKEN
+  `)
+  .action(accessDeny);
+
+accessCmd
   .command("remove <aid>")
-  .description("Remove AID from allow-list")
-  .action(allowListRemove);
+  .description("Remove AID from allow-list or deny-list")
+  .option("--allow", "Remove from allow-list")
+  .option("--deny", "Remove from deny-list")
+  .addHelpText("after", `
+Must specify either --allow or --deny to indicate which list to remove from.
 
-allowListCmd
+Examples:
+  $ merits access remove alice-aid --allow --token $TOKEN
+  $ merits access remove spammer-aid --deny --token $TOKEN
+  `)
+  .action(accessRemove);
+
+accessCmd
   .command("list")
-  .description("List all AIDs on allow-list")
+  .description("List AIDs on allow-list or deny-list")
+  .option("--allow", "Show allow-list")
+  .option("--deny", "Show deny-list")
   .addHelpText("after", `
-Shows whether allow-list is active and all allowed AIDs.
+Must specify either --allow or --deny to indicate which list to show.
 
-Example:
-  $ merits allow-list list --token $TOKEN --format pretty
+Output includes:
+  - All AIDs on the list
+  - When each was added
+  - Optional notes/reasons
+  - List status (active/inactive for allow-list)
+
+Examples:
+  $ merits access list --allow --token $TOKEN --format pretty
+  $ merits access list --deny --token $TOKEN
   `)
-  .action(allowListList);
+  .action(accessList);
 
-allowListCmd
+accessCmd
   .command("clear")
-  .description("Clear entire allow-list (disable default-deny mode)")
+  .description("Clear all entries from allow-list or deny-list")
+  .option("--allow", "Clear allow-list")
+  .option("--deny", "Clear deny-list")
   .addHelpText("after", `
-Removes all entries from allow-list, returning to default allow-all behavior.
+Must specify either --allow or --deny to indicate which list to clear.
 
-Example:
-  $ merits allow-list clear --token $TOKEN
+Effects:
+  - Clearing allow-list: Returns to allow-all mode
+  - Clearing deny-list: Unblocks all previously blocked AIDs
+
+Examples:
+  $ merits access clear --allow --token $TOKEN
+  $ merits access clear --deny --token $TOKEN
   `)
-  .action(allowListClear);
-
-// Deny-list command group (Phase 6)
-const denyListCmd = program
-  .command("deny-list")
-  .description("Manage deny-list (blocklist) for messages");
-
-denyListCmd
-  .command("add <aid>")
-  .description("Add AID to deny-list (block someone)")
-  .option("--reason <text>", "Optional reason for blocking")
-  .addHelpText("after", `
-Blocked AIDs cannot send you messages. Deny-list takes priority over allow-list.
-
-Example:
-  $ merits deny-list add spammer-aid --reason "spam" --token $TOKEN
-  `)
-  .action(denyListAdd);
-
-denyListCmd
-  .command("remove <aid>")
-  .description("Remove AID from deny-list (unblock someone)")
-  .addHelpText("after", `
-Example:
-  $ merits deny-list remove alice-aid --token $TOKEN
-  `)
-  .action(denyListRemove);
-
-denyListCmd
-  .command("list")
-  .description("List all AIDs on deny-list")
-  .addHelpText("after", `
-Shows all blocked AIDs with optional reasons.
-
-Example:
-  $ merits deny-list list --token $TOKEN --format pretty
-  `)
-  .action(denyListList);
-
-denyListCmd
-  .command("clear")
-  .description("Clear entire deny-list (unblock everyone)")
-  .addHelpText("after", `
-Removes all entries from deny-list, unblocking all previously blocked AIDs.
-
-Example:
-  $ merits deny-list clear --token $TOKEN
-  `)
-  .action(denyListClear);
+  .action(accessClear);
 
 // Watch command (Phase 4: Real-time streaming with session tokens)
 program

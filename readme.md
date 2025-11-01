@@ -33,6 +33,12 @@ merits group create team-alpha --from alice
 # Send to group
 merits send <group-id> --message "Hello team!" --from alice
 
+# Access control (NEW)
+merits access allow <aid> --note "friend" --token $TOKEN     # Whitelist
+merits access deny <aid> --note "spam" --token $TOKEN        # Blocklist
+merits access list --allow --token $TOKEN                     # View lists
+merits access --help                                          # Full documentation
+
 # Watch real-time
 merits watch --from alice --plaintext
 ```
@@ -84,11 +90,16 @@ const cancel = await client.transport.subscribe({
 
 - ✅ **Challenge/Response Auth** - No passwords, prove AID control via Ed25519 signatures
 - ✅ **Direct Messaging** - 1:1 encrypted messages with ack/replay protection
-- ✅ **Zero-Knowledge Group Messaging** - End-to-end encrypted groups with ephemeral keys (NEW ✨)
+- ✅ **Zero-Knowledge Group Messaging** - End-to-end encrypted groups with ephemeral keys
   - Backend cannot decrypt messages
   - Forward secrecy via ephemeral AES-256-GCM keys
   - Per-member key distribution via X25519 ECDH
   - Automatic client-side decryption
+- ✅ **Access Control** - Fine-grained message filtering with allow/deny lists (NEW ✨)
+  - Block unwanted senders (deny-list)
+  - Private messaging mode (allow-list)
+  - Priority rules (deny always wins)
+  - See [`merits access --help`](#access-control) and [docs/ALLOW-LIST-DESIGN.md](docs/ALLOW-LIST-DESIGN.md)
 - ✅ **Real-Time Delivery** - Subscribe to messages with auto-ack
 - ✅ **Message Routing** - Type-based dispatch (`typ: "chat.text.v1"`)
 - ✅ **Backend-Agnostic** - Core interfaces + Convex adapter
@@ -146,17 +157,22 @@ const cancel = await client.transport.subscribe({
 
 ### Overview & Architecture
 - **[Architecture](docs/architecture.md)** - Codebase layout, design patterns, key assumptions
-- **[Group Messaging](docs/GROUP-MESSAGING-COMPLETE.md)** - Zero-knowledge group encryption implementation (NEW ✨)
+- **[Group Messaging](docs/GROUP-MESSAGING-COMPLETE.md)** - Zero-knowledge group encryption implementation
 - **[Group Chat Design](docs/group-chat.md)** - Group chat architecture and message flow
 
 ### Security & Authentication
 - **[Authentication](docs/auth.md)** - Challenge/response flow, signature verification, KSN binding
 - **[Permissions](docs/permissions.md)** - Who can message whom, admin controls, rate limiting
+- **[Access Control](docs/ALLOW-LIST-DESIGN.md)** - Allow/deny lists for message filtering (NEW ✨)
+  - Use `merits access --help` for CLI documentation
+  - Backend APIs: [convex/allowList.ts](convex/allowList.ts), [convex/denyList.ts](convex/denyList.ts)
+  - Implementation summary: [docs/PHASE-6-ALLOW-LIST-COMPLETE.md](docs/PHASE-6-ALLOW-LIST-COMPLETE.md)
 
 ### API & CLI Reference
 - **CLI Help** - Run `merits --help` for command overview
   - `merits send --help` - Direct and group message sending
   - `merits unread --help` - Message retrieval and decryption
+  - `merits access --help` - Access control (allow/deny lists)
 - **Code Documentation** - Comprehensive JSDoc comments in source files:
   - [convex/schema.ts](convex/schema.ts) - Database schemas with security notes
   - [convex/groups.ts](convex/groups.ts) - Group APIs (getMembers, sendGroupMessage)
