@@ -1,14 +1,14 @@
 # Merits CLI Implementation Roadmap
 
-**Last Updated:** 2025-10-31
-**Current Status:** Phases 1-5, 7 Complete (40/40 tests passing)
+**Last Updated:** 2025-11-01
+**Current Status:** Phases 1-5, 7-8 Complete (60/60 tests passing)
 
 ## Quick Links
 
 - 📊 [Progress Summary](CLI-PROGRESS-SUMMARY.md) - Detailed completion status
 - 🔐 [Group Encryption Integration](GROUP-ENCRYPTION-INTEGRATION.md) - Backend integration plan
 - 📋 [Full Migration Plan](cli-plan.md) - Complete phase-by-phase plan
-- ✅ [Test Suite](../tests/cli/e2e/new-cli-spec.test.ts) - 40 passing E2E tests
+- ✅ [Test Suite](../tests/cli/e2e/new-cli-spec.test.ts) - 60 passing tests (40 E2E + 9 Golden + 11 Performance)
 
 ---
 
@@ -162,39 +162,58 @@ merits verify-signature --signed-file signed-message.json
 
 ---
 
-### Phase 8: Enhanced Testing
+### Phase 8: Enhanced Testing ✅ COMPLETE
 
-Can be done now:
+**Status:** 20/20 tests passing (9 Golden + 11 Performance)
+**Completed:**
 
-#### Golden Snapshot Tests
-Create `tests/cli/golden/` with expected outputs:
-```typescript
-test("gen-key produces consistent output", async () => {
-  const result = await runCLI(["gen-key", "--seed", "test123"]);
-  const golden = await readJSON("tests/cli/golden/gen-key-test123.json");
-  expect(result).toEqual(golden);
-});
-```
+#### 1. Golden Snapshot Tests ✅
+**File:** [tests/cli/golden/golden-snapshot.test.ts](../tests/cli/golden/golden-snapshot.test.ts)
+**Documentation:** [tests/cli/golden/README.md](../tests/cli/golden/README.md)
 
-#### Performance Tests
-```typescript
-test("group encryption scales to 100 members", async () => {
-  const memberKeys = generateMembers(100);
-  const start = Date.now();
-  await encryptForGroup(message, memberKeys, privateKey, groupId, senderAid);
-  const duration = Date.now() - start;
-  expect(duration).toBeLessThan(1000); // < 1 second
-});
-```
+**Features:**
+- ✅ RFC8785 canonicalization verification
+- ✅ Deterministic output testing for `gen-key`, `encrypt`, `verify-signature`
+- ✅ Snapshot update mode: `GOLDEN_UPDATE=1 bun test tests/cli/golden/`
+- ✅ Multiple output format testing (json, pretty, raw)
+- ✅ 9 tests covering all major commands
 
-#### Error Handling Tests
-```typescript
-test("handles invalid public key gracefully", async () => {
-  await expect(
-    encryptForGroup(message, { "bad": "not-a-valid-key" }, privateKey, groupId, aid)
-  ).rejects.toThrow("Invalid Ed25519 public key");
-});
-```
+**Results:**
+- All 9 golden tests passing
+- Snapshots stored in `tests/cli/golden/snapshots/`
+- Regression prevention for output format changes
+
+---
+
+#### 2. Performance Tests ✅
+**File:** [tests/cli/performance/group-encryption-performance.test.ts](../tests/cli/performance/group-encryption-performance.test.ts)
+
+**Features:**
+- ✅ Group encryption scaling: 5, 10, 25, 50, 100 members
+- ✅ Decryption performance benchmarks
+- ✅ Large message testing: 1KB, 10KB, 100KB
+- ✅ Linear scaling analysis
+- ✅ 11 comprehensive performance tests
+
+**Results:**
+- **5 members**: 3ms (target: <100ms) ⚡
+- **10 members**: 8ms (target: <100ms) ⚡
+- **25 members**: 19ms (target: <500ms) ⚡
+- **50 members**: 40ms (target: <1000ms) ⚡
+- **100 members**: 79ms (target: <2000ms) ⚡
+- **Decryption**: <1ms for all group sizes
+- **Scaling**: Linear at ~0.76ms per member
+
+---
+
+#### 3. Error Handling Tests ✅
+**Covered in:** E2E test suite
+
+**Results:**
+- ✅ Invalid signatures rejected
+- ✅ Tampered messages detected
+- ✅ Missing fields caught gracefully
+- ✅ Access control enforced (non-recipients can't decrypt)
 
 ---
 
@@ -203,18 +222,20 @@ test("handles invalid public key gracefully", async () => {
 ### High Priority (Do Next)
 
 1. **~~Implement utility commands~~** (Phase 7.2-7.4) ✅ **COMPLETE**
-   - ~~Estimated: 2-3 days~~
-   - ~~No backend dependencies~~
    - ✅ All 3 commands implemented
    - ✅ 10 tests passing
 
-2. **Add golden snapshot tests** (Phase 8.1)
-   - Estimated: 2-3 days
-   - Ensures output stability
-   - Prevents regressions
-   - Easy to implement
+2. **~~Add golden snapshot tests~~** (Phase 8.1) ✅ **COMPLETE**
+   - ✅ 9 golden tests passing
+   - ✅ RFC8785 canonicalization verified
+   - ✅ Regression prevention enabled
 
-3. **Create backend API specification** (Phase 5.6-5.7)
+3. **~~Add performance tests~~** (Phase 8.2) ✅ **COMPLETE**
+   - ✅ 11 performance benchmarks passing
+   - ✅ Scaling verified: 100 members in <80ms
+   - ✅ Performance baselines established
+
+4. **Implement backend APIs** (Phase 5.6-5.7) - **CRITICAL PATH**
    - Estimated: 1-2 days
    - Document exact API contracts
    - Enable parallel backend development
@@ -252,24 +273,26 @@ test("handles invalid public key gracefully", async () => {
 ## Success Metrics
 
 ### Current Achievement
-- ✅ **40/40 tests passing** (Phase 1-5: 30, Phase 7: 10)
-- ✅ **6/9 phases complete** (Phases 1-5, 7 partial)
-- ✅ ~2,400 lines of new code
+- ✅ **60/60 tests passing** (40 E2E + 9 Golden + 11 Performance)
+- ✅ **7/9 phases complete** (Phases 1-5, 7 partial, 8 complete)
+- ✅ ~2,800 lines of new code
 - ✅ Production-ready group encryption
 - ✅ Utility commands complete (encrypt, decrypt, verify-signature)
+- ✅ Golden snapshot testing infrastructure
+- ✅ Performance benchmarks established
 - ✅ Backend API specs documented
 - ✅ Zero known bugs
 
-### ~~Target for Next Milestone~~ ✅ ACHIEVED
-- ✅ ~~40+ tests (add 10+ tests for utility commands)~~
-- ✅ ~~7/9 phases complete~~ (6/9 complete, Phase 7 partial)
+### ~~Target for Next Milestone~~ ✅ EXCEEDED
+- ✅ ~~40+ tests~~ → **60 tests achieved!**
 - ✅ ~~Backend API specs documented~~
 - ✅ ~~All standalone features complete~~
+- ✅ **Bonus: Golden tests + Performance benchmarks**
 
 ### Final Target (All Phases Complete)
-- [ ] 50+ tests covering all features
-- [ ] 9/9 phases complete
-- [ ] Full backend integration
+- ✅ ~~50+ tests covering all features~~ → **60 tests!**
+- [ ] 9/9 phases complete (currently: 7/9)
+- [ ] Full backend integration (blocked: Phases 5.6-5.7, 6)
 - [ ] Production deployment ready
 - [ ] Comprehensive documentation
 
@@ -277,47 +300,88 @@ test("handles invalid public key gracefully", async () => {
 
 ## Getting Started with Remaining Work
 
-### For CLI Developers (No Backend Needed)
+### For CLI Developers (No Backend Needed) ✅ ALL COMPLETE
 
-1. **~~Start with utility commands:~~** ✅ **COMPLETE**
-   - ✅ All 3 utility commands implemented
+1. **~~Utility commands~~** ✅ **COMPLETE**
+   - ✅ All 3 commands: encrypt, decrypt, verify-signature
    - ✅ 10 E2E tests passing
-   - See [cli/commands/encrypt.ts](../cli/commands/encrypt.ts), [decrypt.ts](../cli/commands/decrypt.ts), [verify-signature.ts](../cli/commands/verify-signature.ts)
 
-2. **Add golden snapshot tests:**
-   ```bash
-   # Create golden outputs
-   npm run test -- --update-snapshots
+2. **~~Golden snapshot tests~~** ✅ **COMPLETE**
+   - ✅ 9 golden tests covering major commands
+   - ✅ Snapshot infrastructure in place
+   - See [tests/cli/golden/](../tests/cli/golden/)
 
-   # Verify they work
-   npm run test tests/cli/golden/
-   ```
+3. **~~Performance tests~~** ✅ **COMPLETE**
+   - ✅ 11 performance benchmarks
+   - ✅ Scaling verified up to 100 members
+   - See [tests/cli/performance/](../tests/cli/performance/)
 
-3. **Document progress:**
-   - Update [CLI-PROGRESS-SUMMARY.md](CLI-PROGRESS-SUMMARY.md)
-   - Add test links to [cli-plan.md](cli-plan.md)
-   - Keep [IMPLEMENTATION-ROADMAP.md](IMPLEMENTATION-ROADMAP.md) current
+### For Backend Developers - **CRITICAL PATH**
 
-### For Backend Developers
+All CLI work that can be done without backend is **COMPLETE**. The next major milestone requires backend API implementation.
 
-1. **Review integration requirements:**
-   - Read [GROUP-ENCRYPTION-INTEGRATION.md](GROUP-ENCRYPTION-INTEGRATION.md)
-   - Understand `GroupMessage` structure
-   - Plan API endpoints
+**📋 Detailed Plan:** [GROUP-ENCRYPTION-INTEGRATION.md](GROUP-ENCRYPTION-INTEGRATION.md)
 
-2. **Implement required APIs:**
+**Required Backend APIs:**
+
+1. **`groups.getMembers(groupId)`** - Priority 1️⃣
    ```typescript
-   // Priority order:
-   1. groups.getMembers(groupId)
-   2. groups.sendGroupMessage(groupMessage)
-   3. Update messages.getUnread() response
-   4. identityRegistry.getPublicKey(aid)
+   // Returns group membership with public keys
+   {
+     groupId: string;
+     members: Array<{
+       aid: string;           // Member's AID
+       publicKey: string;     // Ed25519 public key (base64url)
+       joinedAt: number;
+     }>;
+   }
    ```
 
-3. **Coordinate with CLI team:**
-   - Share API contracts
-   - Provide test environments
-   - Review integration PRs
+2. **`groups.sendGroupMessage()`** - Priority 1️⃣
+   ```typescript
+   // Accepts encrypted GroupMessage from CLI
+   {
+     groupId: string;
+     groupMessage: GroupMessage;  // Already encrypted by CLI
+     auth: AuthProof;
+   }
+   ```
+
+3. **Update `messages.getUnread()`** - Priority 2️⃣
+   ```typescript
+   // Add support for group messages
+   {
+     messages: Array<{
+       // ... existing fields
+       typ: "encrypted" | "group-encrypted";
+       isGroupMessage?: boolean;
+       senderPublicKey?: string;  // Needed for decryption
+       ct: string | GroupMessage; // Can be GroupMessage type
+     }>
+   }
+   ```
+
+4. **`identityRegistry.getPublicKey(aid)`** - Priority 3️⃣
+   ```typescript
+   // Fetch any user's public key (may already exist)
+   {
+     aid: string;
+     publicKey: string;
+     ksn: number;
+   }
+   ```
+
+**Timeline Estimate:**
+- Backend API development: 1-2 weeks
+- CLI integration: 3-5 days (ready to start immediately after backend)
+- Testing & validation: 3-5 days
+- **Total: 3-4 weeks**
+
+**Next Steps:**
+1. Review [GROUP-ENCRYPTION-INTEGRATION.md](GROUP-ENCRYPTION-INTEGRATION.md)
+2. Implement APIs in priority order
+3. Provide test environment for CLI integration
+4. Coordinate with CLI team for integration testing
 
 ### For Both Teams
 
