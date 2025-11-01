@@ -54,71 +54,9 @@ describe("MessageBus Integration Tests with KERI Authentication", () => {
       "EBBB"
     );
 
-    // For testing, use test helper to set users as "known" tier
-    // In production, users would go through onboarding flow
-    // We'll insert tier records directly to simulate this
-    await convex.mutation(api._test_helpers.resetAdminRoles, {});
-
-    // Bootstrap a super admin for test setup
-    await convex.mutation(api._test_helpers.bootstrapSuperAdmin, {
-      aid: aliceAid, // Use Alice as admin for test
-    });
-
-    // Manually create tier records for both users (simulating completed onboarding)
-    // In real flow, this would be done via onboardUser mutation
-    // For integration tests, we just want to test message flow, not onboarding
-    // So we'll set them as "known" which allows messaging
-    const tierDoc = {
-      aid: bobAid,
-      tier: "known",
-      updatedAt: Date.now(),
-    };
-
-    // Use verifyUser to promote them (requires them to be "known" first)
-    // Actually, let's just insert the tier record directly via test helper
-    // We need a simpler approach - let's use onboardUser
-
-    // For now, set both as "known" by creating the records
-    // This is test scaffolding - in production they'd go through onboarding
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: bobAid,
-      onboardingProof: "ETEST_PROOF_BOB",
-      notes: "Test user",
-      auth: await client.createAuth(
-        {
-          aid: aliceAid,
-          privateKey: aliceKeys.privateKey,
-          ksn: 0,
-        },
-        "admin",
-        {
-          action: "onboardUser",
-          userAid: bobAid,
-          onboardingProof: "ETEST_PROOF_BOB",
-        }
-      ),
-    });
-
-    // Alice is already super_admin, so she's effectively "verified"
-    // Let's also onboard Alice herself
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: aliceAid,
-      onboardingProof: "ETEST_PROOF_ALICE",
-      notes: "Test admin user",
-      auth: await client.createAuth(
-        {
-          aid: aliceAid,
-          privateKey: aliceKeys.privateKey,
-          ksn: 0,
-        },
-        "admin",
-        {
-          action: "onboardUser",
-          userAid: aliceAid,
-          onboardingProof: "ETEST_PROOF_ALICE",
-        }
-      ),
-    });
+    // Grant all permissions to test users (bypasses RBAC for integration tests)
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: aliceAid });
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: bobAid });
 
     // Create credentials
     aliceCreds = {

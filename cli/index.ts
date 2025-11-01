@@ -2,20 +2,26 @@
 /**
  * Merits CLI Entry Point
  *
- * Commands:
- * - merits identity new       - Generate new identity
- * - merits identity list      - List identities
- * - merits send               - Send message
- * - merits receive            - Receive messages
+ * Key Commands:
+ * - merits init               - First-time setup wizard
+ * - merits gen-key            - Generate Ed25519 key pair
+ * - merits create-user        - Create user registration challenge
+ * - merits sign-in            - Sign in with existing user
+ * - merits send               - Send encrypted message (direct or group)
+ * - merits unread             - Retrieve unread messages
  * - merits group create       - Create group
  * - merits group list         - List groups
+ * - merits access allow       - Add to allow-list
+ * - merits access deny        - Add to deny-list
  *
  * Global options:
- * - --format <json|text|compact>
+ * - --format <json|pretty|raw>
+ * - --token <path>
+ * - --no-banner
  * - --verbose
- * - --from <identity>
  * - --config <path>
  * - --convex-url <url>
+ * - --data-dir <path>
  * - --no-color
  * - --debug
  */
@@ -179,21 +185,6 @@ import {
   accessClear,
 } from "./commands/access";
 
-// Old messaging commands (to be removed in Phase 9)
-import { receiveMessages } from "./commands/receive";
-import { ackMessage } from "./commands/ack";
-import { watchMessages } from "./commands/watch";
-
-// Old commands (to be removed in Phase 9)
-import { newIdentity } from "./commands/identity/new";
-import { listIdentities } from "./commands/identity/list";
-import { showIdentity } from "./commands/identity/show";
-import { registerIdentity } from "./commands/identity/register";
-import { setDefaultIdentity } from "./commands/identity/set-default";
-import { exportIdentity } from "./commands/identity/export";
-import { importIdentity } from "./commands/identity/import";
-import { deleteIdentity } from "./commands/identity/delete";
-
 // Init command (first-time setup)
 program
   .command("init")
@@ -331,64 +322,6 @@ program
   .option("--signed-file <path>", "Path to signed message JSON (or use stdin)")
   .action(verifySignature);
 
-// --- Old Identity Commands (to be removed in Phase 9) ---
-
-// Identity command group
-const identityCmd = program
-  .command("identity")
-  .description("Manage KERI identities");
-
-identityCmd
-  .command("new <name>")
-  .description("Create a new identity")
-  .option("--no-register", "Skip backend registration")
-  .option("--set-default", "Set as default identity")
-  .option("--description <text>", "Description for the identity")
-  .action(newIdentity);
-
-identityCmd
-  .command("list")
-  .description("List all identities")
-  .option("--format <type>", "Output format (json|text|compact)")
-  .option("--verbose", "Show full details")
-  .action(listIdentities);
-
-identityCmd
-  .command("show <name>")
-  .description("Show identity details")
-  .option("--format <type>", "Output format (json|text)")
-  .action(showIdentity);
-
-identityCmd
-  .command("register <name>")
-  .description("Register identity with backend")
-  .action(registerIdentity);
-
-identityCmd
-  .command("set-default <name>")
-  .description("Set default identity")
-  .action(setDefaultIdentity);
-
-identityCmd
-  .command("export <name>")
-  .description("Export identity for backup")
-  .option("--output <path>", "Output file (default: stdout)")
-  .option("--include-key", "Include private key (dangerous!)")
-  .action(exportIdentity);
-
-identityCmd
-  .command("import <file>")
-  .description("Import identity from backup")
-  .option("--name <name>", "Override identity name")
-  .option("--register", "Register with backend after import")
-  .action(importIdentity);
-
-identityCmd
-  .command("delete <name>")
-  .description("Delete identity from vault")
-  .option("--force", "Skip confirmation prompt")
-  .action(deleteIdentity);
-
 // Send command
 program
   .command("send <recipient>")
@@ -436,31 +369,6 @@ Output:
   `)
   .action(sendMessage);
 
-// Old registration helper commands (replaced by gen-key, create-user, sign, confirm-challenge)
-// Commented out - to be removed in Phase 9
-// program
-//   .command("gen-user")
-//   .description("Generate a new user keypair (prints JSON with aid/publicKey/secretKey)")
-//   .action((_opts, cmd) => genUser(cmd.opts()));
-
-// program
-//   .command("create")
-//   .description("Create registration challenge for an AID")
-//   .requiredOption("-aid <aid>", "User AID")
-//   .requiredOption("-publicKey <publicKey>", "User public key (CESR or base64url)")
-//   .action((opts) => createUser(opts));
-
-// program
-//   .command("sign-challenge")
-//   .description("Submit signed registration challenge to create user")
-//   .requiredOption("-aid <aid>", "User AID")
-//   .requiredOption("-publicKey <publicKey>", "User public key")
-//   .requiredOption("--challenge-id <id>", "Challenge ID returned by create")
-//   .option("--sigs <list>", "Comma-separated indexed signatures (idx-b64,idx-b64,...)")
-//   .option("--ksn <num>", "Key sequence number", (v) => parseInt(v, 10))
-//   .option("--from <identity>", "Sign locally using this identity from vault")
-//   .action((opts) => signChallenge(opts));
-
 // RBAC admin commands
 const rolesCmd = program
   .command("roles")
@@ -503,25 +411,6 @@ program
   .command("rbac:bootstrap-onboarding")
   .description("Bootstrap onboarding group, anon role, and permission mapping")
   .action((opts) => bootstrapOnboardingCmd(opts));
-
-// Receive command
-program
-  .command("receive")
-  .description("Retrieve and display messages")
-  .option("--from <identity>", "Receive as this identity (default: config.defaultIdentity)")
-  .option("--mark-read", "Acknowledge messages after receiving")
-  .option("--format <type>", "Output format (json|text|compact)")
-  .option("--limit <n>", "Maximum messages to retrieve", parseInt)
-  .option("--plaintext", "Decrypt and show plaintext")
-  .action(receiveMessages);
-
-// Ack command
-program
-  .command("ack <message-id>")
-  .description("Acknowledge message receipt")
-  .requiredOption("--envelope-hash <hash>", "Envelope hash to sign (required for non-repudiation)")
-  .option("--from <identity>", "Identity acknowledging (default: config.defaultIdentity)")
-  .action(ackMessage);
 
 // Group command group (Phase 4)
 const groupCmd = program
@@ -697,17 +586,6 @@ Examples:
   $ merits access clear --deny --token $TOKEN
   `)
   .action(accessClear);
-
-// Watch command (Phase 4: Real-time streaming with session tokens)
-program
-  .command("watch")
-  .description("Stream messages in real-time (Phase 4)")
-  .option("--from <identity>", "Watch as this identity (default: config.defaultIdentity)")
-  .option("--no-auto-ack", "Disable automatic acknowledgment (default: auto-ack enabled)")
-  .option("--plaintext", "Decrypt and show plaintext")
-  .option("--format <type>", "Output format (json|text|compact)")
-  .option("--filter <pattern>", "Filter messages by sender or content (not yet implemented)")
-  .action(watchMessages);
 
 program
   .command("config")

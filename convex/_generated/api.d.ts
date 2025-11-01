@@ -13,7 +13,6 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
-import type * as _test_helpers from "../_test_helpers.js";
 import type * as accessControl from "../accessControl.js";
 import type * as adapters_ConvexGroupApi from "../adapters/ConvexGroupApi.js";
 import type * as adapters_ConvexGroupChatApi from "../adapters/ConvexGroupChatApi.js";
@@ -29,6 +28,7 @@ import type * as messages from "../messages.js";
 import type * as permissions from "../permissions.js";
 import type * as permissions_admin from "../permissions_admin.js";
 import type * as sessions from "../sessions.js";
+import type * as testHelpers from "../testHelpers.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -39,7 +39,6 @@ import type * as sessions from "../sessions.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
-  _test_helpers: typeof _test_helpers;
   accessControl: typeof accessControl;
   "adapters/ConvexGroupApi": typeof adapters_ConvexGroupApi;
   "adapters/ConvexGroupChatApi": typeof adapters_ConvexGroupChatApi;
@@ -55,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   permissions: typeof permissions;
   permissions_admin: typeof permissions_admin;
   sessions: typeof sessions;
+  testHelpers: typeof testHelpers;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

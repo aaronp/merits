@@ -63,84 +63,9 @@ describe("Router Integration: Full Flow", () => {
       lastEvtSaid: "EBBB",
     });
 
-    // Setup admins and onboard users
-    await convex.mutation(api._test_helpers.resetAdminRoles, {});
-    await convex.mutation(api._test_helpers.bootstrapSuperAdmin, {
-      aid: aliceAid,
-    });
-
-    // Onboard both users
-    const aliceAdminChallenge = await identityAuth.issueChallenge({
-      aid: aliceAid,
-      purpose: "admin",
-      args: {
-        action: "onboardUser",
-        userAid: aliceAid,
-        onboardingProof: "ETEST_ALICE",
-      },
-    });
-
-    const aliceAdminSig = await sign(
-      new TextEncoder().encode(
-        JSON.stringify(
-          aliceAdminChallenge.payloadToSign,
-          Object.keys(aliceAdminChallenge.payloadToSign).sort()
-        )
-      ),
-      aliceKeys.privateKey
-    );
-
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: aliceAid,
-      onboardingProof: "ETEST_ALICE",
-      notes: "Test user",
-      auth: {
-        challengeId: aliceAdminChallenge.challengeId as any,
-        sigs: [
-          `0-${btoa(String.fromCharCode(...aliceAdminSig))
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=/g, "")}`,
-        ],
-        ksn: 0,
-      },
-    });
-
-    const bobAdminChallenge = await identityAuth.issueChallenge({
-      aid: aliceAid,
-      purpose: "admin",
-      args: {
-        action: "onboardUser",
-        userAid: bobAid,
-        onboardingProof: "ETEST_BOB",
-      },
-    });
-
-    const bobAdminSig = await sign(
-      new TextEncoder().encode(
-        JSON.stringify(
-          bobAdminChallenge.payloadToSign,
-          Object.keys(bobAdminChallenge.payloadToSign).sort()
-        )
-      ),
-      aliceKeys.privateKey
-    );
-
-    await convex.mutation(api.authorization.onboardUser, {
-      userAid: bobAid,
-      onboardingProof: "ETEST_BOB",
-      notes: "Test user",
-      auth: {
-        challengeId: bobAdminChallenge.challengeId as any,
-        sigs: [
-          `0-${btoa(String.fromCharCode(...bobAdminSig))
-            .replace(/\+/g, "-")
-            .replace(/\//g, "_")
-            .replace(/=/g, "")}`,
-        ],
-        ksn: 0,
-      },
-    });
+    // Grant all permissions to test users (bypasses RBAC for integration tests)
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: aliceAid });
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: bobAid });
   });
 
   afterAll(() => {

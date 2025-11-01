@@ -80,7 +80,7 @@ export const send = mutation({
     }
 
     // ACCESS CONTROL: Check allow/deny lists
-    const access = await canMessage(ctx.db, senderAid, args.recpAid);
+    const access = await canMessage(ctx, senderAid, args.recpAid);
     if (!access.allowed) {
       throw new Error(`Cannot send message: ${access.reason}`);
     }
@@ -159,7 +159,7 @@ export const receive = mutation({
 
     // ACCESS CONTROL: Filter out messages from blocked senders
     const senderAids = [...new Set(messages.map((m) => m.senderAid))];
-    const accessMap = await canMessageBatch(ctx.db, senderAids, args.recpAid);
+    const accessMap = await canMessageBatch(ctx, senderAids, args.recpAid);
     const filteredMessages = messages.filter((msg) => {
       const access = accessMap.get(msg.senderAid);
       return access?.allowed ?? true;
@@ -308,7 +308,7 @@ export const list = query({
 
     // ACCESS CONTROL: Filter out messages from blocked senders
     const senderAids = [...new Set(messages.map((m) => m.senderAid))];
-    const accessMap = await canMessageBatch(ctx.db, senderAids, args.recpAid);
+    const accessMap = await canMessageBatch(ctx, senderAids, args.recpAid);
     const filteredMessages = messages.filter((msg) => {
       const access = accessMap.get(msg.senderAid);
       return access?.allowed ?? true;
@@ -415,7 +415,7 @@ export const getUnread = query({
 
     // ACCESS CONTROL: Filter out direct messages from blocked senders
     const directSenderAids = [...new Set(directMessages.map((m) => m.senderAid))];
-    const directAccessMap = await canMessageBatch(ctx.db, directSenderAids, args.aid);
+    const directAccessMap = await canMessageBatch(ctx, directSenderAids, args.aid);
     const filteredDirectMessages = directMessages.filter((msg) => {
       const access = directAccessMap.get(msg.senderAid);
       return access?.allowed ?? true;
@@ -459,7 +459,7 @@ export const getUnread = query({
 
         // ACCESS CONTROL: Filter out group messages from blocked senders
         const groupSenderAids = [...new Set(groupMessages.map((m) => m.senderAid))];
-        const groupAccessMap = await canMessageBatch(ctx.db, groupSenderAids, args.aid);
+        const groupAccessMap = await canMessageBatch(ctx, groupSenderAids, args.aid);
 
         // Get sender public keys for decryption
         for (const msg of groupMessages) {

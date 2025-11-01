@@ -67,29 +67,9 @@ describe("Allow/Deny List Integration", () => {
     await client.registerKeyState(bobAid, 0, [bobCesrKey], "1", "EBBB");
     await client.registerKeyState(carolAid, 0, [carolCesrKey], "1", "ECCC");
 
-    // Bootstrap admin and permissions (if available)
-    try {
-      await convex.mutation(api._test_helpers.resetAdminRoles, {});
-      await convex.mutation(api.authorization.bootstrapDefaultTiers, {});
-      await convex.mutation(api._test_helpers.bootstrapSuperAdmin, { aid: bobAid });
-
-      // Assign all users to "known" tier so they can message each other
-      for (const aid of [aliceAid, bobAid, carolAid]) {
-        await convex.mutation(api.authorization.assignTier, {
-          aid,
-          tierName: "known",
-          promotionProof: "SYSTEM_ADMIN",
-          notes: "Test user",
-          auth: await client.createAuth(
-            { aid: bobAid, privateKey: bobKeys.privateKey, ksn: 0 },
-            "assign_tier",
-            { aid, tierName: "known" }
-          ),
-        });
-      }
-    } catch (e) {
-      console.log("⚠️  Skipping authorization setup (not available in this deployment)");
-      console.log("   Tests will focus on access control without RBAC");
+    // Grant all permissions to test users (bypasses RBAC for integration tests)
+    for (const aid of [aliceAid, bobAid, carolAid]) {
+      await convex.mutation(api.testHelpers.grantAllPermissions, { aid });
     }
 
     // Setup credentials

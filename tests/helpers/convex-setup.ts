@@ -62,11 +62,9 @@ export async function setupConvexTest(): Promise<ConvexTestContext> {
     lastEvtSaid: "EBBB",
   });
 
-  // Setup test helpers (reset admin roles, bootstrap super admin)
-  await convex.mutation(api._test_helpers.resetAdminRoles, {});
-  await convex.mutation(api._test_helpers.bootstrapSuperAdmin, {
-    aid: aliceAid,
-  });
+  // Grant all permissions to test users (bypasses RBAC for integration tests)
+  await convex.mutation(api.testHelpers.grantAllPermissions, { aid: aliceAid });
+  await convex.mutation(api.testHelpers.grantAllPermissions, { aid: bobAid });
 
   const alice: TestUser = {
     aid: aliceAid,

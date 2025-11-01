@@ -15,7 +15,7 @@
  * @see denyList.ts for deny-list management
  */
 
-import type { DatabaseReader } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 
 /**
  * Check if a sender is allowed to message a recipient
@@ -30,7 +30,7 @@ import type { DatabaseReader } from "./_generated/server";
  * - Checks allow-list existence if deny not found (1 query)
  * - Checks allow-list membership if list is active (1 query)
  *
- * @param ctx - Database context (read-only)
+ * @param ctx - Mutation or query context
  * @param senderAid - AID of the sender attempting to send message
  * @param recipientAid - AID of the recipient who owns the allow/deny lists
  *
@@ -47,7 +47,7 @@ import type { DatabaseReader } from "./_generated/server";
  * }
  */
 export async function canMessage(
-  ctx: DatabaseReader,
+  ctx: MutationCtx | QueryCtx,
   senderAid: string,
   recipientAid: string
 ): Promise<{ allowed: boolean; reason?: string }> {
@@ -112,7 +112,7 @@ export async function canMessage(
  * // }
  */
 export async function canMessageBatch(
-  ctx: DatabaseReader,
+  ctx: MutationCtx | QueryCtx,
   senderAids: string[],
   recipientAid: string
 ): Promise<Map<string, { allowed: boolean; reason?: string }>> {

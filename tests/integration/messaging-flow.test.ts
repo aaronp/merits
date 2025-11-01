@@ -67,33 +67,9 @@ describe("Messaging Flow Integration", () => {
       "EBBB"
     );
 
-    // Test-only: ensure clean admin state and bootstrap Bob as onboarding admin
-    try {
-      // @ts-ignore - using generated API without types
-      await convex.mutation(api._test_helpers.resetAdminRoles, {});
-    } catch (e) {
-      // ignore if not available
-    }
-
-    // Bootstrap default tiers
-    await convex.mutation(api.authorization.bootstrapDefaultTiers, {});
-
-    // Bootstrap Bob as super admin
-    // @ts-ignore - using generated API without types
-    await convex.mutation(api._test_helpers.bootstrapSuperAdmin, { aid: bobAid });
-
-    // Assign Bob to "known" tier so Alice (unknown) can message him
-    await convex.mutation(api.authorization.assignTier, {
-      aid: bobAid,
-      tierName: "known",
-      promotionProof: "SYSTEM_ADMIN",
-      notes: "Test admin",
-      auth: await client.createAuth(
-        { aid: bobAid, privateKey: bobKeys.privateKey, ksn: 0 },
-        "assign_tier",
-        { aid: bobAid, tierName: "known" }
-      ),
-    });
+    // Grant all permissions to test users (bypasses RBAC for integration tests)
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: aliceAid });
+    await convex.mutation(api.testHelpers.grantAllPermissions, { aid: bobAid });
 
     // Setup credentials
     aliceCreds = {

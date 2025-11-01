@@ -53,7 +53,14 @@
       "Bash(MERITS_VAULT_QUIET=1 GOLDEN_UPDATE=1 bun test:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex deploy:*)",
-      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bun test:*)"
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bun test:*)",
+      "Bash(git rm:*)",
+      "Bash(git mv:*)",
+      "Bash(git add:*)",
+      "Bash(tee:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make test-integration:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex deploy:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make test:*)"
     ],
     "deny": [],
     "ask": []
