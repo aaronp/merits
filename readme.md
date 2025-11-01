@@ -33,11 +33,14 @@ merits group create team-alpha --from alice
 # Send to group
 merits send <group-id> --message "Hello team!" --from alice
 
-# Access control (NEW)
+# Access control
 merits access allow <aid> --note "friend" --token $TOKEN     # Whitelist
 merits access deny <aid> --note "spam" --token $TOKEN        # Blocklist
 merits access list --allow --token $TOKEN                     # View lists
 merits access --help                                          # Full documentation
+
+# Lookup public keys (NEW)
+merits key-for <aid> --format pretty                          # Get public key
 
 # Watch real-time
 merits watch --from alice --plaintext
@@ -173,6 +176,7 @@ const cancel = await client.transport.subscribe({
   - `merits send --help` - Direct and group message sending
   - `merits unread --help` - Message retrieval and decryption
   - `merits access --help` - Access control (allow/deny lists)
+  - `merits key-for --help` - Public key lookup
 - **Code Documentation** - Comprehensive JSDoc comments in source files:
   - [convex/schema.ts](convex/schema.ts) - Database schemas with security notes
   - [convex/groups.ts](convex/groups.ts) - Group APIs (getMembers, sendGroupMessage)

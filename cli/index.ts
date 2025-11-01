@@ -153,6 +153,7 @@ import { sign } from "./commands/sign";
 import { confirmChallenge } from "./commands/confirm-challenge";
 import { signIn } from "./commands/sign-in";
 import { whoami } from "./commands/whoami";
+import { keyFor } from "./commands/key-for";
 import { listUnread } from "./commands/list-unread";
 import { unread } from "./commands/unread";
 import { markAsRead } from "./commands/mark-as-read";
@@ -239,6 +240,30 @@ program
   .command("whoami")
   .description("Display current session information")
   .action(whoami);
+
+program
+  .command("key-for <aid>")
+  .description("Fetch public key for an AID")
+  .addHelpText("after", `
+Retrieves the public key and metadata for a registered AID.
+
+Output includes:
+  - aid: The AID identifier
+  - publicKey: Ed25519 public key (base64url encoded)
+  - ksn: Key sequence number (for rotation tracking)
+  - updatedAt: Last update timestamp
+
+Examples:
+  $ merits key-for Dabcd1234... --format json
+  $ merits key-for Eefgh5678... --format pretty
+
+Use Cases:
+  - Verify someone's public key before encrypting
+  - Check if an AID is registered
+  - Export key for sharing
+  - Validate key rotation status
+  `)
+  .action(keyFor);
 
 // Messaging commands
 program
