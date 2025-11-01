@@ -49,7 +49,8 @@
       "Bash(MERITS_VAULT_QUIET=1 bun run:*)",
       "Bash(.merits/test-keys.json)",
       "Bash(.merits/test-encrypted.json)",
-      "Bash(MERITS_VAULT_QUIET=1 bun test:*)"
+      "Bash(MERITS_VAULT_QUIET=1 bun test:*)",
+      "Bash(MERITS_VAULT_QUIET=1 GOLDEN_UPDATE=1 bun test:*)"
     ],
     "deny": [],
     "ask": []
