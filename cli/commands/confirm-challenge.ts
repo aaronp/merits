@@ -67,24 +67,13 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
 
   if (purpose === "registerUser") {
     // Register new user
-    const result = await ctx.client.connection.mutation(api.auth.registerUser, {
+    sessionToken = await ctx.client.registerUser({
       aid: args.aid,
       publicKey: args.publicKey,
-      auth: {
-        challengeId: challengeId as Id<"challenges">,
-        sigs: signature,
-        ksn: 0, // Initial key sequence number
-      },
+      challengeId: challengeId,
+      sigs: signature,
+      ksn: 0, // Initial key sequence number
     });
-
-    // Create session token
-    // TODO: Backend should return actual session token. For now, we create a placeholder.
-    sessionToken = {
-      token: `session_${args.aid}_${Date.now()}`,
-      expiresAt: Date.now() + 60000, // 60 seconds
-      aid: args.aid,
-      ksn: 0,
-    };
   } else if (purpose === "signIn") {
     // Sign in existing user
     // TODO: Implement sign-in flow when backend supports it

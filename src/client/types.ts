@@ -60,6 +60,16 @@ export interface IdentityRegistry {
 }
 
 /**
+ * Session token for authenticated operations
+ */
+export interface SessionToken {
+  token: string;
+  aid: string;
+  expiresAt: number;
+  ksn: number;
+}
+
+/**
  * Unified Merits Client Interface
  *
  * Provides backend-agnostic access to all Merits operations.
@@ -93,6 +103,20 @@ export interface MeritsClient {
 
   /** Helper: Compute content hash */
   computeCtHash(ct: string): string;
+
+  /**
+   * Register a new user with authenticated challenge
+   *
+   * @param req - Registration request with auth proof
+   * @returns Session token for the newly registered user
+   */
+  registerUser(req: {
+    aid: string;
+    publicKey: string;
+    challengeId: string;
+    sigs: string[];
+    ksn: number;
+  }): Promise<SessionToken>;
 
   /** Close the client connection */
   close(): void;

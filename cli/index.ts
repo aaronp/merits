@@ -5,6 +5,7 @@
  * Key Commands:
  * - merits init               - First-time setup wizard
  * - merits gen-key            - Generate Ed25519 key pair
+ * - merits incept             - Complete user inception flow (one-step registration)
  * - merits create-user        - Create user registration challenge
  * - merits sign-in            - Sign in with existing user
  * - merits send               - Send encrypted message (direct or group)
@@ -47,9 +48,14 @@ Features:
   - Session tokens for streaming operations
 
 Quick Start:
-  $ merits init                          # First-time setup
+  $ merits init                          # First-time setup wizard
+  $ merits incept                        # One-step user inception (generate + register)
+
+  OR manually:
   $ merits gen-key                       # Generate key pair
   $ merits create-user --id <aid> --public-key <key>  # Register user
+
+  Then:
   $ merits send <recipient> --message "Hello"         # Send message
   $ merits unread --token $TOKEN         # Retrieve messages
 
@@ -154,6 +160,7 @@ program.hook("postAction", async (thisCommand, actionCommand) => {
 // Import commands (new CLI spec from cli.md)
 import { initCommand } from "./commands/init";
 import { genKey } from "./commands/gen-key";
+import { incept } from "./commands/incept";
 import { createUser } from "./commands/create-user";
 import { sign } from "./commands/sign";
 import { confirmChallenge } from "./commands/confirm-challenge";
@@ -199,6 +206,30 @@ program
   .description("Generate a new Ed25519 key pair")
   .option("--seed <value>", "Deterministic seed for testing (not secure!)")
   .action(genKey);
+
+// User inception (convenience command)
+program
+  .command("incept")
+  .description("Complete user inception flow (generate keys, register, obtain session token)")
+  .option("--seed <value>", "Deterministic seed for testing (not secure!)")
+  .addHelpText("after", `
+Convenience command that performs the full user inception flow in one step:
+  1. Generate a new Ed25519 key pair
+  2. Register the identity with the server
+  3. Sign the registration challenge
+  4. Confirm the challenge to obtain a session token
+
+Output includes:
+  - aid: The generated AID
+  - keys: privateKey and publicKey (base64url encoded)
+  - challenge: The registration challenge details
+  - session: Session token and expiration
+
+Examples:
+  $ merits incept --format pretty
+  $ merits incept --seed test123 --format json  # Deterministic (testing only)
+  `)
+  .action(incept);
 
 // User management
 program

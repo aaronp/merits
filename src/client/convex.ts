@@ -125,6 +125,11 @@ export class ConvexMeritsClient implements MeritsClient {
     this.router = createMessageRouter();
   }
 
+  /** Get access to the underlying Convex client for direct mutations/queries */
+  get connection(): ConvexClient {
+    return this.convex;
+  }
+
   async createAuth(
     credentials: AuthCredentials,
     purpose: string,
@@ -157,6 +162,34 @@ export class ConvexMeritsClient implements MeritsClient {
     const encoder = new TextEncoder();
     const data = encoder.encode(ct);
     return sha256Hex(data);
+  }
+
+  async registerUser(req: {
+    aid: string;
+    publicKey: string;
+    challengeId: string;
+    sigs: string[];
+    ksn: number;
+  }): Promise<import("./types").SessionToken> {
+    // Call backend registerUser mutation
+    await this.convex.mutation(api.auth.registerUser, {
+      aid: req.aid,
+      publicKey: req.publicKey,
+      auth: {
+        challengeId: req.challengeId as any,
+        sigs: req.sigs,
+        ksn: req.ksn,
+      },
+    });
+
+    // TODO: Backend should return actual session token
+    // For now, generate placeholder until session token system is implemented
+    return {
+      token: `session_${req.aid}_${Date.now()}`,
+      aid: req.aid,
+      expiresAt: Date.now() + 3600000, // 1 hour
+      ksn: req.ksn,
+    };
   }
 
   close(): void {

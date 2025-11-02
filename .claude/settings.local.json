@@ -69,7 +69,10 @@
       "Bash(MERITS_VAULT_QUIET=1 MERITS_DEBUG=1 ../merits gen-key:*)",
       "Bash(/tmp/bad-response.json)",
       "Bash(MERITS_VAULT_QUIET=1 ../merits confirm-challenge:*)",
-      "Bash(MERITS_VAULT_QUIET=1 CONVEX_URL=https://invalid.example.com ../merits create-user:*)"
+      "Bash(MERITS_VAULT_QUIET=1 CONVEX_URL=https://invalid.example.com ../merits create-user:*)",
+      "Bash(MERITS_VAULT_QUIET=1 ../merits incept:*)",
+      "Bash(MERITS_VAULT_QUIET=1 ./merits incept:*)",
+      "Bash(MERITS_VAULT_QUIET=1 CONVEX_URL=https://aware-tiger-369.convex.cloud ./merits incept:*)"
     ],
     "deny": [],
     "ask": []
