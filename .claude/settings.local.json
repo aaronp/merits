@@ -75,7 +75,8 @@
       "Bash(MERITS_VAULT_QUIET=1 CONVEX_URL=https://aware-tiger-369.convex.cloud ./merits incept:*)",
       "Bash(export BOOTSTRAP_KEY=\"dev-only-secret\")",
       "Bash(export CONVEX_URL=https://aware-tiger-369.convex.cloud)",
-      "Bash(tests/helpers/admin-bootstrap.example.test.ts)"
+      "Bash(tests/helpers/admin-bootstrap.example.test.ts)",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []

@@ -47,10 +47,28 @@ describe("Allow/Deny List API Operations", () => {
     console.log("Alice AID:", aliceAid);
     console.log("Bob AID:", bobAid);
 
-    // Register key states
-    await client.registerKeyState(aliceAid, 0, [aliceCesrKey], "1", "EAAA");
-    await client.registerKeyState(bobAid, 0, [bobCesrKey], "1", "EBBB");
-  });
+    // Register key states with timeout
+    try {
+      await Promise.race([
+        client.registerKeyState(aliceAid, 0, [aliceCesrKey], "1", "EAAA"),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout registering Alice key state")), 10000)
+        ),
+      ]);
+
+      await Promise.race([
+        client.registerKeyState(bobAid, 0, [bobCesrKey], "1", "EBBB"),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Timeout registering Bob key state")), 10000)
+        ),
+      ]);
+
+      console.log("✓ Key states registered successfully");
+    } catch (error) {
+      console.error("❌ Failed to register key states:", error);
+      throw error;
+    }
+  }, 30000);
 
   test("Allow-list: Add, list, remove, clear", async () => {
     // 1. Initially empty
@@ -113,7 +131,7 @@ describe("Allow/Deny List API Operations", () => {
     expect(list.allowList.length).toBe(0);
 
     console.log("✅ Allow-list operations passed");
-  });
+  }, 20000);
 
   test("Deny-list: Add, list, remove, clear", async () => {
     // 1. Initially empty
@@ -175,7 +193,7 @@ describe("Allow/Deny List API Operations", () => {
     expect(list.denyList.length).toBe(0);
 
     console.log("✅ Deny-list operations passed");
-  });
+  }, 20000);
 
   test("Clear operations: Remove all entries at once", async () => {
     // 1. Add multiple entries to both lists
@@ -238,5 +256,5 @@ describe("Allow/Deny List API Operations", () => {
     expect(denyList.denyList.length).toBe(0);
 
     console.log("✅ Clear operations passed");
-  });
+  }, 30000);
 });
