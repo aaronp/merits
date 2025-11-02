@@ -62,7 +62,14 @@
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex deploy:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make test:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make:*)",
-      "Bash(../merits:*)"
+      "Bash(../merits:*)",
+      "Bash(/tmp/test-bad.json)",
+      "Bash(/tmp/bad-challenge.json)",
+      "Bash(MERITS_VAULT_QUIET=1 ../merits create-user:*)",
+      "Bash(MERITS_VAULT_QUIET=1 MERITS_DEBUG=1 ../merits gen-key:*)",
+      "Bash(/tmp/bad-response.json)",
+      "Bash(MERITS_VAULT_QUIET=1 ../merits confirm-challenge:*)",
+      "Bash(MERITS_VAULT_QUIET=1 CONVEX_URL=https://invalid.example.com ../merits create-user:*)"
     ],
     "deny": [],
     "ask": []

@@ -597,5 +597,39 @@ program
     console.log("  merits config set        - Set config value");
   });
 
-// Parse and execute
-program.parse();
+// Parse and execute with error handling
+program.parseAsync().catch((error) => {
+  // Extract error details
+  const errorMessage = error.message || "Unknown error";
+  const errorCode = error.code || "CLI_ERROR";
+  const errorContext = error.context || {};
+
+  // Format error for stderr
+  console.error("");
+  console.error(`❌ Error: ${errorMessage}`);
+
+  // Show error code if available
+  if (error.code) {
+    console.error(`   Code: ${error.code}`);
+  }
+
+  // Show hint if available
+  if (errorContext.hint || error.hint) {
+    console.error(`   Hint: ${errorContext.hint || error.hint}`);
+  }
+
+  // Show additional context in debug mode
+  if (process.env.DEBUG || process.env.MERITS_DEBUG) {
+    console.error("");
+    console.error("Debug information:");
+    console.error(JSON.stringify({ errorCode, errorContext }, null, 2));
+    console.error("");
+    console.error("Stack trace:");
+    console.error(error.stack);
+  }
+
+  console.error("");
+
+  // Exit with non-zero code
+  process.exit(1);
+});

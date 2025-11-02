@@ -10,6 +10,13 @@ import {
   sha256Hex,
   computeArgsHash as coreComputeArgsHash,
 } from "../core/crypto";
+import {
+  NotFoundError,
+  ChallengeError,
+  SignatureError,
+  AlreadyExistsError,
+  ValidationError,
+} from "./errors";
 
 /**
  * KERI Key State
@@ -105,9 +112,10 @@ export async function ensureKeyState(
 
   // TODO: In production, resolve via OOBI/resolver
   // For now, throw error requiring explicit key state registration
-  throw new Error(
-    `Key state for AID ${aid} not found. Register key state first.`
-  );
+  throw new NotFoundError("Key state", aid, {
+    hint: "Register the key state first using create-user or registerKeyState",
+    aid,
+  });
 }
 
 /**
@@ -272,15 +280,25 @@ export const proveChallenge = mutation({
     // Fetch challenge
     const challenge = await ctx.db.get(args.challengeId);
     if (!challenge) {
-      throw new Error("Challenge not found");
+      throw new NotFoundError("Challenge", args.challengeId, {
+        hint: "The challenge may have expired or been used already",
+      });
     }
 
     if (challenge.used) {
-      throw new Error("Challenge already used");
+      throw new ChallengeError("Challenge already used", {
+        challengeId: args.challengeId,
+        hint: "Request a new challenge to authenticate",
+      });
     }
 
     if (challenge.expiresAt < now) {
-      throw new Error("Challenge expired");
+      throw new ChallengeError("Challenge expired", {
+        challengeId: args.challengeId,
+        expiresAt: challenge.expiresAt,
+        now,
+        hint: "Request a new challenge to authenticate",
+      });
     }
 
     // Fetch key state
@@ -288,7 +306,11 @@ export const proveChallenge = mutation({
 
     // Verify KSN is not ahead of current state (prevent future key use)
     if (args.ksn > keyState.ksn) {
-      throw new Error("Invalid KSN - ahead of current state");
+      throw new ValidationError("ksn", "KSN ahead of current state", {
+        providedKsn: args.ksn,
+        currentKsn: keyState.ksn,
+        hint: "Use the current key sequence number",
+      });
     }
 
     // Reconstruct payload - use the original timestamp from when challenge was issued
@@ -304,7 +326,13 @@ export const proveChallenge = mutation({
     // Verify signatures
     const valid = await verifyIndexedSigs(payload, args.sigs, keyState);
     if (!valid) {
-      throw new Error("Invalid signatures or threshold not met");
+      throw new SignatureError("Invalid signatures or threshold not met", {
+        aid: challenge.aid,
+        ksn: args.ksn,
+        threshold: keyState.threshold,
+        providedSignatures: args.sigs.length,
+        hint: "Verify that you're signing with the correct private key",
+      });
     }
 
     // Mark challenge as used
@@ -346,32 +374,56 @@ export async function verifyAuth(
   // Fetch challenge
   const challenge = await ctx.db.get(auth.challengeId);
   if (!challenge) {
-    throw new Error("Challenge not found");
+    throw new NotFoundError("Challenge", auth.challengeId, {
+      hint: "The challenge may have expired or been used already",
+    });
   }
 
   if (challenge.used) {
-    throw new Error("Challenge already used");
+    throw new ChallengeError("Challenge already used", {
+      challengeId: auth.challengeId,
+      hint: "Request a new challenge to authenticate",
+    });
   }
 
   if (challenge.expiresAt < now) {
-    throw new Error("Challenge expired");
+    throw new ChallengeError("Challenge expired", {
+      challengeId: auth.challengeId,
+      expiresAt: challenge.expiresAt,
+      now,
+      hint: "Request a new challenge to authenticate",
+    });
   }
 
   // Enforce timestamp skew (max 2 minutes)
   const MAX_SKEW = 2 * 60 * 1000;
   const skew = Math.abs(now - challenge.createdAt);
   if (skew > MAX_SKEW) {
-    throw new Error("Challenge timestamp skew too large");
+    throw new ChallengeError("Challenge timestamp skew too large", {
+      challengeCreatedAt: challenge.createdAt,
+      now,
+      skew,
+      maxSkew: MAX_SKEW,
+      hint: "Check system clock synchronization",
+    });
   }
 
   if (challenge.purpose !== expectedPurpose) {
-    throw new Error(`Invalid purpose: expected ${expectedPurpose}, got ${challenge.purpose}`);
+    throw new ValidationError("purpose", "Purpose mismatch", {
+      expected: expectedPurpose,
+      actual: challenge.purpose,
+      hint: `This challenge was created for '${challenge.purpose}', not '${expectedPurpose}'`,
+    });
   }
 
   // Verify argsHash matches (ALWAYS recompute server-side)
   const argsHash = await computeArgsHash(args);
   if (challenge.argsHash !== argsHash) {
-    throw new Error("Args hash mismatch - authentication not valid for these args");
+    throw new ValidationError("argsHash", "Arguments hash mismatch", {
+      expected: challenge.argsHash,
+      actual: argsHash,
+      hint: "The signed challenge does not match the provided arguments",
+    });
   }
 
   // Fetch key state
@@ -379,7 +431,11 @@ export async function verifyAuth(
 
   // Verify KSN (only allow current KSN for strict verification)
   if (auth.ksn !== keyState.ksn) {
-    throw new Error(`Invalid KSN: expected ${keyState.ksn}, got ${auth.ksn}`);
+    throw new ValidationError("ksn", "KSN mismatch", {
+      expected: keyState.ksn,
+      actual: auth.ksn,
+      hint: "Use the current key sequence number",
+    });
   }
 
   // Reconstruct canonical payload (MUST match what client signed)
@@ -396,7 +452,13 @@ export async function verifyAuth(
   // Verify signatures
   const valid = await verifyIndexedSigs(payload, auth.sigs, keyState);
   if (!valid) {
-    throw new Error("Invalid signatures");
+    throw new SignatureError("Invalid signatures or threshold not met", {
+      aid: challenge.aid,
+      ksn: auth.ksn,
+      threshold: keyState.threshold,
+      providedSignatures: auth.sigs.length,
+      hint: "Verify that you're signing with the correct private key and the payload matches",
+    });
   }
 
   // Mark challenge as used
@@ -488,7 +550,9 @@ export const registerUser = mutation({
       .withIndex("by_aid", (q) => q.eq("aid", args.aid))
       .first();
     if (existing) {
-      throw new Error("User already exists");
+      throw new AlreadyExistsError("User", args.aid, {
+        hint: "Use sign-in to authenticate with an existing user",
+      });
     }
 
     // Insert user
@@ -589,7 +653,9 @@ export const getPublicKey = query({
       .first();
 
     if (!user) {
-      throw new Error(`User not found for AID: ${aid}`);
+      throw new NotFoundError("User", aid, {
+        hint: "The user must be registered before you can fetch their public key",
+      });
     }
 
     // Also fetch key state for additional context
