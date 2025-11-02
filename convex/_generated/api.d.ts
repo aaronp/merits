@@ -30,6 +30,7 @@ import type * as permissions from "../permissions.js";
 import type * as permissions_admin from "../permissions_admin.js";
 import type * as sessions from "../sessions.js";
 import type * as testHelpers from "../testHelpers.js";
+import type * as userStatus from "../userStatus.js";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -57,6 +58,7 @@ declare const fullApi: ApiFromModules<{
   permissions_admin: typeof permissions_admin;
   sessions: typeof sessions;
   testHelpers: typeof testHelpers;
+  userStatus: typeof userStatus;
 }>;
 export declare const api: FilterApi<
   typeof fullApi,

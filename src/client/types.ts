@@ -70,6 +70,28 @@ export interface SessionToken {
 }
 
 /**
+ * Group membership information
+ */
+export interface GroupMembership {
+  groupId: string;
+  groupName: string;
+  role: string;
+  joinedAt: number;
+}
+
+/**
+ * User status information
+ */
+export interface UserStatus {
+  aid: string;
+  roles: string[];
+  groups: GroupMembership[];
+  publicKey: string | null;
+  publicKeyKsn: number;
+  publicKeyUpdatedAt: number | null;
+}
+
+/**
  * Unified Merits Client Interface
  *
  * Provides backend-agnostic access to all Merits operations.
@@ -117,6 +139,14 @@ export interface MeritsClient {
     sigs: string[];
     ksn: number;
   }): Promise<SessionToken>;
+
+  /**
+   * Get comprehensive user status information
+   *
+   * @param aid - User's AID
+   * @returns User status including roles, groups, and public key
+   */
+  getUserStatus(aid: string): Promise<UserStatus>;
 
   /** Close the client connection */
   close(): void;

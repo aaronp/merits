@@ -192,6 +192,12 @@ export class ConvexMeritsClient implements MeritsClient {
     };
   }
 
+  async getUserStatus(aid: string): Promise<import("./types").UserStatus> {
+    // Query user status from backend
+    const status = await this.convex.query(api.userStatus.getUserStatus, { aid });
+    return status;
+  }
+
   close(): void {
     this.convex.close();
   }

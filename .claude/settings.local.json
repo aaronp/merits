@@ -76,7 +76,8 @@
       "Bash(export BOOTSTRAP_KEY=\"dev-only-secret\")",
       "Bash(export CONVEX_URL=https://aware-tiger-369.convex.cloud)",
       "Bash(tests/helpers/admin-bootstrap.example.test.ts)",
-      "Bash(pkill:*)"
+      "Bash(pkill:*)",
+      "Bash(session.json)"
     ],
     "deny": [],
     "ask": []

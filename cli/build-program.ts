@@ -29,6 +29,7 @@ import { sign } from "./commands/sign";
 import { confirmChallenge } from "./commands/confirm-challenge";
 import { signIn } from "./commands/sign-in";
 import { whoami } from "./commands/whoami";
+import { status } from "./commands/status";
 import { keyFor } from "./commands/key-for";
 import { listUnread } from "./commands/list-unread";
 import { unread } from "./commands/unread";
@@ -255,6 +256,36 @@ Examples:
     .command("whoami")
     .description("Display current session information")
     .action(whoami);
+
+  program
+    .command("status")
+    .description("Display comprehensive user status (roles, groups, public key, session TTL)")
+    .addHelpText("after", `
+Displays detailed user status including:
+  - User's current role(s)
+  - Group memberships
+  - Public key on record
+  - Session token TTL and validity
+
+Output includes:
+  - aid: User's AID
+  - roles: Array of assigned roles (e.g., ["user"], ["admin"])
+  - groups: Array of group memberships with names, roles, and join times
+  - publicKey: Currently registered public key
+  - session: Session token expiration and validity status
+
+Examples:
+  $ merits status --format pretty
+  $ merits status --token /path/to/session.json
+  $ merits status --format json
+
+Use Cases:
+  - Check your current permissions and access level
+  - Verify which groups you're a member of
+  - Monitor session expiration
+  - Confirm your public key registration
+  `)
+    .action(status);
 
   program
     .command("key-for <aid>")
