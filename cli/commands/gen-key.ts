@@ -9,13 +9,14 @@
  *
  * Output (RFC8785 canonicalized JSON):
  *   {
+ *     "aid": "<CESR-encoded AID>",
  *     "privateKey": "<base64url>",
  *     "publicKey": "<base64url>"
  *   }
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { generateKeyPair } from "../../core/crypto";
+import { generateKeyPair, createAID } from "../../core/crypto";
 import { sha256 } from "../../core/crypto";
 import * as ed from "@noble/ed25519";
 
@@ -50,7 +51,9 @@ export const genKey = withGlobalOptions(async (opts: GenKeyOptions) => {
   }
 
   // Convert to base64url for output
+  const aid = createAID(keys.publicKey);
   const output = {
+    aid,
     privateKey: Buffer.from(keys.privateKey).toString("base64url"),
     publicKey: Buffer.from(keys.publicKey).toString("base64url"),
   };

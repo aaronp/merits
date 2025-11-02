@@ -5,8 +5,9 @@
  *
  * Usage:
  *   merits gen-key > alice-keys.json
+ *   export AID=$(jq -r '.aid' alice-keys.json)
  *   export PUBLIC_KEY=$(jq -r '.publicKey' alice-keys.json)
- *   merits create-user --id alice --public-key ${PUBLIC_KEY} > challenge.json
+ *   merits create-user --id ${AID} --public-key ${PUBLIC_KEY} > challenge.json
  *
  * Output (RFC8785 canonicalized JSON):
  *   {
@@ -38,6 +39,16 @@ export const createUser = withGlobalOptions(async (opts: CreateUserOptions) => {
   }
 
   const args = { aid: opts.id, publicKey: opts.publicKey };
+
+  // Convert base64url public key to Uint8Array
+  const publicKeyBytes = Buffer.from(opts.publicKey, "base64url");
+
+  // Register key state first (required before issuing challenge)
+  await ctx.client.identityRegistry.registerIdentity({
+    aid: opts.id,
+    publicKey: publicKeyBytes,
+    ksn: 0,
+  });
 
   // Issue challenge for user registration
   const challenge = await ctx.client.identityAuth.issueChallenge({
