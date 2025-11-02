@@ -61,7 +61,8 @@
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make test-integration:*)",
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex deploy:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make test:*)",
-      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make:*)"
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud make:*)",
+      "Bash(../merits:*)"
     ],
     "deny": [],
     "ask": []

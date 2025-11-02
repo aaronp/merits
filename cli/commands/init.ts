@@ -42,8 +42,8 @@ export async function initCommand(opts: InitOptions): Promise<void> {
     placeholder: "alice",
     validate: (value) => {
       if (!value) return "Name is required";
-      if (!/^[a-z0-9-]+$/.test(value as string)) {
-        return "Name must be lowercase alphanumeric with dashes (e.g., 'alice', 'work-identity')";
+      if (!/^[A-Za-z0-9-]+$/.test(value as string)) {
+        return "Name must be alphanumeric with dashes (e.g., 'alice', 'Alice', 'work-identity')";
       }
       if (identities.includes(value as string)) {
         return `Identity '${value}' already exists`;
@@ -114,7 +114,7 @@ export async function initCommand(opts: InitOptions): Promise<void> {
       console.log(chalk.green("  ✓ Registered successfully"));
     } catch (err: any) {
       console.log(chalk.yellow(`  ⚠️  Registration failed: ${err.message}`));
-      console.log(chalk.gray(`     You can register later with: merits identity register ${name}`));
+      console.log(chalk.gray(`     You can register later with: merits create-user --id ${aid} --public-key <key>`));
     }
   } else {
     console.log(chalk.yellow("\n⚠️  No backend configured. Skipping registration."));
@@ -132,10 +132,11 @@ export async function initCommand(opts: InitOptions): Promise<void> {
   // Show next steps
   console.log();
   console.log(chalk.bold("Next steps:"));
-  console.log(`  ${chalk.cyan("merits identity list")}     - View your identities`);
-  console.log(`  ${chalk.cyan("merits identity show")} ${name}  - View details`);
+  console.log(`  ${chalk.cyan("merits whoami")}              - View your current session`);
+  console.log(`  ${chalk.cyan("merits send")} <aid>          - Send a message`);
+  console.log(`  ${chalk.cyan("merits unread")}              - Check for messages`);
   if (!ctx.config.backend?.url) {
-    console.log(`  ${chalk.cyan("merits config set")}        - Configure backend URL`);
+    console.log(`  ${chalk.cyan("merits config set")}         - Configure backend URL`);
   }
   console.log();
 }

@@ -58,7 +58,7 @@ export async function sendMessage(
   const fromIdentity = opts.from || ctx.config.defaultIdentity;
   if (!fromIdentity) {
     throw new Error(
-      "No default identity set. Use --from or: merits identity set-default <name>"
+      "No default identity set. Use --from <identity-name> or run: merits init"
     );
   }
 
