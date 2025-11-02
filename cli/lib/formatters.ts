@@ -244,7 +244,7 @@ export async function formatIdentity(
     case "json":
       return JSON.stringify({ name, ...identity }, null, 2);
 
-    case "text": {
+    case "pretty": {
       const nameLabel = color ? chalk.blue("Name:") : "Name:";
       const aidLabel = color ? chalk.blue("AID:") : "AID:";
       const ksnLabel = color ? chalk.blue("KSN:") : "KSN:";
@@ -290,7 +290,7 @@ export async function formatGroup(
     case "json":
       return JSON.stringify(group, null, 2);
 
-    case "text": {
+    case "pretty": {
       const idLabel = color ? chalk.blue("ID:") : "ID:";
       const nameLabel = color ? chalk.blue("Name:") : "Name:";
       const membersLabel = color ? chalk.blue("Members:") : "Members:";

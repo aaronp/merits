@@ -49,7 +49,7 @@ describe("Config Management", () => {
     expect(config.version).toBe(1);
     expect(config.backend.type).toBe("convex");
     expect(config.backend.url).toBe("https://example.convex.cloud");
-    expect(config.outputFormat).toBe("text");
+    expect(config.outputFormat).toBe("json");
     expect(config.watchInterval).toBe(1000);
     expect(config.verbose).toBe(false);
     expect(config.color).toBe(true);
@@ -83,13 +83,13 @@ describe("Config Management", () => {
     fs.writeFileSync(configPath, JSON.stringify(fileConfig, null, 2));
 
     process.env.CONVEX_URL = "https://env.convex.cloud";
-    process.env.MERITS_OUTPUT_FORMAT = "text";
+    process.env.MERITS_OUTPUT_FORMAT = "pretty";
 
     const config = loadConfig(configPath);
 
     expect(config.backend.url).toBe("https://env.convex.cloud");
     expect(config.backend.type).toBe("convex");
-    expect(config.outputFormat).toBe("text");
+    expect(config.outputFormat).toBe("pretty");
   });
 
   test("CLI flags override everything", () => {
@@ -105,12 +105,12 @@ describe("Config Management", () => {
 
     const config = loadConfig(configPath, {
       backend: { type: "convex", url: "https://cli.convex.cloud" },
-      outputFormat: "compact",
+      outputFormat: "raw",
     });
 
     expect(config.backend.url).toBe("https://cli.convex.cloud");
     expect(config.backend.type).toBe("convex");
-    expect(config.outputFormat).toBe("compact");
+    expect(config.outputFormat).toBe("raw");
   });
 
   test("throws error if backend is missing", () => {
@@ -145,7 +145,7 @@ describe("Config Management", () => {
     const config = {
       version: 1,
       backend: { type: "convex" as const, url: "https://example.convex.cloud" },
-      outputFormat: "text" as const,
+      outputFormat: "json" as const,
       watchInterval: 1000,
       verbose: false,
       color: true,

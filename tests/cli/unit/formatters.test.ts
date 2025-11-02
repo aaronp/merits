@@ -56,16 +56,16 @@ describe("Message Formatters", () => {
     expect(output).toMatchSnapshot();
   });
 
-  test("formats as text (no color)", async () => {
-    const output = await formatMessages(sampleMessages, "text", {
+  test("formats as pretty (no color)", async () => {
+    const output = await formatMessages(sampleMessages, "pretty", {
       color: false,
     });
 
     expect(output).toMatchSnapshot();
   });
 
-  test("formats as text (verbose, no color)", async () => {
-    const output = await formatMessages(sampleMessages, "text", {
+  test("formats as pretty (verbose, no color)", async () => {
+    const output = await formatMessages(sampleMessages, "pretty", {
       verbose: true,
       color: false,
     });
@@ -73,8 +73,8 @@ describe("Message Formatters", () => {
     expect(output).toMatchSnapshot();
   });
 
-  test("formats as compact (no color)", async () => {
-    const output = await formatMessages(sampleMessages, "compact", {
+  test("formats as raw (no color)", async () => {
+    const output = await formatMessages(sampleMessages, "raw", {
       color: false,
     });
 
@@ -114,33 +114,33 @@ describe("Identity Formatter", () => {
     expect(output).toMatchSnapshot();
   });
 
-  test("formats identity as text (no color)", async () => {
+  test("formats identity as pretty (no color)", async () => {
     const output = await formatIdentity(
       "alice",
       sampleIdentity,
-      "text",
+      "pretty",
       { color: false }
     );
 
     expect(output).toMatchSnapshot();
   });
 
-  test("formats identity as text (verbose, no color)", async () => {
+  test("formats identity as pretty (verbose, no color)", async () => {
     const output = await formatIdentity(
       "alice",
       sampleIdentity,
-      "text",
+      "pretty",
       { verbose: true, color: false }
     );
 
     expect(output).toMatchSnapshot();
   });
 
-  test("formats identity as compact", async () => {
+  test("formats identity as raw", async () => {
     const output = await formatIdentity(
       "alice",
       sampleIdentity,
-      "compact",
+      "raw",
       {}
     );
 
@@ -165,21 +165,21 @@ describe("Group Formatter", () => {
     expect(output).toMatchSnapshot();
   });
 
-  test("formats group as text (no color)", async () => {
-    const output = await formatGroup(sampleGroup, "text", { color: false });
+  test("formats group as pretty (no color)", async () => {
+    const output = await formatGroup(sampleGroup, "pretty", { color: false });
     expect(output).toMatchSnapshot();
   });
 
-  test("formats group as text (verbose, no color)", async () => {
-    const output = await formatGroup(sampleGroup, "text", {
+  test("formats group as pretty (verbose, no color)", async () => {
+    const output = await formatGroup(sampleGroup, "pretty", {
       verbose: true,
       color: false,
     });
     expect(output).toMatchSnapshot();
   });
 
-  test("formats group as compact", async () => {
-    const output = await formatGroup(sampleGroup, "compact", {});
+  test("formats group as raw", async () => {
+    const output = await formatGroup(sampleGroup, "raw", {});
     expect(output).toMatchSnapshot();
   });
 });
