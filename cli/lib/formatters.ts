@@ -8,7 +8,6 @@
  */
 
 import chalk from "chalk";
-import type { MeritsVault } from "./vault/MeritsVault";
 
 /**
  * Output format types (updated to match cli.md spec)
@@ -38,8 +37,6 @@ export interface EncryptedMessage {
 export interface FormatOptions {
   verbose?: boolean;
   color?: boolean;
-  vault?: MeritsVault;
-  identityName?: string;
 }
 
 /**
@@ -179,24 +176,9 @@ async function formatText(
     lines.push(`${typeLabel} ${msg.typ}`);
     lines.push(`${timeLabel} ${formatTimestamp(msg.createdAt)}`);
 
-    // Decrypt if vault provided
-    if (options.vault && options.identityName) {
-      try {
-        const plaintext = await options.vault.decrypt(
-          options.identityName,
-          msg.ct,
-          { ek: msg.ek, alg: msg.alg }
-        );
-        const contentLabel = color ? chalk.green("Content:") : "Content:";
-        lines.push(`${contentLabel} ${plaintext}`);
-      } catch (err) {
-        const ctLabel = color ? chalk.yellow("Ciphertext:") : "Ciphertext:";
-        lines.push(`${ctLabel} ${truncate(msg.ct, 64)}`);
-      }
-    } else {
-      const ctLabel = color ? chalk.yellow("Ciphertext:") : "Ciphertext:";
-      lines.push(`${ctLabel} ${truncate(msg.ct, 64)}`);
-    }
+    // Show ciphertext (decryption handled by backend)
+    const ctLabel = color ? chalk.yellow("Ciphertext:") : "Ciphertext:";
+    lines.push(`${ctLabel} ${truncate(msg.ct, 64)}`);
 
     if (options.verbose) {
       const idLabel = color ? chalk.dim("ID:") : "ID:";

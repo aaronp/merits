@@ -18,14 +18,13 @@ import * as os from "os";
  */
 export interface MeritsConfig {
   version: number;
-  dataDir?: string; // NEW: Override data directory (for testing)
+  dataDir?: string; // Override data directory (for testing)
   backend?: {
     type: "convex" | "rest" | "local";
     url: string;
   };
   outputFormat?: "json" | "pretty" | "raw";
   watchInterval?: number; // milliseconds
-  defaultIdentity?: string;
   verbose?: boolean;
   color?: boolean;
 }
@@ -58,7 +57,7 @@ const CONFIG_SCHEMA = {
   type: "object",
   properties: {
     version: { type: "number", enum: [1] },
-    dataDir: { type: "string", minLength: 1 }, // NEW: Data directory override
+    dataDir: { type: "string", minLength: 1 },
     backend: {
       type: "object",
       properties: {
@@ -70,7 +69,6 @@ const CONFIG_SCHEMA = {
     },
     outputFormat: { type: "string", enum: ["json", "pretty", "raw"] },
     watchInterval: { type: "number", minimum: 100, maximum: 30000 },
-    defaultIdentity: { type: "string", minLength: 1 },
     verbose: { type: "boolean" },
     color: { type: "boolean" },
   },

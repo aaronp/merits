@@ -2,11 +2,10 @@
  * CLI Context
  *
  * Shared context for all commands (created by preAction hook).
- * Provides access to config, vault, and client.
+ * Provides access to config and client.
  */
 
 import type { MeritsClient } from "../../src/client";
-import type { MeritsVault } from "./vault/MeritsVault";
 import type { ResolvedConfig } from "./config";
 
 /**
@@ -14,7 +13,6 @@ import type { ResolvedConfig } from "./config";
  */
 export interface CLIContext {
   config: ResolvedConfig;
-  vault: MeritsVault;
   client: MeritsClient;
 }
 

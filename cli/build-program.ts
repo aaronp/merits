@@ -16,12 +16,10 @@
 
 import { Command } from "commander";
 import { loadConfig } from "./lib/config";
-import { createVault } from "./lib/vault";
 import { createMeritsClient } from "../src/client";
 import type { CLIContext } from "./lib/context";
 
 // Import commands (new CLI spec from cli.md)
-import { initCommand } from "./commands/init";
 import { genKey } from "./commands/gen-key";
 import { incept } from "./commands/incept";
 import { createUser } from "./commands/create-user";
@@ -36,8 +34,6 @@ import { unread } from "./commands/unread";
 import { markAsRead } from "./commands/mark-as-read";
 import { extractIds } from "./commands/extract-ids";
 import { sendMessage } from "./commands/send";
-import { encrypt } from "./commands/encrypt";
-import { decrypt } from "./commands/decrypt";
 import { verifySignature } from "./commands/verify-signature";
 import { rolesCreate, permissionsCreate, rolesAddPermission, usersGrantRole, bootstrapOnboardingCmd } from "./commands/rbac";
 import {
@@ -109,7 +105,7 @@ Documentation:
   /**
    * PreAction hook: Initialize context for all commands
    *
-   * Creates config, vault, and client once at startup.
+   * Creates config and client once at startup.
    * Injected into command options as `_ctx`.
    */
   program.hook("preAction", (thisCommand, actionCommand) => {
@@ -121,22 +117,18 @@ Documentation:
 
     // Load config with 4-layer precedence
     const config = loadConfig(mergedOpts.config, {
-      dataDir: mergedOpts.dataDir, // NEW: Data directory override
+      dataDir: mergedOpts.dataDir,
       backend: mergedOpts.convexUrl ? { type: "convex", url: mergedOpts.convexUrl } : undefined,
       outputFormat: mergedOpts.format,
       verbose: mergedOpts.verbose,
       color: mergedOpts.color,
-      defaultIdentity: mergedOpts.from,
     });
-
-    // Create vault (uses dataDir if set for FileVault)
-    const vault = createVault(config);
 
     // Create Merits client (backend-agnostic)
     const client = createMeritsClient(config);
 
     // Inject context into command options
-    const ctx: CLIContext = { config, vault, client };
+    const ctx: CLIContext = { config, client };
     actionCommand.setOptionValue("_ctx", ctx);
 
     // Inject global options into command (so they're accessible in command handlers)
@@ -159,7 +151,6 @@ Documentation:
     // Debug logging
     if (mergedOpts.debug) {
       console.error("[DEBUG] Config:", config);
-      console.error("[DEBUG] Vault type: OS Keychain");
       console.error("[DEBUG] Global options:", {
         token: mergedOpts.token,
         format: mergedOpts.format,
@@ -176,21 +167,12 @@ Documentation:
     const ctx = opts._ctx as CLIContext | undefined;
 
     if (ctx) {
-      // Flush vault metadata
-      await ctx.vault.flush();
-
       // Close client connection
       ctx.client.close();
     }
   });
 
   // --- Commands ---
-
-  // Init command (first-time setup)
-  program
-    .command("init")
-    .description("First-time setup wizard")
-    .action(initCommand);
 
   // --- New CLI Commands (cli.md spec) ---
 
@@ -357,19 +339,7 @@ Output Formats:
     .action(extractIds);
 
   // Utility commands (Phase 7)
-  program
-    .command("encrypt")
-    .description("Encrypt message for testing (standalone encryption)")
-    .option("--message <text>", "Message text (or use stdin)")
-    .requiredOption("--public-key-file <path>", "Path to JSON file with recipient's public key")
-    .action(encrypt);
-
-  program
-    .command("decrypt")
-    .description("Decrypt message for testing (standalone decryption)")
-    .option("--encrypted-file <path>", "Path to encrypted message JSON (or use stdin)")
-    .requiredOption("--keys-file <path>", "Path to JSON file with private key")
-    .action(decrypt);
+  // encrypt and decrypt commands removed - encryption now handled by backend
 
   program
     .command("verify-signature")

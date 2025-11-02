@@ -1,7 +1,9 @@
 /**
- * Group Management Commands (Phase 4)
+ * Group Management Commands
  *
- * Commands for creating and managing groups:
+ * Simplified token-based group management. Backend handles all authorization.
+ *
+ * Commands:
  * - group create: Create new group
  * - group list: List all groups
  * - group info: Show group details
@@ -12,40 +14,40 @@
 
 import chalk from "chalk";
 import type { CLIContext } from "../lib/context";
-import { getAuthProof } from "../lib/getAuthProof";
+import { requireSessionToken } from "../lib/session";
 import { normalizeFormat } from "../lib/options";
 
 interface GroupCreateOptions {
-  from?: string;
+  token?: string;
   description?: string;
   _ctx: CLIContext;
 }
 
 interface GroupListOptions {
-  from?: string;
+  token?: string;
   format?: string;
   _ctx: CLIContext;
 }
 
 interface GroupInfoOptions {
-  from?: string;
+  token?: string;
   format?: string;
   _ctx: CLIContext;
 }
 
 interface GroupAddOptions {
-  from?: string;
+  token?: string;
   role?: string;
   _ctx: CLIContext;
 }
 
 interface GroupRemoveOptions {
-  from?: string;
+  token?: string;
   _ctx: CLIContext;
 }
 
 interface GroupLeaveOptions {
-  from?: string;
+  token?: string;
   _ctx: CLIContext;
 }
 
@@ -57,32 +59,13 @@ export async function createGroup(
   opts: GroupCreateOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get identity for AID
-  const identity = await ctx.vault.getIdentity(identityName);
-
-  // Get auth proof for creating group
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: {
-      action: "createGroup",
-      name: groupName,
-    },
-  });
-
-  // Create group via GroupApi
+  // Create group via backend (backend handles authorization)
   const result = await ctx.client.group.createGroup({
+    token: session.token,
     name: groupName,
     initialMembers: [], // Start with just the owner
-    auth,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -94,37 +77,21 @@ export async function createGroup(
     console.log(chalk.cyan(`\n📋 Group Details:`));
     console.log(`   ID: ${chalk.bold(result.groupId)}`);
     console.log(`   Name: ${chalk.bold(groupName)}`);
-    console.log(`   Owner: ${identity.aid}`);
+    console.log(`   Owner: ${session.aid}`);
     console.log(`   Members: 1 (owner)`);
   }
 }
 
 /**
- * List all groups for an identity
+ * List all groups for the authenticated user
  */
 export async function listGroups(opts: GroupListOptions): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  const identity = await ctx.vault.getIdentity(identityName);
-
-  // Get auth proof for listing groups
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: { action: "listGroups" },
-  });
-
-  // List groups via GroupApi
+  // List groups via backend
   const groups = await ctx.client.group.listGroups({
-    for: identity.aid,
-    auth,
+    token: session.token,
   });
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
@@ -158,25 +125,12 @@ export async function groupInfo(
   opts: GroupInfoOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: { action: "info", groupId },
-  });
-
-  // Get group info
+  // Get group info from backend
   const group = await ctx.client.group.getGroup({
+    token: session.token,
     groupId,
-    auth,
   });
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
@@ -211,30 +165,13 @@ export async function addGroupMember(
   opts: GroupAddOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: {
-      action: "addMembers",
-      groupId,
-      members: [memberAid],
-    },
-  });
-
-  // Add member (always added as "member" role - backend limitation)
+  // Add member via backend (backend handles authorization)
   await ctx.client.group.addMembers({
+    token: session.token,
     groupId,
     members: [memberAid],
-    auth,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -256,30 +193,13 @@ export async function removeGroupMember(
   opts: GroupRemoveOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: {
-      action: "removeMembers",
-      groupId,
-      members: [memberAid],
-    },
-  });
-
-  // Remove member
+  // Remove member via backend (backend handles authorization)
   await ctx.client.group.removeMembers({
+    token: session.token,
     groupId,
     members: [memberAid],
-    auth,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -299,36 +219,18 @@ export async function leaveGroup(
   opts: GroupLeaveOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const identityName = opts.from || ctx.config.defaultIdentity;
+  const session = requireSessionToken(opts.token);
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  const identity = await ctx.vault.getIdentity(identityName);
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "manageGroup",
-    args: {
-      action: "leaveGroup",
-      groupId,
-    },
-  });
-
-  // Leave group
+  // Leave group via backend
   await ctx.client.group.leaveGroup({
+    token: session.token,
     groupId,
-    auth,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
 
   if (isJsonMode) {
-    console.log(JSON.stringify({ success: true, groupId, aid: identity.aid }, null, 2));
+    console.log(JSON.stringify({ success: true, groupId, aid: session.aid }, null, 2));
   } else {
     console.log(chalk.green(`✅ Left group ${groupId}`));
   }

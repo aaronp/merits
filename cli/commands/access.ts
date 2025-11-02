@@ -21,7 +21,6 @@
  */
 
 import type { CLIContext } from "../lib/context";
-import { getAuthProof } from "../lib/getAuthProof";
 import { normalizeFormat } from "../lib/options";
 import { requireSessionToken } from "../lib/session";
 
@@ -51,26 +50,12 @@ export async function accessAllow(aid: string, opts: AccessOptions): Promise<voi
 
   // Load session token
   const session = requireSessionToken(opts.token);
-  const identityName = session.identityName || ctx.config.defaultIdentity;
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "addToAllowList",
-    args: { allowedAid: aid },
-  });
-
-  // Call backend API
+  // Call backend API (backend handles authorization via token)
   const result = await ctx.client.mutation(ctx.api.allowList.add, {
+    token: session.token,
     allowedAid: aid,
     note: opts.note,
-    auth,
   });
 
   // Output result
@@ -118,26 +103,12 @@ export async function accessDeny(aid: string, opts: AccessOptions): Promise<void
 
   // Load session token
   const session = requireSessionToken(opts.token);
-  const identityName = session.identityName || ctx.config.defaultIdentity;
 
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
-
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: "addToDenyList",
-    args: { deniedAid: aid },
-  });
-
-  // Call backend API
+  // Call backend API (backend handles authorization via token)
   const result = await ctx.client.mutation(ctx.api.denyList.add, {
+    token: session.token,
     deniedAid: aid,
     reason: opts.note, // Using 'note' for both allow and deny
-    auth,
   });
 
   // Output result
@@ -189,28 +160,14 @@ export async function accessRemove(aid: string, opts: AccessOptions): Promise<vo
 
   // Load session token
   const session = requireSessionToken(opts.token);
-  const identityName = session.identityName || ctx.config.defaultIdentity;
-
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
 
   const isAllow = opts.allow;
   const listType = isAllow ? "allow-list" : "deny-list";
 
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: isAllow ? "removeFromAllowList" : "removeFromDenyList",
-    args: isAllow ? { allowedAid: aid } : { deniedAid: aid },
-  });
-
-  // Call backend API
+  // Call backend API (backend handles authorization via token)
   const result = isAllow
-    ? await ctx.client.mutation(ctx.api.allowList.remove, { allowedAid: aid, auth })
-    : await ctx.client.mutation(ctx.api.denyList.remove, { deniedAid: aid, auth });
+    ? await ctx.client.mutation(ctx.api.allowList.remove, { token: session.token, allowedAid: aid })
+    : await ctx.client.mutation(ctx.api.denyList.remove, { token: session.token, deniedAid: aid });
 
   // Output result
   const output = {
@@ -321,28 +278,14 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
 
   // Load session token
   const session = requireSessionToken(opts.token);
-  const identityName = session.identityName || ctx.config.defaultIdentity;
-
-  if (!identityName) {
-    throw new Error("No identity specified. Use --from or set a default identity.");
-  }
 
   const isAllow = opts.allow;
   const listType = isAllow ? "allow-list" : "deny-list";
 
-  // Get auth proof
-  const auth = await getAuthProof({
-    client: ctx.client,
-    vault: ctx.vault,
-    identityName,
-    purpose: isAllow ? "clearAllowList" : "clearDenyList",
-    args: {},
-  });
-
-  // Call backend API
+  // Call backend API (backend handles authorization via token)
   const result = isAllow
-    ? await ctx.client.mutation(ctx.api.allowList.clear, { auth })
-    : await ctx.client.mutation(ctx.api.denyList.clear, { auth });
+    ? await ctx.client.mutation(ctx.api.allowList.clear, { token: session.token })
+    : await ctx.client.mutation(ctx.api.denyList.clear, { token: session.token });
 
   // Output result
   const output = {

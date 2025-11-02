@@ -23,6 +23,26 @@ export interface SessionToken {
   expiresAt: number;
   aid: string;
   ksn?: number;
+  keys?: {
+    privateKey: string;
+    publicKey: string;
+  };
+}
+
+/**
+ * Full identity file structure (from incept command)
+ */
+export interface IdentityFile {
+  aid: string;
+  keys: {
+    privateKey: string;
+    publicKey: string;
+  };
+  session: {
+    token: string;
+    aid: string;
+    expiresAt: number;
+  };
 }
 
 /**
@@ -113,14 +133,33 @@ export function loadSessionToken(path?: string): SessionToken | null {
 
   try {
     const content = readFileSync(tokenPath, "utf-8");
-    const parsed: SessionToken = JSON.parse(content);
+    const parsed = JSON.parse(content);
 
-    // Validate structure
-    if (!parsed.token || !parsed.expiresAt || !parsed.aid) {
+    // Handle two formats:
+    // 1. New format from incept: { aid, keys: {...}, session: { token, aid, expiresAt } }
+    // 2. Old flat format: { token, aid, expiresAt, ksn? }
+
+    if (parsed.session && parsed.keys) {
+      // New incept format
+      const identity: IdentityFile = parsed;
+      return {
+        token: identity.session.token,
+        expiresAt: identity.session.expiresAt,
+        aid: identity.aid,
+        keys: identity.keys,
+      };
+    } else if (parsed.token && parsed.expiresAt && parsed.aid) {
+      // Old flat format (backward compat)
+      return {
+        token: parsed.token,
+        expiresAt: parsed.expiresAt,
+        aid: parsed.aid,
+        ksn: parsed.ksn,
+        keys: parsed.keys, // May be undefined
+      };
+    } else {
       throw new Error("Invalid session token structure");
     }
-
-    return parsed;
   } catch (err) {
     console.error(`Failed to load session token from ${tokenPath}:`, err);
     return null;
@@ -217,9 +256,8 @@ export function requireSessionToken(path?: string): SessionToken {
   if (!session) {
     throw new Error(
       `No session token found. Please authenticate first:\n` +
-        `  merits create-user --id <aid> --public-key <key> > challenge.json\n` +
-        `  merits sign --file challenge.json --keys <keys.json> > challenge-response.json\n` +
-        `  merits confirm-challenge --file challenge-response.json`
+        `  merits incept --seed <your-seed> > identity.json\n` +
+        `  merits <command> --token identity.json`
     );
   }
 
@@ -227,8 +265,8 @@ export function requireSessionToken(path?: string): SessionToken {
     throw new Error(
       `Session token expired. Please authenticate again:\n` +
         `  merits sign-in --id ${session.aid} > challenge.json\n` +
-        `  merits sign --file challenge.json --keys <keys.json> > challenge-response.json\n` +
-        `  merits confirm-challenge --file challenge-response.json`
+        `  merits sign --file challenge.json --keys <keys.json> > response.json\n` +
+        `  merits confirm-challenge --file response.json > new-session.json`
     );
   }
 
