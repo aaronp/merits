@@ -17,7 +17,7 @@
 
 import { describe, it, expect, beforeAll } from "bun:test";
 import { runCliInProcess, assertSuccess } from "../helpers/exec";
-import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
+import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkScenario } from "../helpers/workspace";
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
@@ -32,6 +32,7 @@ const runTests = shouldRun ? describe : describe.skip;
 runTests("E2E: Sign-In Flow (Returning Users)", () => {
   let scenario: ReturnType<typeof mkScenario>;
   let admin: AdminCredentials;
+  let adminSessionPath: string;
   let userAid: string;
   let userPublicKey: string;
   let userPrivateKey: string;
@@ -41,6 +42,14 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
     console.log(`✓ Admin initialized: ${admin.aid}`);
 
     scenario = mkScenario("sign-in-flow");
+
+    // Get admin session token
+    adminSessionPath = join(scenario.dataDir, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 90000,
+      saveTo: adminSessionPath,
+    });
+    console.log(`✓ Admin session token created`);
   }, 60000);
 
   it("user incepts for the first time", async () => {
@@ -209,8 +218,8 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
         "grant-role",
         userAid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-signin-user",
       ],

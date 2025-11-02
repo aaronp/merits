@@ -173,16 +173,19 @@ export async function ensureAdminInitialised(
       // Step 2: Register user (get challenge and sign)
       const args = { aid, publicKey };
 
+      // Compute args hash on server to ensure consistency
+      const argsHash = await convex.query(api.auth.computeHash, { args });
+
       // Issue challenge
       const challenge = await convex.mutation(api.auth.issueChallenge, {
         aid,
-        purpose: "registerUser" as any,
-        args,
-        ttlMs: 120000,
+        purpose: "registerUser",
+        argsHash,
+        ttl: 120000,
       });
 
-      // Sign challenge
-      const sigs = await signPayload(challenge.payloadToSign, privateKeyBytes, 0);
+      // Sign the payload (signPayload handles serialization internally)
+      const sigs = await signPayload(challenge.payload, privateKeyBytes, 0);
 
       // Register user
       await convex.mutation(api.auth.registerUser, {
@@ -267,4 +270,76 @@ export function getCurrentAdminSeed(): string | null {
     console.warn(`⚠️  Could not read .admin-seed file:`, err);
   }
   return null;
+}
+
+/**
+ * Sign in as admin and get a session token
+ *
+ * This creates a session token with "admin" scope for the admin user.
+ * The token can be used for admin operations like creating roles, granting permissions, etc.
+ *
+ * @param convexUrl - Convex backend URL
+ * @param admin - Admin credentials from ensureAdminInitialised()
+ * @param options - Optional configuration
+ * @returns Session token object with token, aid, ksn, and expiresAt
+ */
+export async function getAdminSessionToken(
+  convexUrl: string,
+  admin: AdminCredentials,
+  options: {
+    /** Token lifetime in milliseconds (default: 60000ms = 1 minute) */
+    ttlMs?: number;
+    /** Path to save session token file (optional) */
+    saveTo?: string;
+  } = {}
+): Promise<{ token: string; aid: string; ksn: number; expiresAt: number }> {
+  const ttlMs = options.ttlMs ?? 60000;
+  const convex = new ConvexClient(convexUrl);
+
+  try {
+    // Compute args hash on server to ensure consistency
+    const args = { scopes: ["admin"], ttlMs };
+    const argsHash = await convex.query(api.auth.computeHash, { args });
+
+    // Issue challenge
+    const challenge = await convex.mutation(api.auth.issueChallenge, {
+      aid: admin.aid,
+      purpose: "openSession",
+      argsHash,
+      ttl: 120000,
+    });
+
+    // Sign the payload (signPayload handles serialization internally)
+    const sigs = await signPayload(challenge.payload, admin.privateKeyBytes, 0);
+
+    // Open session
+    const session = await convex.mutation(api.sessions.openSession, {
+      aid: admin.aid,
+      scopes: ["admin"],
+      ttlMs,
+      auth: {
+        challengeId: challenge.challengeId as any,
+        sigs,
+        ksn: 0,
+      },
+    });
+
+    const sessionData = {
+      token: session.token,
+      aid: admin.aid,
+      ksn: 0,
+      expiresAt: session.expiresAt,
+    };
+
+    // Save to file if requested
+    if (options.saveTo) {
+      writeFileSync(options.saveTo, JSON.stringify(sessionData, null, 2), "utf-8");
+      console.log(`✅ Admin session saved to ${options.saveTo}`);
+    }
+
+    console.log(`✅ Admin session token created (expires in ${ttlMs}ms)`);
+    return sessionData;
+  } finally {
+    convex.close();
+  }
 }

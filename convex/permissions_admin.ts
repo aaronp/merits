@@ -1,6 +1,7 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
+import { validateSessionToken } from "./sessions";
 
 async function requireAssignRoles(ctx: any, aid: string) {
   // First-run bypass: if there are no roles and no permissions yet, allow
@@ -17,11 +18,16 @@ async function requireAssignRoles(ctx: any, aid: string) {
 export const createRole = mutation({
   args: {
     roleName: v.string(),
-    adminAID: v.string(),
     actionSAID: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAssignRoles(ctx, args.adminAID);
+    // Validate session token and extract AID
+    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+
+    // Check permissions
+    await requireAssignRoles(ctx, session.aid);
+
     const now = Date.now();
     // Ensure not exists
     const existing = await ctx.db
@@ -31,7 +37,7 @@ export const createRole = mutation({
     if (existing) return { roleId: existing._id };
     const id = await ctx.db.insert("roles", {
       roleName: args.roleName,
-      adminAID: args.adminAID,
+      adminAID: session.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -43,11 +49,16 @@ export const createPermission = mutation({
   args: {
     key: v.string(),
     data: v.optional(v.any()),
-    adminAID: v.string(),
     actionSAID: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAssignRoles(ctx, args.adminAID);
+    // Validate session token and extract AID
+    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+
+    // Check permissions
+    await requireAssignRoles(ctx, session.aid);
+
     const now = Date.now();
     const existing = await ctx.db
       .query("permissions")
@@ -57,7 +68,7 @@ export const createPermission = mutation({
     const id = await ctx.db.insert("permissions", {
       key: args.key,
       data: args.data,
-      adminAID: args.adminAID,
+      adminAID: session.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -69,11 +80,16 @@ export const addPermissionToRole = mutation({
   args: {
     roleName: v.string(),
     key: v.string(),
-    adminAID: v.string(),
     actionSAID: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAssignRoles(ctx, args.adminAID);
+    // Validate session token and extract AID
+    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+
+    // Check permissions
+    await requireAssignRoles(ctx, session.aid);
+
     const now = Date.now();
     const role = await ctx.db
       .query("roles")
@@ -96,7 +112,7 @@ export const addPermissionToRole = mutation({
     await ctx.db.insert("rolePermissions", {
       roleId: role._id,
       permissionId: perm._id,
-      adminAID: args.adminAID,
+      adminAID: session.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -108,11 +124,16 @@ export const grantRoleToUser = mutation({
   args: {
     userAID: v.string(),
     roleName: v.string(),
-    adminAID: v.string(),
     actionSAID: v.string(),
+    sessionToken: v.string(),
   },
   handler: async (ctx, args) => {
-    await requireAssignRoles(ctx, args.adminAID);
+    // Validate session token and extract AID
+    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+
+    // Check permissions
+    await requireAssignRoles(ctx, session.aid);
+
     const now = Date.now();
     const role = await ctx.db
       .query("roles")
@@ -122,7 +143,7 @@ export const grantRoleToUser = mutation({
     await ctx.db.insert("userRoles", {
       userAID: args.userAID,
       roleId: role._id,
-      adminAID: args.adminAID,
+      adminAID: session.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });

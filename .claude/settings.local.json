@@ -77,7 +77,9 @@
       "Bash(export CONVEX_URL=https://aware-tiger-369.convex.cloud)",
       "Bash(tests/helpers/admin-bootstrap.example.test.ts)",
       "Bash(pkill:*)",
-      "Bash(session.json)"
+      "Bash(session.json)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex deploy:*)",
+      "Bash(export CONVEX_DEPLOYMENT=dev:aware-tiger-369)"
     ],
     "deny": [],
     "ask": []

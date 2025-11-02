@@ -176,13 +176,13 @@ export const bootstrapOnboarding = mutation({
       // Check if this AID already has admin role
       const existingAssignment = await ctx.db
         .query("userRoles")
-        .withIndex("by_user", (q: any) => q.eq("userId", args.adminAid))
+        .withIndex("by_user", (q: any) => q.eq("userAID", args.adminAid))
         .filter((q: any) => q.eq(q.field("roleId"), adminRole!._id))
         .first();
 
       if (!existingAssignment) {
         await ctx.db.insert("userRoles", {
-          userId: args.adminAid,
+          userAID: args.adminAid,
           roleId: adminRole!._id,
           adminAID: "SYSTEM",
           actionSAID: "bootstrap/assign",

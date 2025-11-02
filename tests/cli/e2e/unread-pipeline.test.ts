@@ -18,8 +18,9 @@
 
 import { describe, it, expect, beforeAll } from "bun:test";
 import { runCliInProcess, assertSuccess } from "../helpers/exec";
-import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
+import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario, writeJSON } from "../helpers/workspace";
+import { join } from "node:path";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -31,6 +32,7 @@ const runTests = shouldRun ? describe : describe.skip;
 runTests("E2E: Unread Message Pipeline", () => {
   let scenario: ReturnType<typeof mkMultiUserScenario>;
   let admin: AdminCredentials;
+  let adminSessionPath: string;
   let aliceAid: string;
   let bobAid: string;
   let messageIds: string[] = [];
@@ -42,6 +44,14 @@ runTests("E2E: Unread Message Pipeline", () => {
 
     // Create workspace
     scenario = mkMultiUserScenario("unread-pipeline", ["alice", "bob"]);
+
+    // Get admin session token
+    adminSessionPath = join(scenario.root, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 90000,
+      saveTo: adminSessionPath,
+    });
+    console.log(`✓ Admin session token created`);
 
     // Incept Alice
     const aliceResult = await runCliInProcess(
@@ -61,8 +71,8 @@ runTests("E2E: Unread Message Pipeline", () => {
         "grant-role",
         aliceAid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-alice-user-unread",
       ],
@@ -88,8 +98,8 @@ runTests("E2E: Unread Message Pipeline", () => {
         "grant-role",
         bobAid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-bob-user-unread",
       ],
@@ -362,14 +372,21 @@ describe("E2E: Unread Pipeline Edge Cases", () => {
     );
     assertSuccess(userResult);
 
+    // Get admin session token for this edge case test
+    const edgeAdminSessionPath = join(scenario.users.user.root, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 60000,
+      saveTo: edgeAdminSessionPath,
+    });
+
     await runCliInProcess(
       [
         "users",
         "grant-role",
         userResult.json.aid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        edgeAdminSessionPath,
         "--actionSAID",
         "grant-user-edge",
       ],

@@ -18,8 +18,9 @@
 
 import { describe, it, expect, beforeAll } from "bun:test";
 import { runCliInProcess, assertSuccess } from "../helpers/exec";
-import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
+import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario } from "../helpers/workspace";
+import { join } from "node:path";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -31,6 +32,7 @@ const runTests = shouldRun ? describe : describe.skip;
 runTests("E2E: Direct Messaging Flow", () => {
   let scenario: ReturnType<typeof mkMultiUserScenario>;
   let admin: AdminCredentials;
+  let adminSessionPath: string;
   let aliceAid: string;
   let bobAid: string;
 
@@ -41,6 +43,14 @@ runTests("E2E: Direct Messaging Flow", () => {
 
     // Create workspace
     scenario = mkMultiUserScenario("direct-messaging", ["alice", "bob"]);
+
+    // Get admin session token (90 seconds should be enough for the test)
+    adminSessionPath = join(scenario.root, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 90000,
+      saveTo: adminSessionPath,
+    });
+    console.log(`✓ Admin session token created`);
 
     // Incept Alice
     const aliceResult = await runCliInProcess(
@@ -60,8 +70,8 @@ runTests("E2E: Direct Messaging Flow", () => {
         "grant-role",
         aliceAid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-alice-user-dm",
       ],
@@ -87,8 +97,8 @@ runTests("E2E: Direct Messaging Flow", () => {
         "grant-role",
         bobAid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-bob-user-dm",
       ],
@@ -356,10 +366,17 @@ describe("E2E: Direct Messaging Edge Cases", () => {
     const scenario = mkMultiUserScenario("dm-edge", ["alice"]);
     const admin = await ensureAdminInitialised(CONVEX_URL!);
 
+    // Get admin session token
+    const adminSessionPath = join(scenario.root, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 60000,
+      saveTo: adminSessionPath,
+    });
+
     const aliceResult = await runCliInProcess(
       ["incept", "--seed", "alice-dm-edge"],
       {
-        cwd: scenario.users.alice.root,
+        cwd: scenario.users.alice!.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );
@@ -371,8 +388,8 @@ describe("E2E: Direct Messaging Edge Cases", () => {
         "grant-role",
         aliceResult.json.aid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-alice-edge",
       ],
@@ -383,7 +400,7 @@ describe("E2E: Direct Messaging Edge Cases", () => {
     const result = await runCliInProcess(
       ["send", "DNonExistentAid123", "--message", "test"],
       {
-        cwd: scenario.users.alice.root,
+        cwd: scenario.users.alice!.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );
@@ -400,10 +417,17 @@ describe("E2E: Direct Messaging Edge Cases", () => {
     const scenario = mkMultiUserScenario("empty-msg", ["alice", "bob"]);
     const admin = await ensureAdminInitialised(CONVEX_URL!);
 
+    // Get admin session token
+    const adminSessionPath = join(scenario.root, "admin-session.json");
+    await getAdminSessionToken(CONVEX_URL!, admin, {
+      ttlMs: 60000,
+      saveTo: adminSessionPath,
+    });
+
     const aliceResult = await runCliInProcess(
       ["incept", "--seed", "alice-empty"],
       {
-        cwd: scenario.users.alice.root,
+        cwd: scenario.users.alice!.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );
@@ -415,8 +439,8 @@ describe("E2E: Direct Messaging Edge Cases", () => {
         "grant-role",
         aliceResult.json.aid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-alice-empty",
       ],
@@ -426,7 +450,7 @@ describe("E2E: Direct Messaging Edge Cases", () => {
     const bobResult = await runCliInProcess(
       ["incept", "--seed", "bob-empty"],
       {
-        cwd: scenario.users.bob.root,
+        cwd: scenario.users.bob!.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );
@@ -438,8 +462,8 @@ describe("E2E: Direct Messaging Edge Cases", () => {
         "grant-role",
         bobResult.json.aid,
         "user",
-        "--adminAID",
-        admin.aid,
+        "--token",
+        adminSessionPath,
         "--actionSAID",
         "grant-bob-empty",
       ],
@@ -450,7 +474,7 @@ describe("E2E: Direct Messaging Edge Cases", () => {
     const result = await runCliInProcess(
       ["send", bobResult.json.aid, "--message", ""],
       {
-        cwd: scenario.users.alice.root,
+        cwd: scenario.users.alice!.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );

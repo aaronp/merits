@@ -82,7 +82,7 @@ export const openSession = mutation({
     }
 
     // Validate scopes
-    const validScopes = ["receive", "ack"];
+    const validScopes = ["receive", "ack", "admin"];
     for (const scope of scopes) {
       if (!validScopes.includes(scope)) {
         throw new Error(`Invalid scope: ${scope}. Must be one of: ${validScopes.join(", ")}`);

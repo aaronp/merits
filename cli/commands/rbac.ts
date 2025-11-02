@@ -1,14 +1,19 @@
 import type { CLIContext } from "../lib/context";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
+import { requireSessionToken } from "../lib/session";
 
 export async function rolesCreate(roleName: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
   const convex = new ConvexClient(ctx.config.backend.url);
+
+  // Load session token (admin must be signed in)
+  const session = requireSessionToken(opts.token);
+
   const res = await convex.mutation(api.permissions_admin.createRole, {
     roleName,
-    adminAID: opts.adminAID,
     actionSAID: opts.actionSAID,
+    sessionToken: session.token,
   });
   console.log(JSON.stringify(res));
 }
@@ -16,15 +21,20 @@ export async function rolesCreate(roleName: string, opts: any & { _ctx: CLIConte
 export async function permissionsCreate(key: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
   const convex = new ConvexClient(ctx.config.backend.url);
+
+  // Load session token (admin must be signed in)
+  const session = requireSessionToken(opts.token);
+
   let data: any = undefined;
   if (opts.data) {
     try { data = JSON.parse(opts.data); } catch { throw new Error("--data must be valid JSON"); }
   }
+
   const res = await convex.mutation(api.permissions_admin.createPermission, {
     key,
     data,
-    adminAID: opts.adminAID,
     actionSAID: opts.actionSAID,
+    sessionToken: session.token,
   });
   console.log(JSON.stringify(res));
 }
@@ -32,11 +42,15 @@ export async function permissionsCreate(key: string, opts: any & { _ctx: CLICont
 export async function rolesAddPermission(roleName: string, key: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
   const convex = new ConvexClient(ctx.config.backend.url);
+
+  // Load session token (admin must be signed in)
+  const session = requireSessionToken(opts.token);
+
   const res = await convex.mutation(api.permissions_admin.addPermissionToRole, {
     roleName,
     key,
-    adminAID: opts.adminAID,
     actionSAID: opts.actionSAID,
+    sessionToken: session.token,
   });
   console.log(JSON.stringify(res));
 }
@@ -44,11 +58,15 @@ export async function rolesAddPermission(roleName: string, key: string, opts: an
 export async function usersGrantRole(aid: string, roleName: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
   const convex = new ConvexClient(ctx.config.backend.url);
+
+  // Load session token (admin must be signed in)
+  const session = requireSessionToken(opts.token);
+
   const res = await convex.mutation(api.permissions_admin.grantRoleToUser, {
     userAID: aid,
     roleName,
-    adminAID: opts.adminAID,
     actionSAID: opts.actionSAID,
+    sessionToken: session.token,
   });
   console.log(JSON.stringify(res));
 }
@@ -65,5 +83,3 @@ export async function bootstrapOnboardingCmd(opts: any & { _ctx: CLIContext }) {
   const res = await convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, args as any);
   console.log(JSON.stringify(res));
 }
-
-
