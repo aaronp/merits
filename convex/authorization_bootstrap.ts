@@ -1,10 +1,68 @@
+/**
+ * Bootstrap System (Dev Environment)
+ *
+ * ⚠️ WARNING: This is a DEVELOPMENT-ONLY bootstrap implementation.
+ *    For production deployment, see docs/bootstrap-plan.md Option A.
+ *
+ * Security guards:
+ * - BOOTSTRAP_KEY environment variable required (prevents accidental production use)
+ * - Idempotent (safe to call multiple times)
+ * - Creates admin role if it doesn't exist
+ * - Assigns specified AID as admin
+ *
+ * TODO: Implement secure HMAC token bootstrap for production (see docs/bootstrap-plan.md)
+ */
+
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 
 export const bootstrapOnboarding = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    adminAid: v.optional(v.string()), // AID to grant admin role (optional for backwards compat)
+  },
+  handler: async (ctx, args) => {
     const now = Date.now();
+
+    // ============================================================================
+    // SECURITY GUARD #1: Require BOOTSTRAP_KEY environment variable
+    // ============================================================================
+    // This prevents accidental bootstrap in production environments.
+    // To bootstrap in dev, set: export BOOTSTRAP_KEY="dev-only-secret"
+    const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
+    if (!BOOTSTRAP_KEY) {
+      throw new Error(
+        "BOOTSTRAP_DISABLED - Bootstrap is not available in this environment. " +
+        "For dev setup, set BOOTSTRAP_KEY environment variable. " +
+        "See docs/bootstrap-plan.md for details."
+      );
+    }
+
+    // ============================================================================
+    // SECURITY GUARD #2: Idempotent check - prevent duplicate bootstrap
+    // ============================================================================
+    // Check if admin role already exists. If so, bootstrap is already done.
+    const existingAdmin = await ctx.db
+      .query("roles")
+      .withIndex("by_roleName", (q: any) => q.eq("roleName", "admin"))
+      .first();
+
+    if (existingAdmin) {
+      console.log("Bootstrap: Admin role already exists, skipping bootstrap");
+      return {
+        ok: true,
+        already: true,
+        message: "System already bootstrapped. Admin role exists.",
+        onboardingGroupId: (await ctx.db
+          .query("groupChats")
+          .filter((q: any) => q.eq(q.field("name"), "onboarding"))
+          .first())?._id,
+        anonRoleId: (await ctx.db
+          .query("roles")
+          .withIndex("by_roleName", (q: any) => q.eq("roleName", "anon"))
+          .first())?._id,
+        adminRoleId: existingAdmin._id,
+      };
+    }
 
     // Create onboarding group if missing
     let onboardingGroup = await ctx.db
@@ -74,10 +132,78 @@ export const bootstrapOnboarding = mutation({
       });
     }
 
+    // ============================================================================
+    // Create admin and user roles
+    // ============================================================================
+    // Create admin role with full permissions
+    let adminRole = await ctx.db
+      .query("roles")
+      .withIndex("by_roleName", (q: any) => q.eq("roleName", "admin"))
+      .first();
+
+    if (!adminRole) {
+      const adminRoleId = await ctx.db.insert("roles", {
+        roleName: "admin",
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/roles",
+        timestamp: now,
+      });
+      adminRole = await ctx.db.get(adminRoleId);
+      console.log("Bootstrap: Created admin role");
+    }
+
+    // Create user role (elevated from anon)
+    let userRole = await ctx.db
+      .query("roles")
+      .withIndex("by_roleName", (q: any) => q.eq("roleName", "user"))
+      .first();
+
+    if (!userRole) {
+      const userRoleId = await ctx.db.insert("roles", {
+        roleName: "user",
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/roles",
+        timestamp: now,
+      });
+      userRole = await ctx.db.get(userRoleId);
+      console.log("Bootstrap: Created user role");
+    }
+
+    // ============================================================================
+    // Assign admin role to specified AID (if provided)
+    // ============================================================================
+    if (args.adminAid) {
+      // Check if this AID already has admin role
+      const existingAssignment = await ctx.db
+        .query("userRoles")
+        .withIndex("by_user", (q: any) => q.eq("userId", args.adminAid))
+        .filter((q: any) => q.eq(q.field("roleId"), adminRole!._id))
+        .first();
+
+      if (!existingAssignment) {
+        await ctx.db.insert("userRoles", {
+          userId: args.adminAid,
+          roleId: adminRole!._id,
+          adminAID: "SYSTEM",
+          actionSAID: "bootstrap/assign",
+          timestamp: now,
+        });
+        console.log(`Bootstrap: Assigned admin role to ${args.adminAid}`);
+      } else {
+        console.log(`Bootstrap: ${args.adminAid} already has admin role`);
+      }
+    }
+
     return {
+      ok: true,
+      already: false,
+      message: "System bootstrapped successfully",
       onboardingGroupId: onboardingGroup!._id,
       anonRoleId: anonRole!._id,
+      userRoleId: userRole!._id,
+      adminRoleId: adminRole!._id,
       permissionId: permission!._id,
+      adminAid: args.adminAid,
     };
   },
 });

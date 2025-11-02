@@ -56,7 +56,13 @@ export async function usersGrantRole(aid: string, roleName: string, opts: any & 
 export async function bootstrapOnboardingCmd(opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
   const convex = new ConvexClient(ctx.config.backend.url);
-  const res = await convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, {} as any);
+
+  const args: { adminAid?: string } = {};
+  if (opts.adminAid) {
+    args.adminAid = opts.adminAid;
+  }
+
+  const res = await convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, args as any);
   console.log(JSON.stringify(res));
 }
 

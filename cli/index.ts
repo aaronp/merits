@@ -440,7 +440,28 @@ usersCmd
 
 program
   .command("rbac:bootstrap-onboarding")
-  .description("Bootstrap onboarding group, anon role, and permission mapping")
+  .description("Bootstrap onboarding group, roles (anon, user, admin), and permission mapping")
+  .option("--admin-aid <aid>", "AID to assign admin role (optional)")
+  .addHelpText("after", `
+⚠️  WARNING: This is a DEV-ONLY bootstrap command.
+    For production deployment, see docs/bootstrap-plan.md Option A.
+
+Environment requirements:
+  - BOOTSTRAP_KEY must be set (prevents accidental production use)
+  - Example: export BOOTSTRAP_KEY="dev-only-secret"
+
+Examples:
+  # Bootstrap system (no admin assignment)
+  merits rbac:bootstrap-onboarding
+
+  # Bootstrap system and assign admin role to specific AID
+  merits rbac:bootstrap-onboarding --admin-aid DqQWHc-DiiUeXcsSIXni913IdnpaNklSJzM0zKj4wVAk
+
+  # Typical dev workflow:
+  merits incept --seed admin-dev-seed > admin-keys.json
+  AID=$(cat admin-keys.json | jq -r '.aid')
+  merits rbac:bootstrap-onboarding --admin-aid "$AID"
+  `)
   .action((opts) => bootstrapOnboardingCmd(opts));
 
 // Group command group (Phase 4)

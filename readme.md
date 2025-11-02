@@ -14,6 +14,72 @@ bunx convex dev          # Start backend
 export CONVEX_URL=https://your-deployment.convex.cloud
 ```
 
+### Development Environment Setup
+
+⚠️ **WARNING**: This is a DEV-ONLY setup. For production deployment, see [docs/bootstrap-plan.md](docs/bootstrap-plan.md) Option A.
+
+**1. Set Bootstrap Environment Variable**
+
+```bash
+export BOOTSTRAP_KEY="dev-only-secret"  # Required to prevent accidental production bootstrap
+```
+
+**2. Create Admin Identity**
+
+```bash
+# Generate deterministic admin keys for dev (NEVER use --seed in production!)
+./merits incept --seed admin-dev-seed --format json > admin-keys.json
+
+# Extract admin AID
+export ADMIN_AID=$(cat admin-keys.json | jq -r '.aid')
+echo "Admin AID: $ADMIN_AID"
+```
+
+**3. Bootstrap System (Creates Roles & Permissions)**
+
+```bash
+# Bootstrap: creates onboarding group, anon/user/admin roles, and assigns admin
+./merits rbac:bootstrap-onboarding --admin-aid "$ADMIN_AID"
+```
+
+**4. Verify Admin Setup**
+
+```bash
+# Check that bootstrap succeeded
+./merits whoami
+```
+
+**What Bootstrap Creates:**
+- **Roles**: `anon` (default for new users), `user` (elevated), `admin` (full permissions)
+- **Onboarding Group**: System group for initial user onboarding
+- **Permissions**: Basic messaging and group permissions
+- **Admin Assignment**: Assigns admin role to specified AID
+
+**Troubleshooting:**
+
+If you see `BOOTSTRAP_DISABLED` error:
+```bash
+# Make sure BOOTSTRAP_KEY is set
+export BOOTSTRAP_KEY="dev-only-secret"
+```
+
+If bootstrap fails with "already bootstrapped":
+```bash
+# This is safe - the system is already set up. Just skip to step 4.
+```
+
+**For Testing:**
+
+The system uses test helpers for rapid iteration:
+```typescript
+// In tests: Grant all permissions without bootstrap ceremony
+await testConvexClient.mutation(internal.testHelpers.grantAllPermissions, {
+  aid: testAdminAid
+});
+```
+
+See [docs/implementation-roadmap.md](docs/implementation-roadmap.md) for the full testing and bootstrap strategy.
+
 ### CLI Usage
 
 ```bash
