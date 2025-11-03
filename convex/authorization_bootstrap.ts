@@ -94,6 +94,16 @@ export const bootstrapOnboarding = mutation({
           createdBy: "SYSTEM",
         });
         onboardingGroup = await ctx.db.get(groupId);
+
+        // Add admin as group member
+        await ctx.db.insert("groupMembers", {
+          groupChatId: groupId,
+          aid: args.adminAid,
+          latestSeqNo: 0,
+          joinedAt: now,
+          role: "owner",
+        });
+        console.log("Bootstrap: Added admin as onboarding group member");
       }
 
       // Return info about existing bootstrap for idempotency
@@ -111,6 +121,27 @@ export const bootstrapOnboarding = mutation({
         .query("roles")
         .withIndex("by_roleName", (q: any) => q.eq("roleName", "user"))
         .first();
+
+      // Ensure admin is a member of onboarding group
+      if (onboardingGroup && args.adminAid) {
+        const existingMembership = await ctx.db
+          .query("groupMembers")
+          .withIndex("by_group_aid", (q: any) =>
+            q.eq("groupChatId", onboardingGroup._id).eq("aid", args.adminAid)
+          )
+          .first();
+
+        if (!existingMembership) {
+          await ctx.db.insert("groupMembers", {
+            groupChatId: onboardingGroup._id,
+            aid: args.adminAid,
+            latestSeqNo: 0,
+            joinedAt: now,
+            role: "owner",
+          });
+          console.log("Bootstrap: Added admin as onboarding group member");
+        }
+      }
 
       // Ensure anon role has permission to message onboarding group
       if (anonRole && onboardingGroup) {
@@ -187,6 +218,16 @@ export const bootstrapOnboarding = mutation({
       });
       console.log("[BOOTSTRAP] Created group with ID:", groupId);
       onboardingGroup = await ctx.db.get(groupId);
+
+      // Add admin as group member
+      await ctx.db.insert("groupMembers", {
+        groupChatId: groupId,
+        aid: args.adminAid!,
+        latestSeqNo: 0,
+        joinedAt: now,
+        role: "owner",
+      });
+      console.log("[BOOTSTRAP] Added admin as onboarding group member");
     } else {
       console.log("Bootstrap: Onboarding group already exists");
     }
