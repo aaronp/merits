@@ -1,10 +1,10 @@
 /**
  * confirm-challenge Command
  *
- * Confirm a signed challenge and obtain a session token.
+ * Confirm a signed challenge and obtain credentials.
  *
  * Usage:
- *   merits confirm-challenge --file challenge-response.json > session-token.json
+ *   merits confirm-challenge --file challenge-response.json > identity.json
  *
  * Input format (challenge-response.json):
  *   {
@@ -24,11 +24,11 @@
  *   }
  *
  * Side effects:
- * - Stores session token to .merits/session.json (or --token path) with 0600 permissions
+ * - Stores credentials to .merits/identity.json (or --credentials path) with 0600 permissions
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { saveSessionToken, type SessionToken } from "../lib/session";
+import { saveCredentials, type Credentials } from "../lib/credentials";
 import { readFileSync } from "fs";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -38,7 +38,7 @@ export interface ConfirmChallengeOptions extends GlobalOptions {
 }
 
 /**
- * Confirm signed challenge and obtain session token
+ * Confirm signed challenge and obtain credentials
  *
  * @param opts Command options
  */
@@ -63,17 +63,25 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
   const { challengeId, signature, purpose, args } = response;
 
   // Determine the action based on purpose
-  let sessionToken: SessionToken;
+  let credentials: Credentials;
 
   if (purpose === "registerUser") {
     // Register new user
-    sessionToken = await ctx.client.registerUser({
+    const result = await ctx.client.registerUser({
       aid: args.aid,
       publicKey: args.publicKey,
       challengeId: challengeId,
       sigs: signature,
       ksn: 0, // Initial key sequence number
     });
+
+    // Build credentials from registration result and args
+    credentials = {
+      aid: result.aid || args.aid,
+      privateKey: args.privateKey, // This should be in args from sign command
+      publicKey: args.publicKey,
+      ksn: 0,
+    };
   } else if (purpose === "signIn") {
     // Sign in existing user
     // TODO: Implement sign-in flow when backend supports it
@@ -86,31 +94,30 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
     throw new Error(`Unknown challenge purpose: ${purpose}`);
   }
 
-  // Store session token to file
-  saveSessionToken(sessionToken, opts.token);
+  // Store credentials to file
+  saveCredentials(credentials, opts.credentials);
 
-  // Output session token in requested format
+  // Output credentials in requested format
   switch (format) {
     case "json":
       // RFC8785 canonicalized JSON for deterministic test snapshots
-      console.log(canonicalizeJSON(sessionToken));
+      console.log(canonicalizeJSON(credentials));
       break;
     case "pretty":
-      console.log(JSON.stringify(sessionToken, null, 2));
+      console.log(JSON.stringify(credentials, null, 2));
       break;
     case "raw":
-      console.log(JSON.stringify(sessionToken));
+      console.log(JSON.stringify(credentials));
       break;
   }
 
   // Success message (only in pretty mode)
   if (format === "pretty" && !opts.noBanner) {
-    const tokenPath = opts.token || ".merits/session.json";
-    console.error(`\n✓ Session token saved to ${tokenPath}`);
-    console.error(`  Expires at: ${new Date(sessionToken.expiresAt).toISOString()}`);
+    const credentialsPath = opts.credentials || ".merits/identity.json";
+    console.error(`\n✓ Credentials saved to ${credentialsPath}`);
     console.error(`\nYou can now use authenticated commands:`);
-    console.error(`  merits whoami --token ${tokenPath}`);
-    console.error(`  merits send --to <recipient> --message "hello" --token ${tokenPath}`);
+    console.error(`  merits whoami --credentials ${credentialsPath}`);
+    console.error(`  merits send --to <recipient> --message "hello" --credentials ${credentialsPath}`);
   }
 });
 

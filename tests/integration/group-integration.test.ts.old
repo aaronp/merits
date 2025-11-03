@@ -13,9 +13,9 @@
 import { describe, test, expect, beforeEach, afterEach } from "bun:test";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
-import { ConvexGroupApi } from "../../convex/adapters/ConvexGroupApi";
-import { ConvexIdentityAuth } from "../../convex/adapters/ConvexIdentityAuth";
-import { ConvexTransport } from "../../convex/adapters/ConvexTransport";
+import { ConvexGroupApi } from "../../src/adapters/ConvexGroupApi";
+import { ConvexIdentityAuth } from "../../src/adapters/ConvexIdentityAuth";
+import { ConvexTransport } from "../../src/adapters/ConvexTransport";
 import { generateKeyPair, createAID, signPayload } from "../helpers/crypto-utils";
 import { eventually, eventuallyValue } from "../helpers/eventually";
 import type { AuthProof } from "../../core/types";

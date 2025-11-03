@@ -1,7 +1,16 @@
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
-import { validateSessionToken } from "./sessions";
+import { verifySignedRequest } from "./auth";
+
+// Signature validator (reusable)
+const sigValidator = v.object({
+  signature: v.string(),
+  timestamp: v.number(),
+  nonce: v.string(),
+  keyId: v.string(),
+  signedFields: v.array(v.string()),
+});
 
 async function requireAssignRoles(ctx: any, aid: string) {
   // First-run bypass: if there are no roles and no permissions yet, allow
@@ -19,14 +28,14 @@ export const createRole = mutation({
   args: {
     roleName: v.string(),
     actionSAID: v.string(),
-    sessionToken: v.string(),
+    sig: sigValidator,
   },
   handler: async (ctx, args) => {
-    // Validate session token and extract AID
-    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+    // Verify signed request
+    const verified = await verifySignedRequest(ctx, args);
 
     // Check permissions
-    await requireAssignRoles(ctx, session.aid);
+    await requireAssignRoles(ctx, verified.aid);
 
     const now = Date.now();
     // Ensure not exists
@@ -37,7 +46,7 @@ export const createRole = mutation({
     if (existing) return { roleId: existing._id };
     const id = await ctx.db.insert("roles", {
       roleName: args.roleName,
-      adminAID: session.aid,
+      adminAID: verified.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -50,14 +59,14 @@ export const createPermission = mutation({
     key: v.string(),
     data: v.optional(v.any()),
     actionSAID: v.string(),
-    sessionToken: v.string(),
+    sig: sigValidator,
   },
   handler: async (ctx, args) => {
-    // Validate session token and extract AID
-    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+    // Verify signed request
+    const verified = await verifySignedRequest(ctx, args);
 
     // Check permissions
-    await requireAssignRoles(ctx, session.aid);
+    await requireAssignRoles(ctx, verified.aid);
 
     const now = Date.now();
     const existing = await ctx.db
@@ -68,7 +77,7 @@ export const createPermission = mutation({
     const id = await ctx.db.insert("permissions", {
       key: args.key,
       data: args.data,
-      adminAID: session.aid,
+      adminAID: verified.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -81,14 +90,14 @@ export const addPermissionToRole = mutation({
     roleName: v.string(),
     key: v.string(),
     actionSAID: v.string(),
-    sessionToken: v.string(),
+    sig: sigValidator,
   },
   handler: async (ctx, args) => {
-    // Validate session token and extract AID
-    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+    // Verify signed request
+    const verified = await verifySignedRequest(ctx, args);
 
     // Check permissions
-    await requireAssignRoles(ctx, session.aid);
+    await requireAssignRoles(ctx, verified.aid);
 
     const now = Date.now();
     const role = await ctx.db
@@ -112,7 +121,7 @@ export const addPermissionToRole = mutation({
     await ctx.db.insert("rolePermissions", {
       roleId: role._id,
       permissionId: perm._id,
-      adminAID: session.aid,
+      adminAID: verified.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });
@@ -125,14 +134,14 @@ export const grantRoleToUser = mutation({
     userAID: v.string(),
     roleName: v.string(),
     actionSAID: v.string(),
-    sessionToken: v.string(),
+    sig: sigValidator,
   },
   handler: async (ctx, args) => {
-    // Validate session token and extract AID
-    const session = await validateSessionToken(ctx, args.sessionToken, "admin");
+    // Verify signed request
+    const verified = await verifySignedRequest(ctx, args);
 
     // Check permissions
-    await requireAssignRoles(ctx, session.aid);
+    await requireAssignRoles(ctx, verified.aid);
 
     const now = Date.now();
     const role = await ctx.db
@@ -143,7 +152,7 @@ export const grantRoleToUser = mutation({
     await ctx.db.insert("userRoles", {
       userAID: args.userAID,
       roleId: role._id,
-      adminAID: session.aid,
+      adminAID: verified.aid,
       actionSAID: args.actionSAID,
       timestamp: now,
     });

@@ -21,14 +21,8 @@ import { runCliInProcess, assertSuccess, assertFailure } from "../helpers/exec";
 import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario } from "../helpers/workspace";
 
-// Only run if CONVEX_URL and BOOTSTRAP_KEY are set
-const CONVEX_URL = process.env.CONVEX_URL;
-const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
 
-const shouldRun = CONVEX_URL && BOOTSTRAP_KEY;
-const runTests = shouldRun ? describe : describe.skip;
-
-runTests("E2E: Allow/Deny List Precedence", () => {
+describe("E2E: Allow/Deny List Precedence", () => {
   let scenario: ReturnType<typeof mkMultiUserScenario>;
   let admin: AdminCredentials;
   let aliceAid: string;
@@ -37,7 +31,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
 
   beforeAll(async () => {
     // Initialize admin
-    admin = await ensureAdminInitialised(CONVEX_URL!);
+    admin = await ensureAdminInitialised();
     console.log(`✓ Admin initialized: ${admin.aid}`);
 
     // Create workspace
@@ -49,7 +43,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
         ["incept", "--seed", `${name}-allow-deny-test`],
         {
           cwd: user.root,
-          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+          env: { MERITS_VAULT_QUIET: "1" },
         }
       );
       assertSuccess(result);
@@ -69,7 +63,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
           `grant-${name}-user-allow-deny`,
         ],
         {
-          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+          env: { MERITS_VAULT_QUIET: "1" },
         }
       );
 
@@ -87,7 +81,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Hi Alice from Bob"],
       {
         cwd: scenario.users.bob.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
     assertSuccess(bobResult);
@@ -97,7 +91,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Hi Alice from Charlie"],
       {
         cwd: scenario.users.charlie.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
     assertSuccess(charlieResult);
@@ -110,7 +104,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["access", "allow", bobAid, "--note", "trusted friend"],
       {
         cwd: scenario.users.alice.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -123,7 +117,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
   it("alice should list allow-list and see bob", async () => {
     const result = await runCliInProcess(["access", "list", "--allow"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -144,7 +138,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Hello from Charlie again"],
       {
         cwd: scenario.users.charlie.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -159,7 +153,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Another message from Bob"],
       {
         cwd: scenario.users.bob.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -173,7 +167,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["access", "deny", bobAid, "--note", "changed my mind"],
       {
         cwd: scenario.users.alice.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -187,7 +181,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Can I still message?"],
       {
         cwd: scenario.users.bob.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -200,7 +194,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
   it("alice should list deny-list and see bob", async () => {
     const result = await runCliInProcess(["access", "list", "--deny"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -218,7 +212,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["access", "remove", bobAid, "--deny"],
       {
         cwd: scenario.users.alice.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -232,7 +226,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Can I message now?"],
       {
         cwd: scenario.users.bob.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -244,7 +238,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
   it("alice clears allow-list (returns to allow-all mode)", async () => {
     const result = await runCliInProcess(["access", "clear", "--allow"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -257,7 +251,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
       ["send", aliceAid, "--message", "Can I message now?"],
       {
         cwd: scenario.users.charlie.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -269,7 +263,7 @@ runTests("E2E: Allow/Deny List Precedence", () => {
   it("alice should verify allow-list is empty and inactive", async () => {
     const result = await runCliInProcess(["access", "list", "--allow"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -292,7 +286,7 @@ describe("E2E: Allow/Deny List Edge Cases", () => {
       ["incept", "--seed", "alice-allow-edge"],
       {
         cwd: scenario.users.alice.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
     assertSuccess(aliceResult);
@@ -309,14 +303,14 @@ describe("E2E: Allow/Deny List Edge Cases", () => {
         "--actionSAID",
         "grant-alice-edge",
       ],
-      { env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! } }
+      { env: { MERITS_VAULT_QUIET: "1" } }
     );
 
     const bobResult = await runCliInProcess(
       ["incept", "--seed", "bob-allow-edge"],
       {
         cwd: scenario.users.bob.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
     assertSuccess(bobResult);
@@ -325,13 +319,13 @@ describe("E2E: Allow/Deny List Edge Cases", () => {
     // Add Bob to allow-list
     await runCliInProcess(["access", "allow", bobAid], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Add Bob again (should handle gracefully)
     const result = await runCliInProcess(["access", "allow", bobAid, "--note", "updated note"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Should succeed (either update or idempotent)
@@ -349,13 +343,13 @@ describe("E2E: Allow/Deny List Edge Cases", () => {
 
     await runCliInProcess(["incept", "--seed", "alice-list-edge"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Try to list without specifying which list
     const result = await runCliInProcess(["access", "list"], {
       cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Should fail - must specify --allow or --deny

@@ -1,5 +1,6 @@
 import { v } from "convex/values";
-import { mutation, query, MutationCtx, QueryCtx } from "./_generated/server";
+import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id } from "./_generated/dataModel";
 import {
   verify,
@@ -10,6 +11,8 @@ import {
   sha256Hex,
   computeArgsHash as coreComputeArgsHash,
 } from "../core/crypto";
+import { verifyMutationSignature } from "../core/signatures";
+import type { SignedRequest } from "../core/types";
 import {
   NotFoundError,
   ChallengeError,
@@ -470,6 +473,105 @@ export async function verifyAuth(
     ksn: keyState.ksn,
     evtSaid: keyState.lastEvtSaid,
     challengeId: auth.challengeId,
+  };
+}
+
+/**
+ * Verify signed request (replaces session tokens)
+ *
+ * Verifies per-request signatures for Convex mutations.
+ * Checks:
+ * - Signature is cryptographically valid
+ * - Timestamp within acceptable skew (±5 minutes)
+ * - Nonce hasn't been seen before (replay protection)
+ * - Public key exists and is active
+ *
+ * @param ctx - Mutation context
+ * @param args - Full mutation arguments (must include 'sig' field)
+ * @returns Verified AID and key state info
+ * @throws SignatureError if signature invalid
+ * @throws ValidationError if timestamp/nonce invalid
+ *
+ * @example
+ * ```typescript
+ * // In a mutation
+ * const { aid, ksn } = await verifySignedRequest(ctx, args);
+ * // Now use verified AID for authorization checks
+ * ```
+ */
+export async function verifySignedRequest(
+  ctx: MutationCtx,
+  args: Record<string, any>
+): Promise<{
+  aid: string;
+  ksn: number;
+  evtSaid: string;
+}> {
+  const sig = args.sig as SignedRequest | undefined;
+
+  if (!sig) {
+    throw new ValidationError("sig", "No signature in request", {
+      hint: "All authenticated mutations require a 'sig' field with SignedRequest data",
+    });
+  }
+
+  // Fetch key state for the signer
+  const keyState = await ensureKeyState(ctx, sig.keyId);
+
+  // Get public key (first key in key state)
+  if (!keyState.keys[0]) {
+    throw new NotFoundError("Public key", sig.keyId, {
+      hint: "No keys registered for this AID",
+    });
+  }
+
+  const publicKeyBytes = decodeCESRKey(keyState.keys[0]);
+
+  // Verify signature (throws on invalid signature or timestamp skew)
+  const valid = await verifyMutationSignature(args, publicKeyBytes, 5 * 60 * 1000);
+
+  if (!valid) {
+    throw new SignatureError("Signature verification failed", {
+      aid: sig.keyId,
+      timestamp: sig.timestamp,
+      hint: "Signature does not match the provided arguments",
+    });
+  }
+
+  // Check nonce replay (prevent reuse of signatures)
+  const now = Date.now();
+  const NONCE_TTL = 10 * 60 * 1000; // 10 minutes
+
+  // Look for existing nonce in the last 10 minutes
+  const existingNonce = await ctx.db
+    .query("usedNonces")
+    .withIndex("by_keyId_nonce", (q) =>
+      q.eq("keyId", sig.keyId).eq("nonce", sig.nonce)
+    )
+    .first();
+
+  if (existingNonce) {
+    throw new ValidationError("nonce", "Nonce already used (replay detected)", {
+      nonce: sig.nonce,
+      keyId: sig.keyId,
+      previousUse: existingNonce.usedAt,
+      hint: "Each request must have a unique nonce. This appears to be a replayed request.",
+    });
+  }
+
+  // Store nonce to prevent replay
+  await ctx.db.insert("usedNonces", {
+    keyId: sig.keyId,
+    nonce: sig.nonce,
+    usedAt: now,
+    expiresAt: now + NONCE_TTL,
+  });
+
+  // Return verified identity info
+  return {
+    aid: sig.keyId,
+    ksn: keyState.ksn,
+    evtSaid: keyState.lastEvtSaid,
   };
 }
 

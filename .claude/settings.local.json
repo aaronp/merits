@@ -84,7 +84,15 @@
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex env get:*)",
       "Bash(git stash:*)",
       "Bash(bunx convex data:*)",
-      "Bash(bunx convex:*)"
+      "Bash(bunx convex:*)",
+      "Bash(export BOOTSTRAP_KEY=\"all-your-base-are-belong-2-us\")",
+      "Bash(mkdir:*)",
+      "Bash(rmdir:*)",
+      "Bash(bunx tsc:*)",
+      "Bash(grep:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex data list:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex:*)",
+      "Bash(xargs grep:*)"
     ],
     "deny": [],
     "ask": []

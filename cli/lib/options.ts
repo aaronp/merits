@@ -12,7 +12,7 @@ import type { CLIContext } from "./context";
  */
 export interface GlobalOptions {
   format?: "json" | "pretty" | "raw";
-  token?: string;
+  credentials?: string;
   noBanner?: boolean;
   verbose?: boolean;
   config?: string;

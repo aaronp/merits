@@ -1,85 +1,64 @@
 import type { CLIContext } from "../lib/context";
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { requireSessionToken } from "../lib/session";
+import { requireCredentials } from "../lib/credentials";
 
 export async function rolesCreate(roleName: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
-  const convex = new ConvexClient(ctx.config.backend.url);
+  const creds = requireCredentials(opts.credentials);
 
-  // Load session token (admin must be signed in)
-  const session = requireSessionToken(opts.token);
+  // Create admin API client (handles all signing internally)
+  const admin = (ctx.client as any).createAdminApi(creds);
 
-  const res = await convex.mutation(api.permissions_admin.createRole, {
-    roleName,
-    actionSAID: opts.actionSAID,
-    sessionToken: session.token,
-  });
+  // Simple, high-level API call
+  const res = await admin.createRole(roleName, opts.actionSAID);
   console.log(JSON.stringify(res));
 }
 
 export async function permissionsCreate(key: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
-  const convex = new ConvexClient(ctx.config.backend.url);
-
-  // Load session token (admin must be signed in)
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
 
   let data: any = undefined;
   if (opts.data) {
     try { data = JSON.parse(opts.data); } catch { throw new Error("--data must be valid JSON"); }
   }
 
-  const res = await convex.mutation(api.permissions_admin.createPermission, {
-    key,
-    data,
-    actionSAID: opts.actionSAID,
-    sessionToken: session.token,
-  });
+  // Create admin API client (handles all signing internally)
+  const admin = (ctx.client as any).createAdminApi(creds);
+
+  // Simple, high-level API call
+  const res = await admin.createPermission(key, opts.actionSAID, data);
   console.log(JSON.stringify(res));
 }
 
 export async function rolesAddPermission(roleName: string, key: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
-  const convex = new ConvexClient(ctx.config.backend.url);
+  const creds = requireCredentials(opts.credentials);
 
-  // Load session token (admin must be signed in)
-  const session = requireSessionToken(opts.token);
+  // Create admin API client (handles all signing internally)
+  const admin = (ctx.client as any).createAdminApi(creds);
 
-  const res = await convex.mutation(api.permissions_admin.addPermissionToRole, {
-    roleName,
-    key,
-    actionSAID: opts.actionSAID,
-    sessionToken: session.token,
-  });
+  // Simple, high-level API call
+  const res = await admin.addPermissionToRole(roleName, key, opts.actionSAID);
   console.log(JSON.stringify(res));
 }
 
 export async function usersGrantRole(aid: string, roleName: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
-  const convex = new ConvexClient(ctx.config.backend.url);
+  const creds = requireCredentials(opts.credentials);
 
-  // Load session token (admin must be signed in)
-  const session = requireSessionToken(opts.token);
+  // Create admin API client (handles all signing internally)
+  const admin = (ctx.client as any).createAdminApi(creds);
 
-  const res = await convex.mutation(api.permissions_admin.grantRoleToUser, {
-    userAID: aid,
-    roleName,
-    actionSAID: opts.actionSAID,
-    sessionToken: session.token,
-  });
+  // Simple, high-level API call
+  const res = await admin.grantRoleToUser(aid, roleName, opts.actionSAID);
   console.log(JSON.stringify(res));
 }
 
-export async function bootstrapOnboardingCmd(opts: any & { _ctx: CLIContext }) {
-  const ctx = opts._ctx;
-  const convex = new ConvexClient(ctx.config.backend.url);
+export async function bootstrapOnboardingCmd(convexUrl: string, adminAid: string) {
+  // Bootstrap doesn't require authentication - it's open during initial setup
+  const { ConvexClient } = await import("convex/browser");
+  const { api } = await import("../../convex/_generated/api");
+  const convex = new ConvexClient(convexUrl);
 
-  const args: { adminAid?: string } = {};
-  if (opts.adminAid) {
-    args.adminAid = opts.adminAid;
-  }
-
-  const res = await convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, args as any);
-  console.log(JSON.stringify(res));
+  return convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, { adminAid });
 }

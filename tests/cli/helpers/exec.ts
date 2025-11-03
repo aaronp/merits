@@ -52,6 +52,7 @@ export interface RunOptions {
   env?: Record<string, string>;
   /** Input text (for stdin) */
   input?: string;
+  expectSuccess?: boolean;
 }
 
 /**
@@ -150,6 +151,8 @@ export async function runCliInProcess(
     // Build argv: ["node", "merits", ...args]
     const argv = ["node", "merits", ...args];
 
+    originalConsoleLog('> merits:', args.join(' '))
+
     // Parse and execute
     await program.parseAsync(argv);
 
@@ -201,13 +204,22 @@ export async function runCliInProcess(
     }
   }
 
-  return {
+
+  const result = {
     code: exitCode,
     stdout: stdoutBuffer,
     stderr: stderrBuffer,
     json,
     error: caughtError,
-  };
+  }
+
+  if (opts.expectSuccess === false) {
+    // the test will do some assertions
+  } else {
+    assertSuccess(result);
+  }
+
+  return result;
 }
 
 /**

@@ -20,14 +20,8 @@ import { runCliInProcess, assertSuccess, assertFailure } from "../helpers/exec";
 import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario } from "../helpers/workspace";
 
-// Only run if CONVEX_URL and BOOTSTRAP_KEY are set
-const CONVEX_URL = process.env.CONVEX_URL;
-const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
 
-const shouldRun = CONVEX_URL && BOOTSTRAP_KEY;
-const runTests = shouldRun ? describe : describe.skip;
-
-runTests("E2E: Default Access for Anon Users", () => {
+describe("E2E: Default Access for Anon Users", () => {
   let scenario: ReturnType<typeof mkMultiUserScenario>;
   let admin: AdminCredentials;
   let aliceAid: string;
@@ -35,7 +29,7 @@ runTests("E2E: Default Access for Anon Users", () => {
 
   beforeAll(async () => {
     // Initialize admin and bootstrap system
-    admin = await ensureAdminInitialised(CONVEX_URL!);
+    admin = await ensureAdminInitialised();
     console.log(`✓ Admin initialized: ${admin.aid}`);
 
     // Ensure bootstrap is complete
@@ -43,9 +37,7 @@ runTests("E2E: Default Access for Anon Users", () => {
       ["rbac:bootstrap-onboarding", "--admin-aid", admin.aid],
       {
         env: {
-          MERITS_VAULT_QUIET: "1",
-          CONVEX_URL: CONVEX_URL!,
-          BOOTSTRAP_KEY: BOOTSTRAP_KEY!,
+          MERITS_VAULT_QUIET: "1"
         },
       }
     );

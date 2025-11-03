@@ -10,9 +10,47 @@
  *   scenario.cleanup(); // or use afterEach/afterAll hooks
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
 import { join } from "node:path";
+
+// Test run identifier for this session
+const TEST_RUN_ID = Date.now();
+
+/**
+ * Get the temporary directory for tests
+ * Creates ./testdata/{timestamp} if it doesn't exist
+ *
+ * @returns Path to the test data directory
+ */
+function tempDir(): string {
+  const testDataRoot = join(process.cwd(), "testdata", TEST_RUN_ID.toString());
+  if (!existsSync(testDataRoot)) {
+    mkdirSync(testDataRoot, { recursive: true });
+  }
+  return testDataRoot;
+}
+
+/**
+ * Clean up the entire testdata directory
+ * Call this after all tests complete to remove test artifacts
+ *
+ * @example
+ * ```typescript
+ * afterAll(() => {
+ *   cleanTestDir();
+ * });
+ * ```
+ */
+export function cleanTestDir(): void {
+  const testDataRoot = join(process.cwd(), "testdata");
+  try {
+    if (existsSync(testDataRoot)) {
+      rmSync(testDataRoot, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.warn(`Failed to cleanup testdata directory ${testDataRoot}:`, err);
+  }
+}
 
 export interface TestScenario {
   /** Root directory for this test scenario */
@@ -65,7 +103,7 @@ export interface TestScenario {
  */
 export function mkScenario(name: string): TestScenario {
   // Create unique temporary directory
-  const root = mkdtempSync(join(tmpdir(), `merits-${name}-`));
+  const root = mkdtempSync(join(tempDir(), `merits-${name}`));
 
   // Create .merits data directory
   const dataDir = join(root, ".merits");
@@ -207,7 +245,7 @@ export function mkMultiUserScenario(name: string, userNames: string[]): {
   cleanup: () => void;
 } {
   // Create root directory
-  const root = mkdtempSync(join(tmpdir(), `merits-${name}-`));
+  const root = mkdtempSync(join(tempDir(), `merits-${name}`));
 
   // Create scenario for each user
   const users: Record<string, TestScenario> = {};
@@ -223,7 +261,7 @@ export function mkMultiUserScenario(name: string, userNames: string[]): {
       dataDir,
       sessionPath: join(dataDir, "session.json"),
       keysPath: join(dataDir, "keys.json"),
-      cleanup: () => {}, // Handled by parent cleanup
+      cleanup: () => { }, // Handled by parent cleanup
     };
   }
 

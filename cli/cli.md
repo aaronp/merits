@@ -1,12 +1,11 @@
 # Merits CLI
 
 `merits` is the command-line entry point for the **Merits system**.  
-It provides a secure messaging and group coordination layer on top of authenticated, ephemeral communication — designed to align with the [KERI](https://github.com/WebOfTrust/keri) ecosystem while remaining standalone.
 
 Build locally via:
 
 ```bash
-make compile
+make build-cli
 ```
 
 ---
@@ -87,9 +86,10 @@ Merits verifies ownership of a key-pair through a **challenge–response** cerem
 # Step 1: Generate keys
 merits gen-key > alice-keys.json
 export PUBLIC_KEY=$(jq -r '.publicKey' alice-keys.json)
+export USER_ID=$(jq -r '.aid' alice-keys.json)
 
 # Step 2: Initiate challenge
-merits create-user --id alice --public-key ${PUBLIC_KEY} > challenge.json
+merits create-user --id ${USER_ID} --public-key ${PUBLIC_KEY} > challenge.json
 
 # Step 3: Sign the challenge
 merits sign --file challenge.json --keys alice-keys.json > challenge-response.json
@@ -339,4 +339,4 @@ They can be stored locally in `.merits/session.json` or passed explicitly with `
 
 ---
 
-© 2025 Kind Services – Merits CLI Specification v1.0
+Merits CLI Specification v1.0

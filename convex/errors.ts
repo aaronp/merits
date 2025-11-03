@@ -4,20 +4,31 @@
  * Provides error codes and context for better client-side handling
  */
 
-export class MeritsError extends Error {
+import { ConvexError } from "convex/values";
+
+export class MeritsError extends ConvexError<{
+  code: string;
+  message: string;
+  context?: Record<string, any>;
+}> {
+  public code: string;
+  public context?: Record<string, any>;
+
   constructor(
-    public code: string,
+    code: string,
     message: string,
-    public context?: Record<string, any>
+    context?: Record<string, any>
   ) {
-    super(message);
+    super({ code, message, context });
+    this.code = code;
+    this.context = context;
     this.name = "MeritsError";
   }
 
   toJSON() {
     return {
       error: this.code,
-      message: this.message,
+      message: this.data.message,
       context: this.context,
     };
   }
@@ -113,3 +124,5 @@ export class AccessDeniedError extends MeritsError {
     this.name = "AccessDeniedError";
   }
 }
+
+// Trigger redeployment

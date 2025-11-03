@@ -5,7 +5,22 @@
  * Supports both pull (receiveMessages) and push (subscribe) models.
  */
 
-import { AID, AuthProof } from "../types";
+import { AID, AuthProof, SignedRequest } from "../types";
+
+/**
+ * Credentials for signing requests
+ * Replaces session tokens with per-request signatures
+ */
+export interface AuthCredentials {
+  /** AID of the user */
+  aid: AID;
+
+  /** Private key for signing (raw bytes) */
+  privateKey: Uint8Array;
+
+  /** Key sequence number */
+  ksn: number;
+}
 
 /**
  * Request to send a message
@@ -97,18 +112,21 @@ export interface EncryptedMessage {
 
 /**
  * Options for subscribing to live message feed
- * Phase 4: Extended to support session tokens and additional callbacks
+ *
+ * Authentication via signed requests - provide credentials to automatically
+ * sign each acknowledgment.
  */
 export interface SubscribeOptions {
   /** AID to receive messages for */
   for: AID;
 
   /**
-   * Authentication - provide either auth proof OR session token
-   * Phase 4: Session token allows streaming without repeated signing
+   * Authentication credentials for signing acknowledgments
+   *
+   * Provide credentials to automatically sign each ack request.
+   * Replaces session tokens with per-request signatures.
    */
-  auth?: AuthProof;
-  sessionToken?: string;
+  credentials: AuthCredentials;
 
   /**
    * Callback invoked for each new message.
@@ -186,12 +204,12 @@ export interface Transport {
    * non-repudiation proof of delivery.
    *
    * Authentication required - must be the message recipient.
-   * Phase 4: Can use either auth proof OR session token
+   * Provide either auth (challenge-response) OR sig (signed request).
    */
   ackMessage(req: {
     messageId: string;
     auth?: AuthProof;
-    sessionToken?: string; // Phase 4: Alternative to auth for streaming
+    sig?: SignedRequest; // Signed request (replaces session tokens)
     receiptSig?: string[]; // Recipient's indexed sigs over envelopeHash
   }): Promise<void>;
 
@@ -201,44 +219,9 @@ export interface Transport {
    * Opens a persistent connection and calls onMessage for each new message.
    * Messages are auto-acknowledged if onMessage returns true.
    *
-   * Authentication required - subscriber must prove control of their AID.
+   * Authentication via signed requests - credentials are used to sign each ack.
    *
    * @returns Cancel function to stop the subscription
    */
   subscribe(opts: SubscribeOptions): Promise<() => void>;
-
-  /**
-   * Phase 4: Open authenticated session for streaming operations.
-   *
-   * Creates a short-lived bearer token that can be reused for multiple
-   * operations without signing. Token is scoped to specific purposes
-   * and bound to AID + KSN.
-   *
-   * Security properties:
-   * - Short-lived (max 60s)
-   * - Scoped to specific operations
-   * - KSN-bound (invalidated on key rotation)
-   * - Non-extendable (must issue new token)
-   *
-   * @returns Session token and expiry timestamp
-   */
-  openSession(req: {
-    aid: AID;
-    scopes: ("receive" | "ack")[];
-    ttlMs: number;
-    auth: AuthProof;
-  }): Promise<{ token: string; expiresAt: number }>;
-
-  /**
-   * Phase 4: Refresh session token for active subscription.
-   *
-   * Allows updating session token mid-stream without tearing down
-   * the WebSocket connection. Used for long-lived watch sessions.
-   *
-   * The new token must be obtained via openSession() first.
-   */
-  refreshSessionToken(req: {
-    for: AID;
-    sessionToken: string;
-  }): Promise<void>;
 }

@@ -110,6 +110,34 @@ export default defineSchema({
     .index("by_expiration", ["expiresAt"]),
 
   /**
+   * UsedNonces - Replay protection for signed requests
+   *
+   * Tracks nonces used in signed requests to prevent replay attacks.
+   * Each nonce can only be used once per keyId.
+   *
+   * Security:
+   * - Nonces expire after 10 minutes (auto-cleanup)
+   * - Prevents replay of valid signatures
+   * - Indexed by keyId+nonce for fast lookup
+   *
+   * Lifecycle:
+   * 1. Client generates unique nonce (UUID) for each request
+   * 2. Server checks if nonce was used before
+   * 3. Server stores nonce with expiry
+   * 4. Expired nonces auto-deleted via cleanup job
+   *
+   * @see auth.ts verifySignedRequest() for nonce validation
+   */
+  usedNonces: defineTable({
+    keyId: v.string(), // AID that used this nonce
+    nonce: v.string(), // UUID v4 nonce
+    usedAt: v.number(), // When it was first used
+    expiresAt: v.number(), // Auto-expire after 10 minutes
+  })
+    .index("by_keyId_nonce", ["keyId", "nonce"])
+    .index("by_expiration", ["expiresAt"]),
+
+  /**
    * KeyStates - KERI key state tracking for each AID
    *
    * Tracks the current cryptographic key state for each Autonomic Identifier (AID).
@@ -405,63 +433,6 @@ export default defineSchema({
     .index("by_group", ["groupChatId"])
     .index("by_aid", ["aid"])
     .index("by_group_aid", ["groupChatId", "aid"]),
-
-  /**
-   * SessionTokens - Short-lived bearer tokens for streaming operations
-   *
-   * Provides temporary authentication for operations that don't support
-   * challenge-response (e.g., WebSocket streaming, long-polling).
-   *
-   * Token Lifecycle:
-   * 1. Client authenticates via challenge-response
-   * 2. Backend issues session token (60s expiry)
-   * 3. Client uses token for streaming operations
-   * 4. Token auto-expires and must be refreshed
-   *
-   * Security:
-   * - Tokens are cryptographically random (64 bytes)
-   * - Short expiry window (60 seconds max)
-   * - Invalidated on key rotation (ksn changes)
-   * - Limited scopes (e.g., only "receive" operations)
-   * - Audit trail via useCount and lastUsedAt
-   *
-   * Scopes:
-   * - receive: Can retrieve messages
-   * - ack: Can acknowledge message receipt
-   * - Custom scopes for future features
-   *
-   * Claims:
-   * - Optional key-value pairs for fine-grained permissions
-   * - Can restrict token to specific groups or message types
-   *
-   * Indexes:
-   * - by_token: Fast token validation
-   * - by_aid: Revoke all tokens for a user
-   * - by_expiration: Cleanup expired tokens
-   *
-   * @see auth.ts issueSessionToken() and validateSessionToken()
-   */
-  sessionTokens: defineTable({
-    token: v.string(), // Cryptographically random token (64 bytes hex)
-    aid: v.string(), // AID this token is bound to
-    ksn: v.number(), // Key sequence number at token issuance (invalidated on rotation)
-    scopes: v.array(v.string()), // Operations allowed: ["receive", "ack"]
-    claims: v.array(
-      v.object({
-        key: v.string(),
-        data: v.optional(v.any()),
-      })
-    ),
-    createdAt: v.number(), // Token creation timestamp
-    expiresAt: v.number(), // Token expiry (max 60s from creation)
-    usedChallengeId: v.id("challenges"), // Challenge that authorized token creation
-    // Audit trail
-    lastUsedAt: v.optional(v.number()), // Last time token was used
-    useCount: v.number(), // Number of times token has been used
-  })
-    .index("by_token", ["token"]) // Fast lookup by token string
-    .index("by_aid", ["aid"]) // Lookup all tokens for an AID
-    .index("by_expiration", ["expiresAt"]), // Cleanup expired tokens
 
   /**
    * AllowList - Explicit list of AIDs allowed to message a user

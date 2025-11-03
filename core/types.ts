@@ -56,6 +56,9 @@ export interface KeyState {
  * 1. Requesting a challenge for a specific purpose + args
  * 2. Signing the challenge payload with their current keys
  * 3. Submitting this proof with the actual operation
+ *
+ * NOTE: This is used for initial registration. For regular mutations,
+ * use SignedRequest instead (no challenge needed).
  */
 export interface AuthProof {
   /** Server-issued challenge identifier */
@@ -66,6 +69,41 @@ export interface AuthProof {
 
   /** Key Sequence Number the client is using */
   ksn: number;
+}
+
+/**
+ * Signed request metadata
+ *
+ * Replaces bearer tokens with per-request signatures.
+ * Embedded in mutation arguments for Convex-compatible authentication.
+ *
+ * Security properties:
+ * - Each request is self-authenticating (no bearer tokens)
+ * - Replay protection via nonce + timestamp
+ * - Immediate revocation (disable public key on server)
+ * - No token theft risk
+ *
+ * Usage:
+ * ```typescript
+ * const sig = await signMutationArgs(args, privateKey, keyId);
+ * await convex.mutation(api.messages.send, { ...args, sig });
+ * ```
+ */
+export interface SignedRequest {
+  /** Base64url-encoded Ed25519 signature */
+  signature: string;
+
+  /** Unix timestamp in milliseconds (for replay protection) */
+  timestamp: number;
+
+  /** UUID v4 nonce (for replay protection) */
+  nonce: string;
+
+  /** AID of the signer (public key identifier) */
+  keyId: string;
+
+  /** Which argument fields were signed (for verification) */
+  signedFields: string[];
 }
 
 /**

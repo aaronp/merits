@@ -5,16 +5,17 @@
  */
 
 import { ConvexClient } from "convex/browser";
-import { api } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
-import {
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import type {
   Transport,
   MessageSendRequest,
   EncryptedMessage,
   SubscribeOptions,
 } from "../../core/interfaces/Transport";
-import { AuthProof } from "../../core/types";
+import { AuthProof, SignedRequest } from "../../core/types";
 import { sha256Hex } from "../../core/crypto";
+import { signMutationArgs } from "../../core/signatures";
 
 /**
  * Convex implementation of Transport interface
@@ -62,7 +63,7 @@ export class ConvexTransport implements Transport {
   async ackMessage(req: {
     messageId: string;
     auth?: AuthProof;
-    sessionToken?: string;
+    sig?: SignedRequest;
     receiptSig?: string[];
   }): Promise<void> {
     await this.client.mutation(api.messages.acknowledge, {
@@ -75,17 +76,16 @@ export class ConvexTransport implements Transport {
             ksn: req.auth.ksn,
           }
         : undefined,
-      sessionToken: req.sessionToken,
+      sig: req.sig,
     });
   }
 
   /**
    * Subscribe to live message feed using Convex's reactive queries
    *
-   * Phase 4: Supports both auth proof and session token
-   *
    * Uses the messages.list query with onUpdate to get real-time pushes.
    * Auto-acknowledges messages when onMessage returns true OR autoAck is set.
+   * Generates signatures for each ack using provided credentials.
    */
   async subscribe(opts: SubscribeOptions): Promise<() => void> {
     // Track which messages we've already processed to avoid duplicates
@@ -115,11 +115,20 @@ export class ConvexTransport implements Transport {
             const doAck = opts.autoAck !== undefined ? opts.autoAck : shouldAck;
 
             if (doAck) {
-              // Phase 4: Use session token if provided, otherwise auth proof
+              // Generate signature for ack using credentials
+              const ackArgs = {
+                messageId: id,
+                receipt: [],
+              };
+              const sig = await signMutationArgs(
+                ackArgs,
+                opts.credentials.privateKey,
+                opts.credentials.aid
+              );
+
               await this.ackMessage({
                 messageId: id,
-                auth: opts.auth,
-                sessionToken: opts.sessionToken,
+                sig,
               });
 
               // Remove from processed set after ack (message won't appear again)
@@ -143,45 +152,6 @@ export class ConvexTransport implements Transport {
         opts.onClose();
       }
     };
-  }
-
-  /**
-   * Phase 4: Open authenticated session for streaming operations
-   */
-  async openSession(req: {
-    aid: string;
-    scopes: ("receive" | "ack")[];
-    ttlMs: number;
-    auth: AuthProof;
-  }): Promise<{ token: string; expiresAt: number }> {
-    const result = await this.client.mutation(api.sessions.openSession, {
-      aid: req.aid,
-      scopes: req.scopes,
-      ttlMs: req.ttlMs,
-      auth: {
-        challengeId: req.auth.challengeId as Id<"challenges">,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
-    });
-
-    return {
-      token: result.token,
-      expiresAt: result.expiresAt,
-    };
-  }
-
-  /**
-   * Phase 4: Refresh session token for active subscription
-   */
-  async refreshSessionToken(req: {
-    for: string;
-    sessionToken: string;
-  }): Promise<void> {
-    await this.client.mutation(api.sessions.refreshSessionToken, {
-      forAid: req.for,
-      sessionToken: req.sessionToken,
-    });
   }
 
   /**

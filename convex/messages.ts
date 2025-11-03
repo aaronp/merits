@@ -1,13 +1,17 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { verifyAuth, computeCtHash, computeEnvelopeHash } from "./auth";
+import { verifyAuth, verifySignedRequest, computeCtHash, computeEnvelopeHash } from "./auth";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
 import { canMessage, canMessageBatch } from "./accessControl";
 
 /**
  * Send a message to a recipient (authenticated)
  *
- * SECURITY: senderAid is DERIVED from verified challenge, never trusted from client!
+ * SECURITY: senderAid is DERIVED from verified signature, never trusted from client!
+ *
+ * Supports two authentication methods:
+ * - sig (NEW): Per-request signature (preferred)
+ * - auth (OLD): Challenge-response (backward compatibility)
  */
 export const send = mutation({
   args: {
@@ -17,11 +21,24 @@ export const send = mutation({
     ek: v.optional(v.string()), // Ephemeral key for PFS
     alg: v.optional(v.string()), // Algorithm identifier
     ttl: v.optional(v.number()), // TTL in milliseconds
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
-    }),
+    // NEW: Signed request (preferred)
+    sig: v.optional(
+      v.object({
+        signature: v.string(),
+        timestamp: v.number(),
+        nonce: v.string(),
+        keyId: v.string(),
+        signedFields: v.array(v.string()),
+      })
+    ),
+    // OLD: Challenge-response (backward compatibility)
+    auth: v.optional(
+      v.object({
+        challengeId: v.id("challenges"),
+        sigs: v.array(v.string()),
+        ksn: v.number(),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -46,23 +63,43 @@ export const send = mutation({
     // Compute ctHash for binding
     const ctHash = await computeCtHash(args.ct);
 
-    // Verify authentication - argsHash MUST include ctHash, not ct!
-    // Use ttl (not expiresAt) to avoid timing issues
-    const verified = await verifyAuth(
-      ctx,
-      args.auth,
-      "send",
-      {
-        recpAid: args.recpAid,
-        ctHash, // Bind to hash, not plaintext
-        ttl, // Use ttl, not expiresAt (timing-independent)
-        alg: args.alg ?? "",
-        ek: args.ek ?? "",
-      }
-    );
+    // Verify authentication - support both sig and auth
+    let senderAid: string;
+    let senderKsn: number;
+    let senderEvtSaid: string;
+    let senderSigs: string[];
+    let usedChallengeId: string | undefined;
 
-    // SECURITY: Use server-verified AID, NEVER trust client!
-    const senderAid = verified.aid;
+    if (args.sig) {
+      // NEW: Signed request (preferred)
+      const verified = await verifySignedRequest(ctx, args);
+      senderAid = verified.aid;
+      senderKsn = verified.ksn;
+      senderEvtSaid = verified.evtSaid;
+      senderSigs = [args.sig.signature];
+      usedChallengeId = undefined;
+    } else if (args.auth) {
+      // OLD: Challenge-response (backward compatibility)
+      const verified = await verifyAuth(
+        ctx,
+        args.auth,
+        "send",
+        {
+          recpAid: args.recpAid,
+          ctHash, // Bind to hash, not plaintext
+          ttl, // Use ttl, not expiresAt (timing-independent)
+          alg: args.alg ?? "",
+          ek: args.ek ?? "",
+        }
+      );
+      senderAid = verified.aid;
+      senderKsn = verified.ksn;
+      senderEvtSaid = verified.evtSaid;
+      senderSigs = args.auth.sigs;
+      usedChallengeId = verified.challengeId;
+    } else {
+      throw new Error("Must provide either sig or auth");
+    }
 
     // AUTHORIZATION: RBAC permission check for direct user messaging
     const claims = await resolveUserClaims(ctx, senderAid);
@@ -107,11 +144,11 @@ export const send = mutation({
       createdAt: now,
       expiresAt,
       retrieved: false,
-      senderSig: args.auth.sigs,
-      senderKsn: verified.ksn,
-      senderEvtSaid: verified.evtSaid,
+      senderSig: senderSigs,
+      senderKsn,
+      senderEvtSaid,
       envelopeHash,
-      usedChallengeId: verified.challengeId,
+      usedChallengeId,
     });
 
     return messageId;
@@ -186,7 +223,7 @@ export const receive = mutation({
 /**
  * Mark a message as retrieved (acknowledge receipt) - authenticated
  *
- * Phase 4: Accepts either auth proof OR session token
+ * Authentication: Accepts either challenge-response (auth) OR signed request (sig)
  *
  * SECURITY: Stores recipient's signature over envelopeHash for non-repudiable
  * proof of delivery.
@@ -195,7 +232,7 @@ export const acknowledge = mutation({
   args: {
     messageId: v.id("messages"),
     receipt: v.optional(v.array(v.string())), // Recipient signs envelopeHash (optional)
-    // Phase 4: Accept either auth OR sessionToken
+    // Accept either challenge-response OR signed request
     auth: v.optional(
       v.object({
         challengeId: v.id("challenges"),
@@ -203,7 +240,15 @@ export const acknowledge = mutation({
         ksn: v.number(),
       })
     ),
-    sessionToken: v.optional(v.string()),
+    sig: v.optional(
+      v.object({
+        signature: v.string(),
+        timestamp: v.number(),
+        nonce: v.string(),
+        keyId: v.string(),
+        signedFields: v.array(v.string()),
+      })
+    ),
   },
   handler: async (ctx, args) => {
     // Fetch message to get recpAid
@@ -216,16 +261,15 @@ export const acknowledge = mutation({
     let verifiedKsn: number;
     let verifiedEvtSaid: string | undefined;
 
-    // Phase 4: Support both auth proof and session token
-    if (args.sessionToken) {
-      // Validate session token
-      const { validateSessionToken } = await import("./sessions");
-      const session = await validateSessionToken(ctx, args.sessionToken, "ack");
-      verifiedAid = session.aid;
-      verifiedKsn = session.ksn;
-      // evtSaid not available from session token (could be added if needed)
+    // Support both auth methods: signed request OR challenge-response
+    if (args.sig) {
+      // Signed request (replaces session tokens)
+      const verified = await verifySignedRequest(ctx, args);
+      verifiedAid = verified.aid;
+      verifiedKsn = verified.ksn;
+      verifiedEvtSaid = verified.evtSaid;
     } else if (args.auth) {
-      // Traditional auth proof
+      // Traditional challenge-response auth
       const verified = await verifyAuth(ctx, args.auth, "ack", {
         recpAid: message.recpAid,
         messageId: args.messageId,
@@ -234,7 +278,7 @@ export const acknowledge = mutation({
       verifiedKsn = verified.ksn;
       verifiedEvtSaid = verified.evtSaid;
     } else {
-      throw new Error("Must provide either auth or sessionToken");
+      throw new Error("Must provide either auth or sig");
     }
 
     // SECURITY: Ensure the verified AID matches the recipient

@@ -12,7 +12,7 @@
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireSessionToken } from "../lib/session";
+import { requireCredentials } from "../lib/credentials";
 
 export interface ListUnreadOptions extends GlobalOptions {
   from?: string; // Comma-separated list of sender AIDs to filter by
@@ -27,8 +27,8 @@ export const listUnread = withGlobalOptions(async (opts: ListUnreadOptions) => {
   const format = normalizeFormat(opts.format);
   const ctx = opts._ctx;
 
-  // Load and validate session token
-  const session = requireSessionToken(opts.token);
+  // Load and validate credentials
+  const creds = requireCredentials(opts.credentials);
 
   // Parse sender filter if provided
   const senderFilter = opts.from

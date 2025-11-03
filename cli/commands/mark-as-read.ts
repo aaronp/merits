@@ -5,8 +5,8 @@
  * Messages are deleted server-side after acknowledgment.
  *
  * Usage:
- *   merits mark-as-read --token ${TOKEN} --ids abc,def
- *   merits mark-as-read --token ${TOKEN} --ids-data ./message-ids.json
+ *   merits mark-as-read --credentials ${CREDENTIALS} --ids abc,def
+ *   merits mark-as-read --credentials ${CREDENTIALS} --ids-data ./message-ids.json
  *
  * Output (RFC8785 canonicalized JSON):
  *   {
@@ -16,7 +16,7 @@
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireSessionToken } from "../lib/session";
+import { requireCredentials } from "../lib/credentials";
 import { readFileSync } from "fs";
 
 export interface MarkAsReadOptions extends GlobalOptions {
@@ -33,8 +33,8 @@ export const markAsRead = withGlobalOptions(async (opts: MarkAsReadOptions) => {
   const format = normalizeFormat(opts.format);
   const ctx = opts._ctx;
 
-  // Load and validate session token
-  const session = requireSessionToken(opts.token);
+  // Load and validate credentials
+  const creds = requireCredentials(opts.credentials);
 
   // Parse message IDs from either --ids or --ids-data
   let messageIds: string[];

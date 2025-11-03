@@ -8,7 +8,7 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
-import { ConvexIdentityAuth } from "../../convex/adapters/ConvexIdentityAuth";
+import { ConvexIdentityAuth } from "../../src/adapters/ConvexIdentityAuth";
 import { IdentityAuth } from "../../core/interfaces/IdentityAuth";
 import {
   generateKeyPair,

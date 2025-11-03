@@ -21,15 +21,11 @@ import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } f
 import { mkScenario } from "../helpers/workspace";
 import { readFileSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
 import { join } from "node:path";
+import { eventuallyValue } from "../../helpers/eventually";
+import { TEST_CONFIG } from "../../config";
 
-// Only run if CONVEX_URL and BOOTSTRAP_KEY are set
-const CONVEX_URL = process.env.CONVEX_URL;
-const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
 
-const shouldRun = CONVEX_URL && BOOTSTRAP_KEY;
-const runTests = shouldRun ? describe : describe.skip;
-
-runTests("E2E: Sign-In Flow (Returning Users)", () => {
+describe("E2E: Sign-In Flow (Returning Users)", () => {
   let scenario: ReturnType<typeof mkScenario>;
   let admin: AdminCredentials;
   let adminSessionPath: string;
@@ -38,26 +34,26 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
   let userPrivateKey: string;
 
   beforeAll(async () => {
-    admin = await ensureAdminInitialised(CONVEX_URL!);
+    admin = await ensureAdminInitialised();
     console.log(`✓ Admin initialized: ${admin.aid}`);
 
     scenario = mkScenario("sign-in-flow");
 
     // Get admin session token
     adminSessionPath = join(scenario.dataDir, "admin-session.json");
-    await getAdminSessionToken(CONVEX_URL!, admin, {
+    await getAdminSessionToken(admin, {
       ttlMs: 90000,
       saveTo: adminSessionPath,
     });
     console.log(`✓ Admin session token created`);
   }, 60000);
 
-  it("user incepts for the first time", async () => {
+  it.only("user incepts for the first time", async () => {
     const result = await runCliInProcess(
       ["incept", "--seed", "returning-user-test"],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -80,7 +76,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
   it("whoami shows active session after inception", async () => {
     const result = await runCliInProcess(["whoami"], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -108,7 +104,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
   it("whoami fails when session is expired", async () => {
     const result = await runCliInProcess(["whoami"], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Should fail - no session
@@ -120,7 +116,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
   it("user signs back in with existing AID", async () => {
     const result = await runCliInProcess(["sign-in", "--id", userAid], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -162,7 +158,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
       ["sign", "--file", challengeFile, "--keys", keysFile],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -183,7 +179,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
       ["confirm-challenge", "--file", responseFile],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -200,7 +196,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
   it("whoami shows active session after sign-in", async () => {
     const result = await runCliInProcess(["whoami"], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(result);
@@ -223,7 +219,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
         "--actionSAID",
         "grant-signin-user",
       ],
-      { env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! } }
+      { env: { MERITS_VAULT_QUIET: "1" } }
     );
 
     // User sends themselves a message
@@ -231,22 +227,27 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
       ["send", userAid, "--message", "Test message after sign-in"],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
     assertSuccess(sendResult);
 
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    // Wait for message to be delivered using eventuallyValue
+    const readResult = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.root,
+          env: { MERITS_VAULT_QUIET: "1" },
+        });
+        assertSuccess(res);
+        return Array.isArray(res.json.messages) && res.json.messages.length > 0
+          ? res
+          : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
-    // User reads their messages
-    const readResult = await runCliInProcess(["unread"], {
-      cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(readResult);
     expect(Array.isArray(readResult.json.messages)).toBe(true);
 
     console.log("✓ User can send and receive messages after sign-in");
@@ -262,7 +263,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
     // Sign in again
     const signInResult = await runCliInProcess(["sign-in", "--id", userAid], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(signInResult);
@@ -276,7 +277,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
       ["sign", "--file", challengeFile, "--keys", keysFile],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -290,7 +291,7 @@ runTests("E2E: Sign-In Flow (Returning Users)", () => {
       ["confirm-challenge", "--file", responseFile],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -310,7 +311,7 @@ describe("E2E: Sign-In Edge Cases", () => {
       ["sign-in", "--id", "DNonExistentAid123"],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -332,7 +333,7 @@ describe("E2E: Sign-In Edge Cases", () => {
       ["incept", "--seed", "invalid-sig-test"],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -348,7 +349,7 @@ describe("E2E: Sign-In Edge Cases", () => {
     // Create sign-in challenge
     const signInResult = await runCliInProcess(["sign-in", "--id", userAid], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     assertSuccess(signInResult);
@@ -367,7 +368,7 @@ describe("E2E: Sign-In Edge Cases", () => {
       ["confirm-challenge", "--file", responseFile],
       {
         cwd: scenario.root,
-        env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        env: { MERITS_VAULT_QUIET: "1" },
       }
     );
 
@@ -387,7 +388,7 @@ describe("E2E: Sign-In Edge Cases", () => {
     // Try whoami without ever creating a session
     const result = await runCliInProcess(["whoami"], {
       cwd: scenario.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+      env: { MERITS_VAULT_QUIET: "1" },
     });
 
     // Should fail gracefully

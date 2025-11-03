@@ -10,7 +10,6 @@ make build
 
 # Run the CLI
 ./merits --help
-./merits init          # First-time setup
 ./merits gen-key       # Generate key pair
 ```
 
@@ -35,7 +34,6 @@ cli/
 ├── cli.md               # Full CLI documentation
 ├── index.ts             # CLI entry point
 ├── commands/            # Command implementations
-│   ├── init.ts          # First-time setup wizard
 │   ├── gen-key.ts       # Generate key pair
 │   ├── create-user.ts   # Create user challenge
 │   ├── sign.ts          # Sign challenge

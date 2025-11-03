@@ -14,40 +14,42 @@
 
 import chalk from "chalk";
 import type { CLIContext } from "../lib/context";
-import { requireSessionToken } from "../lib/session";
+import { requireCredentials } from "../lib/credentials";
 import { normalizeFormat } from "../lib/options";
+import { signMutationArgs } from "../../core/signatures";
+import { base64UrlToUint8Array } from "../../core/crypto";
 
 interface GroupCreateOptions {
-  token?: string;
+  credentials?: string;
   description?: string;
   _ctx: CLIContext;
 }
 
 interface GroupListOptions {
-  token?: string;
+  credentials?: string;
   format?: string;
   _ctx: CLIContext;
 }
 
 interface GroupInfoOptions {
-  token?: string;
+  credentials?: string;
   format?: string;
   _ctx: CLIContext;
 }
 
 interface GroupAddOptions {
-  token?: string;
+  credentials?: string;
   role?: string;
   _ctx: CLIContext;
 }
 
 interface GroupRemoveOptions {
-  token?: string;
+  credentials?: string;
   _ctx: CLIContext;
 }
 
 interface GroupLeaveOptions {
-  token?: string;
+  credentials?: string;
   _ctx: CLIContext;
 }
 
@@ -59,13 +61,20 @@ export async function createGroup(
   opts: GroupCreateOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
+
+  // Build and sign mutation args
+  const args = {
+    name: groupName,
+    initialMembers: [], // Start with just the owner
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
 
   // Create group via backend (backend handles authorization)
   const result = await ctx.client.group.createGroup({
-    token: session.token,
-    name: groupName,
-    initialMembers: [], // Start with just the owner
+    ...args,
+    sig,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -77,7 +86,7 @@ export async function createGroup(
     console.log(chalk.cyan(`\n📋 Group Details:`));
     console.log(`   ID: ${chalk.bold(result.groupId)}`);
     console.log(`   Name: ${chalk.bold(groupName)}`);
-    console.log(`   Owner: ${session.aid}`);
+    console.log(`   Owner: ${creds.aid}`);
     console.log(`   Members: 1 (owner)`);
   }
 }
@@ -87,12 +96,13 @@ export async function createGroup(
  */
 export async function listGroups(opts: GroupListOptions): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
 
-  // List groups via backend
-  const groups = await ctx.client.group.listGroups({
-    token: session.token,
-  });
+  // Create group API client (handles all signing internally)
+  const groupApi = (ctx.client as any).createGroupApi(creds);
+
+  // Simple, high-level API call
+  const groups = await groupApi.listGroups();
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
@@ -125,12 +135,19 @@ export async function groupInfo(
   opts: GroupInfoOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
+
+  // Build and sign mutation args
+  const args = {
+    groupId,
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
 
   // Get group info from backend
   const group = await ctx.client.group.getGroup({
-    token: session.token,
-    groupId,
+    ...args,
+    sig,
   });
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
@@ -165,13 +182,20 @@ export async function addGroupMember(
   opts: GroupAddOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
+
+  // Build and sign mutation args
+  const args = {
+    groupId,
+    members: [memberAid],
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
 
   // Add member via backend (backend handles authorization)
   await ctx.client.group.addMembers({
-    token: session.token,
-    groupId,
-    members: [memberAid],
+    ...args,
+    sig,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -193,13 +217,20 @@ export async function removeGroupMember(
   opts: GroupRemoveOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
+
+  // Build and sign mutation args
+  const args = {
+    groupId,
+    members: [memberAid],
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
 
   // Remove member via backend (backend handles authorization)
   await ctx.client.group.removeMembers({
-    token: session.token,
-    groupId,
-    members: [memberAid],
+    ...args,
+    sig,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
@@ -219,18 +250,25 @@ export async function leaveGroup(
   opts: GroupLeaveOptions
 ): Promise<void> {
   const ctx = opts._ctx;
-  const session = requireSessionToken(opts.token);
+  const creds = requireCredentials(opts.credentials);
+
+  // Build and sign mutation args
+  const args = {
+    groupId,
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
 
   // Leave group via backend
   await ctx.client.group.leaveGroup({
-    token: session.token,
-    groupId,
+    ...args,
+    sig,
   });
 
   const isJsonMode = ctx.config.outputFormat === "json";
 
   if (isJsonMode) {
-    console.log(JSON.stringify({ success: true, groupId, aid: session.aid }, null, 2));
+    console.log(JSON.stringify({ success: true, groupId, aid: creds.aid }, null, 2));
   } else {
     console.log(chalk.green(`✅ Left group ${groupId}`));
   }

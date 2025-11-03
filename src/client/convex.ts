@@ -6,13 +6,16 @@
 
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
-import { ConvexIdentityAuth } from "../../convex/adapters/ConvexIdentityAuth";
-import { ConvexTransport } from "../../convex/adapters/ConvexTransport";
-import { ConvexGroupApi } from "../../convex/adapters/ConvexGroupApi";
+import { ConvexIdentityAuth } from "../adapters/ConvexIdentityAuth";
+import { ConvexTransport } from "../adapters/ConvexTransport";
+import { ConvexGroupApi } from "../adapters/ConvexGroupApi";
+import { AdminApi } from "./admin";
+import { GroupApi } from "./group-api";
 import { createMessageRouter } from "../../core/runtime/router";
 import { computeArgsHash, signPayload, sha256Hex } from "../../core/crypto";
 import type { MeritsClient, IdentityRegistry, AuthCredentials } from "./types";
 import type { AuthProof } from "../../core/types";
+import type { Credentials } from "../../cli/lib/credentials";
 
 /**
  * Convex-specific implementation of IdentityRegistry
@@ -130,6 +133,40 @@ export class ConvexMeritsClient implements MeritsClient {
     return this.convex;
   }
 
+  /**
+   * Create an authenticated admin API client
+   *
+   * @param credentials - Admin credentials for signing requests
+   * @returns AdminApi instance that handles all signing internally
+   *
+   * @example
+   * ```typescript
+   * const admin = client.createAdminApi(credentials);
+   * await admin.createRole("user", actionSAID);
+   * await admin.grantRoleToUser(userAid, "user", actionSAID);
+   * ```
+   */
+  createAdminApi(credentials: Credentials): AdminApi {
+    return new AdminApi(this.convex, credentials);
+  }
+
+  /**
+   * Create an authenticated group API client
+   *
+   * @param credentials - User credentials for signing requests
+   * @returns GroupApi instance that handles all signing internally
+   *
+   * @example
+   * ```typescript
+   * const groups = client.createGroupApi(credentials);
+   * await groups.createGroup("My Group");
+   * const myGroups = await groups.listGroups();
+   * ```
+   */
+  createGroupApi(credentials: Credentials): GroupApi {
+    return new GroupApi(this.convex, credentials);
+  }
+
   async createAuth(
     credentials: AuthCredentials,
     purpose: string,
@@ -196,6 +233,115 @@ export class ConvexMeritsClient implements MeritsClient {
     // Query user status from backend
     const status = await this.convex.query(api.userStatus.getUserStatus, { aid });
     return status;
+  }
+
+  /**
+   * Send an encrypted message to a recipient
+   *
+   * High-level API that handles encryption and authentication internally.
+   *
+   * @param recipient - Recipient's AID
+   * @param plaintext - Message content (will be encrypted)
+   * @param credentials - Sender's credentials
+   * @param options - Optional message type and TTL
+   * @returns Message ID
+   *
+   * @example
+   * ```typescript
+   * const messageId = await client.sendMessage(
+   *   recipientAid,
+   *   "Hello, World!",
+   *   senderCredentials,
+   *   { typ: "chat.text" }
+   * );
+   * ```
+   */
+  async sendMessage(
+    recipient: string,
+    plaintext: string,
+    credentials: Credentials,
+    options?: { typ?: string; ttl?: number }
+  ): Promise<string> {
+    // Import libsodium
+    const libsodiumModule = await import("libsodium-wrappers-sumo");
+    const libsodium = libsodiumModule.default;
+    await libsodium.ready;
+
+    // Get recipient's public key
+    const recipientKeyState = await this.identityRegistry.getPublicKey(recipient);
+
+    // Convert Ed25519 → X25519 for encryption
+    const recipientX25519Key = libsodium.crypto_sign_ed25519_pk_to_curve25519(
+      Uint8Array.from(recipientKeyState.publicKey)
+    );
+
+    // Encrypt with sealed box
+    const messageBytes = new TextEncoder().encode(plaintext);
+    const cipherBytes = libsodium.crypto_box_seal(messageBytes, recipientX25519Key);
+
+    // Encode as base64url
+    const ct = Buffer.from(cipherBytes).toString("base64url");
+
+    // Send the encrypted message
+    return this.sendRawMessage(recipient, ct, credentials, {
+      ...options,
+      alg: "x25519-xsalsa20poly1305",
+    });
+  }
+
+  /**
+   * Send a pre-encrypted (raw) message to a recipient
+   *
+   * Lower-level API for sending already-encrypted ciphertext.
+   * Use this when you've encrypted the message yourself or need custom encryption.
+   *
+   * @param recipient - Recipient's AID
+   * @param ciphertext - Already-encrypted message (base64url)
+   * @param credentials - Sender's credentials
+   * @param options - Optional message type, algorithm, and TTL
+   * @returns Message ID
+   *
+   * @example
+   * ```typescript
+   * const messageId = await client.sendRawMessage(
+   *   recipientAid,
+   *   encryptedData,
+   *   senderCredentials,
+   *   { typ: "chat.text", alg: "x25519-xsalsa20poly1305" }
+   * );
+   * ```
+   */
+  async sendRawMessage(
+    recipient: string,
+    ciphertext: string,
+    credentials: Credentials,
+    options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
+  ): Promise<string> {
+    const { signMutationArgs } = await import("../../core/signatures");
+    const { base64UrlToUint8Array } = await import("../../core/crypto");
+
+    // Build mutation args
+    const ttl = options?.ttl ?? 24 * 60 * 60 * 1000; // Default 24 hours
+    const sendArgs = {
+      recpAid: recipient,
+      ct: ciphertext,
+      typ: options?.typ,
+      ttl,
+      alg: options?.alg ?? "",
+      ek: options?.ek ?? "",
+    };
+
+    // Sign the request
+    const privateKeyBytes = base64UrlToUint8Array(credentials.privateKey);
+    const sig = await signMutationArgs(sendArgs, privateKeyBytes, credentials.aid);
+
+    // Send with signed request
+    const messageId = await this.convex.mutation(api.messages.send, {
+      ...sendArgs,
+      sig,
+    });
+
+    return messageId;
   }
 
   close(): void {

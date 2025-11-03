@@ -73,7 +73,6 @@ Features:
   - Session tokens for streaming operations
 
 Quick Start:
-  $ merits init                          # First-time setup wizard
   $ merits incept                        # One-step user inception (generate + register)
 
   OR manually:
@@ -105,6 +104,7 @@ Documentation:
   /**
    * PreAction hook: Initialize context for all commands
    *
+   * Runs before every command:
    * Creates config and client once at startup.
    * Injected into command options as `_ctx`.
    */
@@ -350,47 +350,39 @@ Output Formats:
   // Send command
   program
     .command("send <recipient>")
-    .description("Send encrypted message to recipient (direct or group)")
-    .option("--message <text>", "Message text (or use stdin)")
-    .option("--ct <ciphertext>", "Pre-encrypted message (base64, direct messages only)")
-    .option("--encrypt-for <aid>", "Encrypt for third party (forwarding)")
-    .option("--from <identity>", "Sender identity (default: config.defaultIdentity)")
+    .description("Send encrypted message to recipient")
+    .option("--message <text>", "Message text to encrypt and send (or use stdin)")
+    .option("--raw <ciphertext>", "Pre-encrypted ciphertext (base64url, requires --alg)")
+    .option("--credentials <path>", "Path to credentials JSON file")
     .option("--ttl <ms>", "Time-to-live in milliseconds (default: 24h)", parseInt)
-    .option("--typ <type>", "Message type")
-    .option("--ek <key>", "Ephemeral key")
-    .option("--alg <algorithm>", "Encryption algorithm")
-    .option("--format <type>", "Output format (json|text|compact)")
+    .option("--typ <type>", "Message type for routing/authorization (e.g., 'chat.text')")
+    .option("--ek <key>", "Ephemeral key (for raw mode)")
+    .option("--alg <algorithm>", "Encryption algorithm (required for --raw mode)")
     .addHelpText("after", `
-Recipient Format:
-  Direct message : AID starting with 'D' or 'E' (CESR-encoded identifier)
-  Group message  : Group ID (any other format)
+Two Modes:
 
-Examples:
-  # Send direct message
-  $ merits send Dabcd1234... --message "Hello Alice"
+  1. Normal Mode (--message):
+     Encrypts plaintext with recipient's public key using libsodium sealed boxes.
 
-  # Send group message
-  $ merits send group-123 --message "Hello team"
+     Examples:
+       $ merits send <recipient-aid> --message "Hello"
+       $ merits send <recipient-aid> --message "Hello" --typ "chat.text"
+       $ echo "Hello" | merits send <recipient-aid>
 
-  # Read from stdin
-  $ echo "Secret message" | merits send Dabcd1234...
+  2. Raw Mode (--raw):
+     Sends pre-encrypted ciphertext as-is (for custom encryption).
 
-  # Pre-encrypted content (direct messages only)
-  $ merits send Dabcd1234... --ct <base64-ciphertext>
+     Examples:
+       $ merits send <recipient-aid> --raw <base64url-ct> --alg "x25519-xsalsa20poly1305"
+       $ merits send <recipient-aid> --raw <base64url-ct> --alg "custom" --ek <ephemeral-key>
 
-Encryption:
-  Direct Messages:
-    - X25519-XChaCha20-Poly1305 encryption
-    - One-to-one encrypted communication
-
-  Group Messages:
-    - Ephemeral AES-256-GCM group encryption
-    - Message encrypted once, distributed to all members
-    - Each member receives separately encrypted key
-    - Zero-knowledge: Backend cannot decrypt
+Authentication:
+  - Requires credentials (--credentials or MERITS_CREDENTIALS env var)
+  - Each send is signed with per-request signature
+  - RBAC enforced on backend (role-based permissions)
 
 Output:
-  Returns JSON with messageId, recipient/groupId, and sentAt timestamp
+  Returns JSON with messageId, recipient, and sentAt timestamp
   `)
     .action(sendMessage);
 
@@ -401,13 +393,11 @@ Output:
 
   rolesCmd
     .command("create <roleName>")
-    .requiredOption("--adminAID <aid>", "Admin AID performing the change")
     .requiredOption("--actionSAID <said>", "Reference to governance action")
     .action(rolesCreate);
 
   rolesCmd
     .command("add-permission <roleName> <key>")
-    .requiredOption("--adminAID <aid>", "Admin AID performing the change")
     .requiredOption("--actionSAID <said>", "Reference to governance action")
     .action(rolesAddPermission);
 
@@ -418,7 +408,6 @@ Output:
   permsCmd
     .command("create <key>")
     .option("--data <json>", "JSON-encoded data payload")
-    .requiredOption("--adminAID <aid>", "Admin AID performing the change")
     .requiredOption("--actionSAID <said>", "Reference to governance action")
     .action(permissionsCreate);
 
@@ -428,35 +417,10 @@ Output:
 
   usersCmd
     .command("grant-role <aid> <roleName>")
-    .requiredOption("--adminAID <aid>", "Admin AID performing the change")
+    .option("--token <path>", "Admin session token file")
     .requiredOption("--actionSAID <said>", "Reference to governance action")
     .action(usersGrantRole);
 
-  program
-    .command("rbac:bootstrap-onboarding")
-    .description("Bootstrap onboarding group, roles (anon, user, admin), and permission mapping")
-    .option("--admin-aid <aid>", "AID to assign admin role (optional)")
-    .addHelpText("after", `
-⚠️  WARNING: This is a DEV-ONLY bootstrap command.
-    For production deployment, see docs/bootstrap-plan.md Option A.
-
-Environment requirements:
-  - BOOTSTRAP_KEY must be set (prevents accidental production use)
-  - Example: export BOOTSTRAP_KEY="dev-only-secret"
-
-Examples:
-  # Bootstrap system (no admin assignment)
-  merits rbac:bootstrap-onboarding
-
-  # Bootstrap system and assign admin role to specific AID
-  merits rbac:bootstrap-onboarding --admin-aid DqQWHc-DiiUeXcsSIXni913IdnpaNklSJzM0zKj4wVAk
-
-  # Typical dev workflow:
-  merits incept --seed admin-dev-seed > admin-keys.json
-  AID=$(cat admin-keys.json | jq -r '.aid')
-  merits rbac:bootstrap-onboarding --admin-aid "$AID"
-  `)
-    .action((opts) => bootstrapOnboardingCmd(opts));
 
   // Group command group (Phase 4)
   const groupCmd = program
@@ -466,41 +430,35 @@ Examples:
   groupCmd
     .command("create <name>")
     .description("Create a new group")
-    .option("--from <identity>", "Identity creating the group (default: config.defaultIdentity)")
     .option("--description <text>", "Group description")
     .action(createGroup);
 
   groupCmd
     .command("list")
     .description("List all groups (owned, admin, or member)")
-    .option("--from <identity>", "Identity to list groups for (default: config.defaultIdentity)")
     .option("--format <type>", "Output format (json|text|compact)")
     .action(listGroups);
 
   groupCmd
     .command("info <group-id>")
     .description("Show detailed group information")
-    .option("--from <identity>", "Identity requesting info (default: config.defaultIdentity)")
     .option("--format <type>", "Output format (json|text)")
     .action(groupInfo);
 
   groupCmd
     .command("add <group-id> <member-aid>")
     .description("Add member to group")
-    .option("--from <identity>", "Identity performing action (default: config.defaultIdentity)")
     .option("--role <type>", "Member role (member|admin)", "member")
     .action(addGroupMember);
 
   groupCmd
     .command("remove <group-id> <member-aid>")
     .description("Remove member from group")
-    .option("--from <identity>", "Identity performing action (default: config.defaultIdentity)")
     .action(removeGroupMember);
 
   groupCmd
     .command("leave <group-id>")
     .description("Leave a group")
-    .option("--from <identity>", "Identity leaving (default: config.defaultIdentity)")
     .action(leaveGroup);
 
   // Access control command group (Phase 6)

@@ -5,9 +5,9 @@
  */
 
 import { ConvexClient } from "convex/browser";
-import { api } from "../_generated/api";
-import type { Id } from "../_generated/dataModel";
-import {
+import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
+import type {
   IdentityAuth,
   IssueChallengeRequest,
   IssueChallengeResponse,

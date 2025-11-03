@@ -8,8 +8,8 @@
 import { describe, test, expect, beforeAll, afterAll } from "bun:test";
 import { ConvexClient } from "convex/browser";
 import { api } from "../../convex/_generated/api";
-import { ConvexTransport } from "../../convex/adapters/ConvexTransport";
-import { ConvexIdentityAuth } from "../../convex/adapters/ConvexIdentityAuth";
+import { ConvexTransport } from "../../src/adapters/ConvexTransport";
+import { ConvexIdentityAuth } from "../../src/adapters/ConvexIdentityAuth";
 import { Transport } from "../../core/interfaces/Transport";
 import { IdentityAuth } from "../../core/interfaces/IdentityAuth";
 import { AuthProof } from "../../core/types";

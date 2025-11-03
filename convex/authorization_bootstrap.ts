@@ -43,11 +43,14 @@ export const bootstrapOnboarding = mutation({
     // Prevent bootstrap on a database with existing data to avoid corruption.
     // Check critical tables: roles, users, userRoles
     const existingRoles = await ctx.db.query("roles").first();
-    const existingUsers = await ctx.db.query("users").first();
+    // const existingUsers = await ctx.db.query("users").first();
     const existingUserRoles = await ctx.db.query("userRoles").first();
 
-    if (existingRoles || existingUsers || existingUserRoles) {
-      console.log("Bootstrap: Database not empty, bootstrap already completed");
+    if (existingRoles || existingUserRoles) {
+      console.log("Bootstrap: Database not empty, bootstrap already completed", {
+        existingRoles,
+        existingUserRoles,
+      });
 
       // Return info about existing bootstrap for idempotency
       const existingAdmin = await ctx.db
@@ -101,6 +104,8 @@ export const bootstrapOnboarding = mutation({
         createdBy: "SYSTEM",
       });
       onboardingGroup = await ctx.db.get(groupId);
+    } else {
+      console.log("Bootstrap: Onboarding group already exists");
     }
 
     // Ensure anon role exists
@@ -119,6 +124,7 @@ export const bootstrapOnboarding = mutation({
     }
 
     // Ensure permission key exists: can.message.groups [onboardingGroupId]
+    // FUCK - this should be in a constant, checked by sending messages
     const permKey = "can.message.groups";
     let permission = await ctx.db
       .query("permissions")
@@ -212,6 +218,8 @@ export const bootstrapOnboarding = mutation({
       } else {
         console.log(`Bootstrap: ${args.adminAid} already has admin role`);
       }
+    } else {
+      console.log("Bootstrap: No admin AID provided");
     }
 
     return {

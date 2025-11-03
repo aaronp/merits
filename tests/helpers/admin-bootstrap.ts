@@ -13,19 +13,24 @@
  * - Deterministic: uses seed from .admin-seed file
  * - Auto-bootstrap: creates roles, permissions, and assigns admin
  * - Git-ignored: .admin-seed is not committed
+ * - Uses CLI commands: All operations go through CLI → Merits API → Backend
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { generateKeyPair, createAID, signPayload, sha256 } from "../../core/crypto";
+import { runCliInProcess } from "../cli/helpers/exec";
+import { sha256 } from "../../core/crypto";
 import * as ed from "@noble/ed25519";
+import { bootstrapOnboardingCmd } from "../../cli/commands/rbac";
 
 /**
  * Admin credentials returned by ensureAdminInitialised
  */
 export interface AdminCredentials {
+  /**
+   * Did we boostrap the system?
+   */
+  created: boolean;
   /** Admin AID (CESR-encoded) */
   aid: string;
   /** Private key (base64url) */
@@ -55,6 +60,14 @@ const ADMIN_SEED_PATH = join(PROJECT_ROOT, ".admin-seed");
  * This is used if .admin-seed doesn't exist and no seed is provided
  */
 const DEFAULT_ADMIN_SEED = "admin-dev-seed-default";
+
+const convexUrl = () => {
+  const convexUrl = process.env.CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("CONVEX_URL is required for admin initialization. Update your .env file");
+  }
+  return convexUrl;
+}
 
 /**
  * Ensure admin user is initialized and bootstrapped
@@ -89,153 +102,94 @@ const DEFAULT_ADMIN_SEED = "admin-dev-seed-default";
  * });
  * ```
  */
-export async function ensureAdminInitialised(
-  convexUrl: string,
-  options: {
-    /** Force regeneration of admin seed (useful for reset) */
-    force?: boolean;
-    /** Custom seed to use (overrides .admin-seed file) */
-    seed?: string;
-    /** Skip bootstrap call (only generate keys) */
-    skipBootstrap?: boolean;
-  } = {}
-): Promise<AdminCredentials> {
-  if (!convexUrl) {
-    throw new Error("CONVEX_URL is required for admin initialization");
-  }
+export async function ensureAdminInitialised(): Promise<AdminCredentials> {
+
+
+  const bootstrapKey = process.env.BOOTSTRAP_KEY;
+
 
   // Check BOOTSTRAP_KEY environment variable
-  if (!process.env.BOOTSTRAP_KEY && !options.skipBootstrap) {
-    console.warn(
-      "⚠️  BOOTSTRAP_KEY not set. Setting to default dev value.\n" +
-      "   For production, set: export BOOTSTRAP_KEY='your-secret-key'"
-    );
-    process.env.BOOTSTRAP_KEY = "dev-only-secret";
+  if (!bootstrapKey) {
+    throw new Error("BOOTSTRAP_KEY is required for admin initialization. Update your .env file");
   }
 
   // Determine seed to use
-  let seed: string;
+  const seed = DEFAULT_ADMIN_SEED;
 
-  if (options.seed) {
-    // Use provided seed
-    seed = options.seed;
-  } else if (options.force || !existsSync(ADMIN_SEED_PATH)) {
-    // Generate new seed or use default
-    seed = DEFAULT_ADMIN_SEED;
+  // Step 1: Use CLI incept command to create admin user
+  const inceptResult = await runCliInProcess(["incept", "--seed", seed], {
+    env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: convexUrl() },
+    expectSuccess: false,
+  });
 
-    // Create .admin-seed file
-    try {
-      writeFileSync(ADMIN_SEED_PATH, seed, "utf-8");
-      console.log(`✅ Created .admin-seed file with seed: ${seed}`);
-    } catch (err) {
-      console.warn(`⚠️  Could not write .admin-seed file:`, err);
-    }
+  // Check if incept succeeded (could fail if user already exists)
+  // let aid: string;
+  // let privateKey: string;
+  // let publicKey: string;
+  // let privateKeyBytes: Uint8Array;
+  // let publicKeyBytes: Uint8Array;
+
+  if (inceptResult.code === 0 && inceptResult.json) {
+    // Success - user incepted
+    const aid = inceptResult.json.aid;
+    const privateKey = inceptResult.json.keys.privateKey;
+    const publicKey = inceptResult.json.keys.publicKey;
+    const privateKeyBytes = Buffer.from(privateKey, "base64url");
+    const publicKeyBytes = Buffer.from(publicKey, "base64url");
+    console.log(`✅ Admin user incepted: ${aid}, bootstraping system...`);
+
+
+    // Step 2: Bootstrap system if needed
+    const result = await bootstrapOnboardingCmd(convexUrl(), aid)
+
+    console.log(`✅ System bootstrapped: ${JSON.stringify(result)}`);
+    return {
+      created: true,
+      aid,
+      privateKey,
+      publicKey,
+      privateKeyBytes,
+      publicKeyBytes,
+      seed
+    };
+
+  } else if (
+    inceptResult.stderr?.includes("already exists") ||
+    inceptResult.stderr?.includes("ALREADY_EXISTS") ||
+    inceptResult.stderr?.includes("AlreadyExistsError") ||
+    inceptResult.stdout?.includes("already exists") ||
+    inceptResult.stdout?.includes("ALREADY_EXISTS") ||
+    // Sometimes Convex returns generic "Server Error" for already-exists cases
+    (inceptResult.stderr?.includes("Server Error") && inceptResult.code !== 0)
+  ) {
+    // User already exists - generate keys from seed to get credentials
+    console.log(`✅ Admin user already exists, deriving keys from seed`);
+    const seedBytes = new TextEncoder().encode(seed);
+    const seedHash = sha256(seedBytes);
+    const publicKeyBytes = await ed.getPublicKeyAsync(seedHash);
+    const privateKeyBytes = seedHash;
+
+    // Import createAID from core/crypto
+    const { createAID } = await import("../../core/crypto");
+    const aid = createAID(publicKeyBytes);
+    const privateKey = Buffer.from(privateKeyBytes).toString("base64url");
+    const publicKey = Buffer.from(publicKeyBytes).toString("base64url");
+    console.log(`Using existing admin AID: ${aid}`);
+
+    return {
+      created: false,
+      aid,
+      privateKey,
+      publicKey,
+      privateKeyBytes,
+      publicKeyBytes,
+      seed
+    };
   } else {
-    // Read existing seed
-    seed = readFileSync(ADMIN_SEED_PATH, "utf-8").trim();
-    console.log(`✅ Using existing admin seed from .admin-seed`);
+    // Real error
+    throw new Error(`Failed to incept admin: ${inceptResult.stderr || inceptResult.stdout}`);
   }
 
-  // Generate deterministic keys from seed
-  const seedBytes = new TextEncoder().encode(seed);
-  const seedHash = sha256(seedBytes);
-  const publicKeyBytes = await ed.getPublicKeyAsync(seedHash);
-  const privateKeyBytes = seedHash;
-
-  const aid = createAID(publicKeyBytes);
-  const privateKey = Buffer.from(privateKeyBytes).toString("base64url");
-  const publicKey = Buffer.from(publicKeyBytes).toString("base64url");
-
-  console.log(`✅ Admin AID: ${aid}`);
-
-  // Bootstrap backend if needed
-  if (!options.skipBootstrap) {
-    const convex = new ConvexClient(convexUrl);
-
-    try {
-      // Step 1: Register key state
-      await convex.mutation(api.auth.registerKeyState, {
-        aid,
-        ksn: 0,
-        keys: [aid], // AID is the public key in CESR format
-        threshold: "1",
-        lastEvtSaid: "",
-      });
-      console.log(`✅ Registered key state for admin`);
-    } catch (err: any) {
-      // Ignore if already exists
-      if (!err.message?.includes("already exists")) {
-        console.warn(`⚠️  Key state registration warning:`, err.message);
-      }
-    }
-
-    try {
-      // Step 2: Register user (get challenge and sign)
-      const args = { aid, publicKey };
-
-      // Compute args hash on server to ensure consistency
-      const argsHash = await convex.query(api.auth.computeHash, { args });
-
-      // Issue challenge
-      const challenge = await convex.mutation(api.auth.issueChallenge, {
-        aid,
-        purpose: "registerUser",
-        argsHash,
-        ttl: 120000,
-      });
-
-      // Sign the payload (signPayload handles serialization internally)
-      const sigs = await signPayload(challenge.payload, privateKeyBytes, 0);
-
-      // Register user
-      await convex.mutation(api.auth.registerUser, {
-        aid,
-        publicKey,
-        auth: {
-          challengeId: challenge.challengeId as any,
-          sigs,
-          ksn: 0,
-        },
-      });
-      console.log(`✅ Registered admin user`);
-    } catch (err: any) {
-      // Ignore if already registered
-      if (!err.message?.includes("already registered") && !err.message?.includes("already exists")) {
-        console.warn(`⚠️  User registration warning:`, err.message);
-      }
-    }
-
-    try {
-      // Step 3: Bootstrap system (creates roles, permissions, assigns admin)
-      const bootstrapResult = await convex.mutation(
-        api.authorization_bootstrap.bootstrapOnboarding,
-        { adminAid: aid } as any
-      );
-
-      if (bootstrapResult.already) {
-        console.log(`✅ System already bootstrapped (idempotent check passed)`);
-      } else {
-        console.log(`✅ System bootstrapped successfully`);
-        console.log(`   - Created roles: anon, user, admin`);
-        console.log(`   - Created onboarding group`);
-        console.log(`   - Assigned admin role to ${aid}`);
-      }
-    } catch (err: any) {
-      console.error(`❌ Bootstrap failed:`, err.message);
-      throw err;
-    }
-
-    convex.close();
-  }
-
-  return {
-    aid,
-    privateKey,
-    publicKey,
-    privateKeyBytes,
-    publicKeyBytes,
-    seed,
-  };
 }
 
 /**
@@ -270,115 +224,4 @@ export function getCurrentAdminSeed(): string | null {
     console.warn(`⚠️  Could not read .admin-seed file:`, err);
   }
   return null;
-}
-
-/**
- * Get a session token for any user with custom scopes
- *
- * Generic helper that works for admin, user, or anon scopes.
- *
- * @param convexUrl - Convex backend URL
- * @param credentials - User credentials (aid, privateKeyBytes)
- * @param scopes - Array of scopes for the session (e.g., ["admin"], ["user"])
- * @param options - Optional configuration
- * @returns Session token object with token, aid, ksn, and expiresAt
- */
-export async function getSessionToken(
-  convexUrl: string,
-  credentials: {
-    aid: string;
-    privateKeyBytes: Uint8Array;
-    ksn?: number;
-  },
-  scopes: string[],
-  options: {
-    /** Token lifetime in milliseconds (default: 60000ms = 1 minute) */
-    ttlMs?: number;
-    /** Path to save session token file (optional) */
-    saveTo?: string;
-  } = {}
-): Promise<{ token: string; aid: string; ksn: number; expiresAt: number }> {
-  const ttlMs = options.ttlMs ?? 60000;
-  const ksn = credentials.ksn ?? 0;
-  const convex = new ConvexClient(convexUrl);
-
-  try {
-    // Compute args hash on server to ensure consistency
-    const args = { scopes, ttlMs };
-    const argsHash = await convex.query(api.auth.computeHash, { args });
-
-    // Issue challenge
-    const challenge = await convex.mutation(api.auth.issueChallenge, {
-      aid: credentials.aid,
-      purpose: "openSession",
-      argsHash,
-      ttl: 120000,
-    });
-
-    // Sign the payload (signPayload handles serialization internally)
-    const sigs = await signPayload(challenge.payload, credentials.privateKeyBytes, 0);
-
-    // Open session
-    const session = await convex.mutation(api.sessions.openSession, {
-      aid: credentials.aid,
-      scopes,
-      ttlMs,
-      auth: {
-        challengeId: challenge.challengeId as any,
-        sigs,
-        ksn,
-      },
-    });
-
-    const sessionData = {
-      token: session.token,
-      aid: credentials.aid,
-      ksn,
-      expiresAt: session.expiresAt,
-    };
-
-    // Save to file if requested
-    if (options.saveTo) {
-      writeFileSync(options.saveTo, JSON.stringify(sessionData, null, 2), "utf-8");
-      console.log(`✅ Session saved to ${options.saveTo}`);
-    }
-
-    console.log(`✅ Session token created for ${credentials.aid} with scopes: ${scopes.join(", ")} (expires in ${ttlMs}ms)`);
-    return sessionData;
-  } finally {
-    convex.close();
-  }
-}
-
-/**
- * Sign in as admin and get a session token
- *
- * This creates a session token with "admin" scope for the admin user.
- * The token can be used for admin operations like creating roles, granting permissions, etc.
- *
- * @param convexUrl - Convex backend URL
- * @param admin - Admin credentials from ensureAdminInitialised()
- * @param options - Optional configuration
- * @returns Session token object with token, aid, ksn, and expiresAt
- */
-export async function getAdminSessionToken(
-  convexUrl: string,
-  admin: AdminCredentials,
-  options: {
-    /** Token lifetime in milliseconds (default: 60000ms = 1 minute) */
-    ttlMs?: number;
-    /** Path to save session token file (optional) */
-    saveTo?: string;
-  } = {}
-): Promise<{ token: string; aid: string; ksn: number; expiresAt: number }> {
-  return getSessionToken(
-    convexUrl,
-    {
-      aid: admin.aid,
-      privateKeyBytes: admin.privateKeyBytes,
-      ksn: 0,
-    },
-    ["admin"],
-    options
-  );
 }

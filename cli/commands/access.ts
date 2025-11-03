@@ -22,14 +22,16 @@
 
 import type { CLIContext } from "../lib/context";
 import { normalizeFormat } from "../lib/options";
-import { requireSessionToken } from "../lib/session";
+import { requireCredentials } from "../lib/credentials";
+import { signMutationArgs } from "../../core/signatures";
+import { base64UrlToUint8Array } from "../../core/crypto";
 
 interface AccessOptions {
   from?: string;
   note?: string;
   allow?: boolean;
   deny?: boolean;
-  token?: string;
+  credentials?: string;
   format?: string;
   noBanner?: boolean;
   _ctx: CLIContext;
@@ -48,14 +50,21 @@ export async function accessAllow(aid: string, opts: AccessOptions): Promise<voi
   const ctx = opts._ctx;
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
-  // Load session token
-  const session = requireSessionToken(opts.token);
+  // Load credentials
+  const creds = requireCredentials(opts.credentials);
 
-  // Call backend API (backend handles authorization via token)
-  const result = await ctx.client.mutation(ctx.api.allowList.add, {
-    token: session.token,
+  // Build and sign mutation args
+  const args = {
     allowedAid: aid,
     note: opts.note,
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+
+  // Call backend API (backend handles authorization via signature)
+  const result = await ctx.client.mutation(ctx.api.allowList.add, {
+    ...args,
+    sig,
   });
 
   // Output result
@@ -101,14 +110,21 @@ export async function accessDeny(aid: string, opts: AccessOptions): Promise<void
   const ctx = opts._ctx;
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
-  // Load session token
-  const session = requireSessionToken(opts.token);
+  // Load credentials
+  const creds = requireCredentials(opts.credentials);
 
-  // Call backend API (backend handles authorization via token)
-  const result = await ctx.client.mutation(ctx.api.denyList.add, {
-    token: session.token,
+  // Build and sign mutation args
+  const args = {
     deniedAid: aid,
     reason: opts.note, // Using 'note' for both allow and deny
+  };
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+
+  // Call backend API (backend handles authorization via signature)
+  const result = await ctx.client.mutation(ctx.api.denyList.add, {
+    ...args,
+    sig,
   });
 
   // Output result
@@ -158,16 +174,26 @@ export async function accessRemove(aid: string, opts: AccessOptions): Promise<vo
     throw new Error("Cannot specify both --allow and --deny");
   }
 
-  // Load session token
-  const session = requireSessionToken(opts.token);
+  // Load credentials
+  const creds = requireCredentials(opts.credentials);
 
   const isAllow = opts.allow;
   const listType = isAllow ? "allow-list" : "deny-list";
 
-  // Call backend API (backend handles authorization via token)
-  const result = isAllow
-    ? await ctx.client.mutation(ctx.api.allowList.remove, { token: session.token, allowedAid: aid })
-    : await ctx.client.mutation(ctx.api.denyList.remove, { token: session.token, deniedAid: aid });
+  // Build and sign mutation args
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+
+  // Call backend API (backend handles authorization via signature)
+  let result;
+  if (isAllow) {
+    const args = { allowedAid: aid };
+    const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+    result = await ctx.client.mutation(ctx.api.allowList.remove, { ...args, sig });
+  } else {
+    const args = { deniedAid: aid };
+    const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+    result = await ctx.client.mutation(ctx.api.denyList.remove, { ...args, sig });
+  }
 
   // Output result
   const output = {
@@ -210,15 +236,15 @@ export async function accessList(opts: AccessOptions): Promise<void> {
     throw new Error("Cannot specify both --allow and --deny");
   }
 
-  // Load session token
-  const session = requireSessionToken(opts.token);
+  // Load credentials
+  const creds = requireCredentials(opts.credentials);
 
   const isAllow = opts.allow;
 
   // Call backend API
   const result = isAllow
-    ? await ctx.client.query(ctx.api.allowList.list, { ownerAid: session.aid })
-    : await ctx.client.query(ctx.api.denyList.list, { ownerAid: session.aid });
+    ? await ctx.client.query(ctx.api.allowList.list, { ownerAid: creds.aid })
+    : await ctx.client.query(ctx.api.denyList.list, { ownerAid: creds.aid });
 
   // Output result
   const output = isAllow
@@ -276,16 +302,26 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
     throw new Error("Cannot specify both --allow and --deny");
   }
 
-  // Load session token
-  const session = requireSessionToken(opts.token);
+  // Load credentials
+  const creds = requireCredentials(opts.credentials);
 
   const isAllow = opts.allow;
   const listType = isAllow ? "allow-list" : "deny-list";
 
-  // Call backend API (backend handles authorization via token)
-  const result = isAllow
-    ? await ctx.client.mutation(ctx.api.allowList.clear, { token: session.token })
-    : await ctx.client.mutation(ctx.api.denyList.clear, { token: session.token });
+  // Build and sign mutation args
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+
+  // Call backend API (backend handles authorization via signature)
+  let result;
+  if (isAllow) {
+    const args = {};
+    const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+    result = await ctx.client.mutation(ctx.api.allowList.clear, { sig });
+  } else {
+    const args = {};
+    const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+    result = await ctx.client.mutation(ctx.api.denyList.clear, { sig });
+  }
 
   // Output result
   const output = {

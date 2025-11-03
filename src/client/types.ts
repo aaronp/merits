@@ -148,6 +148,44 @@ export interface MeritsClient {
    */
   getUserStatus(aid: string): Promise<UserStatus>;
 
+  /**
+   * Send an encrypted message to a recipient
+   *
+   * High-level API that handles encryption and authentication internally.
+   * Encrypts the plaintext message with the recipient's public key.
+   *
+   * @param recipient - Recipient's AID
+   * @param plaintext - Message content (will be encrypted)
+   * @param credentials - Sender's credentials
+   * @param options - Optional message type and TTL
+   * @returns Message ID
+   */
+  sendMessage(
+    recipient: string,
+    plaintext: string,
+    credentials: any,
+    options?: { typ?: string; ttl?: number }
+  ): Promise<string>;
+
+  /**
+   * Send a pre-encrypted (raw) message to a recipient
+   *
+   * Lower-level API for sending already-encrypted ciphertext.
+   * Use this when you've encrypted the message yourself or need custom encryption.
+   *
+   * @param recipient - Recipient's AID
+   * @param ciphertext - Already-encrypted message (base64url)
+   * @param credentials - Sender's credentials
+   * @param options - Optional message type, algorithm, and TTL
+   * @returns Message ID
+   */
+  sendRawMessage(
+    recipient: string,
+    ciphertext: string,
+    credentials: any,
+    options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
+  ): Promise<string>;
+
   /** Close the client connection */
   close(): void;
 }

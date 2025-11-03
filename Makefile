@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build-cli clean clear-db summarise summarise-convex
+.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build-cli clean clear-db set-env get-env summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -11,12 +11,12 @@ test-unit:
 # Integration tests (requires Convex)
 test-integration:
 	@echo "Running integration tests..."
-	@if [ ! -f .env.local ]; then \
-		echo "Error: .env.local file not found"; \
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
 		echo "Please run 'make dev' first to set up your Convex deployment"; \
 		exit 1; \
 	fi
-	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && bun test ./tests/integration/
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && bun test ./tests/integration/
 
 # CLI unit tests (fast, isolated)
 test-cli:
@@ -26,12 +26,12 @@ test-cli:
 # E2E CLI tests (requires Convex, uses isolated data dirs)
 test-e2e:
 	@echo "Running E2E CLI tests..."
-	@if [ ! -f .env.local ]; then \
-		echo "Error: .env.local file not found"; \
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
 		echo "Please run 'make dev' first to set up your Convex deployment"; \
 		exit 1; \
 	fi
-	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && bun test ./tests/cli/e2e/
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && bun test ./tests/cli/e2e/
 
 # Watch mode for development
 test-watch:
@@ -51,12 +51,12 @@ dev:
 
 # Run CLI tool
 cli:
-	@if [ ! -f .env.local ]; then \
-		echo "Error: .env.local file not found"; \
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
 		echo "Please run 'make dev' first to set up your Convex deployment"; \
 		exit 1; \
 	fi
-	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && bun run cli
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && bun run cli
 
 # Build CLI binary
 build-cli:
@@ -72,21 +72,21 @@ clean:
 
 # Clear Convex database (requires confirmation)
 clear-db:
-	@if [ ! -f .env.local ]; then \
-		echo "Error: .env.local file not found"; \
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
 		echo "Please run 'make dev' first to set up your Convex deployment"; \
 		exit 1; \
 	fi
 	@echo "⚠️  WARNING: This will DELETE ALL DATA from your Convex database!"
 	@echo ""
-	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && \
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && \
 		echo "Deployment: $$CONVEX_DEPLOYMENT" && \
 		echo "URL: $$CONVEX_URL"
 	@echo ""
 	@echo -n "Type 'yes' to confirm: " && \
 		read confirm && \
 		if [ "$$confirm" = "yes" ]; then \
-			export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && \
+			export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && \
 			bunx convex run _dev_utils:clearAllData && \
 			echo "" && \
 			echo "✅ Database cleared successfully" && \
@@ -96,6 +96,32 @@ clear-db:
 			echo "❌ Database clear cancelled"; \
 			exit 1; \
 		fi
+
+# Set BOOTSTRAP_KEY environment variable in Convex from .env
+set-env:
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
+		echo "Please run 'make dev' first to set up your Convex deployment"; \
+		exit 1; \
+	fi
+	@echo "Setting BOOTSTRAP_KEY in Convex deployment..."
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && \
+		echo "Deployment: $$CONVEX_DEPLOYMENT" && \
+		bunx convex env set BOOTSTRAP_KEY "$$BOOTSTRAP_KEY"
+	@echo "✅ BOOTSTRAP_KEY set successfully"
+
+# List environment variables set in Convex deployment
+get-env:
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
+		echo "Please run 'make dev' first to set up your Convex deployment"; \
+		exit 1; \
+	fi
+	@echo "Listing environment variables for Convex deployment..."
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && \
+		echo "Deployment: $$CONVEX_DEPLOYMENT" && \
+		echo "" && \
+		bunx convex env list
 
 # Generate summary of convex files and copy to clipboard
 summarise:

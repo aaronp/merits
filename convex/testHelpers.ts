@@ -163,7 +163,7 @@ export const resetAll = mutation({
       "groupChats",
       "groupMessages",
       "groupMembers",
-      "sessionTokens",
+      "usedNonces",
       "allowList",
       "denyList",
       "userRoles",

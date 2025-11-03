@@ -1,9 +1,9 @@
 import { ConvexClient } from "convex/browser";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
-import { ConvexIdentityAuth } from "../convex/adapters/ConvexIdentityAuth";
-import { ConvexTransport } from "../convex/adapters/ConvexTransport";
-import { ConvexGroupApi } from "../convex/adapters/ConvexGroupApi";
+import { ConvexIdentityAuth } from "./adapters/ConvexIdentityAuth";
+import { ConvexTransport } from "./adapters/ConvexTransport";
+import { ConvexGroupApi } from "./adapters/ConvexGroupApi";
 import type { IdentityAuth } from "../core/interfaces/IdentityAuth";
 import type { Transport } from "../core/interfaces/Transport";
 import type { GroupApi } from "../core/interfaces/GroupApi";

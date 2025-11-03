@@ -15,10 +15,6 @@ import type {
 } from "convex/server";
 import type * as _dev_utils from "../_dev_utils.js";
 import type * as accessControl from "../accessControl.js";
-import type * as adapters_ConvexGroupApi from "../adapters/ConvexGroupApi.js";
-import type * as adapters_ConvexGroupChatApi from "../adapters/ConvexGroupChatApi.js";
-import type * as adapters_ConvexIdentityAuth from "../adapters/ConvexIdentityAuth.js";
-import type * as adapters_ConvexTransport from "../adapters/ConvexTransport.js";
 import type * as allowList from "../allowList.js";
 import type * as auth from "../auth.js";
 import type * as authorization_bootstrap from "../authorization_bootstrap.js";
@@ -29,7 +25,6 @@ import type * as groups from "../groups.js";
 import type * as messages from "../messages.js";
 import type * as permissions from "../permissions.js";
 import type * as permissions_admin from "../permissions_admin.js";
-import type * as sessions from "../sessions.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as userStatus from "../userStatus.js";
 
@@ -44,10 +39,6 @@ import type * as userStatus from "../userStatus.js";
 declare const fullApi: ApiFromModules<{
   _dev_utils: typeof _dev_utils;
   accessControl: typeof accessControl;
-  "adapters/ConvexGroupApi": typeof adapters_ConvexGroupApi;
-  "adapters/ConvexGroupChatApi": typeof adapters_ConvexGroupChatApi;
-  "adapters/ConvexIdentityAuth": typeof adapters_ConvexIdentityAuth;
-  "adapters/ConvexTransport": typeof adapters_ConvexTransport;
   allowList: typeof allowList;
   auth: typeof auth;
   authorization_bootstrap: typeof authorization_bootstrap;
@@ -58,7 +49,6 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   permissions: typeof permissions;
   permissions_admin: typeof permissions_admin;
-  sessions: typeof sessions;
   testHelpers: typeof testHelpers;
   userStatus: typeof userStatus;
 }>;
