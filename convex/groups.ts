@@ -508,6 +508,34 @@ export const getMembers = query({
 });
 
 /**
+ * Get group by tag
+ *
+ * Tags are unique identifiers for system groups (e.g., "onboarding").
+ * Returns the group with the specified tag, or null if not found.
+ */
+export const getGroupByTag = query({
+  args: {
+    tag: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const group = await ctx.db
+      .query("groupChats")
+      .withIndex("by_tag", (q) => q.eq("tag", args.tag))
+      .first();
+
+    return group ? {
+      id: group._id,
+      name: group.name,
+      tag: group.tag,
+      ownerAid: group.ownerAid,
+      membershipSaid: group.membershipSaid,
+      createdAt: group.createdAt,
+      createdBy: group.createdBy,
+    } : null;
+  },
+});
+
+/**
  * List all group chats for an AID
  */
 export const listGroupChats = query({

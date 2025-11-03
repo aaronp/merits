@@ -176,6 +176,10 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
     const publicKey = Buffer.from(publicKeyBytes).toString("base64url");
     console.log(`Using existing admin AID: ${aid}`);
 
+    // Step 2: Bootstrap system (idempotent - safe to call even if already bootstrapped)
+    const result = await bootstrapOnboardingCmd(convexUrl(), aid);
+    console.log(`✅ Bootstrap check complete: ${JSON.stringify(result)}`);
+
     return {
       created: false,
       aid,

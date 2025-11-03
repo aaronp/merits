@@ -317,12 +317,14 @@ export default defineSchema({
 
     // Group metadata
     name: v.string(), // Human-readable group name
+    tag: v.optional(v.string()), // Unique tag for system groups (e.g., "onboarding", "support")
     maxTtl: v.number(), // Maximum TTL for messages (for cleanup)
     createdAt: v.number(),
     createdBy: v.string(), // AID that created the group
   })
     .index("by_owner", ["ownerAid"])
-    .index("by_created", ["createdAt"]),
+    .index("by_created", ["createdAt"])
+    .index("by_tag", ["tag"]),
 
   /**
    * GroupMessages - Encrypted group message history

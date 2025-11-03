@@ -21,6 +21,7 @@ import type * as authorization_bootstrap from "../authorization_bootstrap.js";
 import type * as debug from "../debug.js";
 import type * as denyList from "../denyList.js";
 import type * as errors from "../errors.js";
+import type * as groupTags from "../groupTags.js";
 import type * as groups from "../groups.js";
 import type * as messages from "../messages.js";
 import type * as permissions from "../permissions.js";
@@ -45,6 +46,7 @@ declare const fullApi: ApiFromModules<{
   debug: typeof debug;
   denyList: typeof denyList;
   errors: typeof errors;
+  groupTags: typeof groupTags;
   groups: typeof groups;
   messages: typeof messages;
   permissions: typeof permissions;

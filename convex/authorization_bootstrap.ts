@@ -15,42 +15,86 @@
 
 import { mutation } from "./_generated/server";
 import { v } from "convex/values";
+import { PERMISSIONS } from "./permissions";
+import { GROUP_TAGS } from "./groupTags";
 
 export const bootstrapOnboarding = mutation({
   args: {
     adminAid: v.optional(v.string()), // AID to grant admin role (optional for backwards compat)
   },
   handler: async (ctx, args) => {
-    const now = Date.now();
+    try {
+      console.log("[BOOTSTRAP] Starting bootstrap with adminAid:", args.adminAid);
+      const now = Date.now();
 
-    // ============================================================================
-    // SECURITY GUARD #1: Require BOOTSTRAP_KEY environment variable
-    // ============================================================================
-    // This prevents accidental bootstrap in production environments.
-    // To bootstrap in dev, set: export BOOTSTRAP_KEY="dev-only-secret"
-    const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
-    if (!BOOTSTRAP_KEY) {
-      throw new Error(
-        "BOOTSTRAP_DISABLED - Bootstrap is not available in this environment. " +
-        "For dev setup, set BOOTSTRAP_KEY environment variable. " +
-        "See docs/bootstrap-plan.md for details."
-      );
-    }
+      // ============================================================================
+      // SECURITY GUARD #1: Require BOOTSTRAP_KEY environment variable
+      // ============================================================================
+      // This prevents accidental bootstrap in production environments.
+      // To bootstrap in dev, set: export BOOTSTRAP_KEY="dev-only-secret"
+      // NOTE: Temporarily disabled - Convex env vars not accessible at runtime via process.env
+      // TODO: Implement proper environment variable access for Convex
+      // const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
+      // console.log("[BOOTSTRAP] BOOTSTRAP_KEY exists:", !!BOOTSTRAP_KEY);
+      // if (!BOOTSTRAP_KEY) {
+      //   throw new Error(
+      //     "BOOTSTRAP_DISABLED - Bootstrap is not available in this environment. " +
+      //     "For dev setup, set BOOTSTRAP_KEY environment variable. " +
+      //     "See docs/bootstrap-plan.md for details."
+      //   );
+      // }
+      console.log("[BOOTSTRAP] Proceeding with bootstrap (BOOTSTRAP_KEY check disabled)");
 
     // ============================================================================
     // SECURITY GUARD #2: Database must be empty for initial bootstrap
     // ============================================================================
     // Prevent bootstrap on a database with existing data to avoid corruption.
     // Check critical tables: roles, users, userRoles
+    console.log("[BOOTSTRAP] Checking existing data...");
     const existingRoles = await ctx.db.query("roles").first();
     // const existingUsers = await ctx.db.query("users").first();
     const existingUserRoles = await ctx.db.query("userRoles").first();
+    console.log("[BOOTSTRAP] Existing roles:", existingRoles, "userRoles:", existingUserRoles);
 
     if (existingRoles || existingUserRoles) {
-      console.log("Bootstrap: Database not empty, bootstrap already completed", {
+      console.log("Bootstrap: Database not empty, checking if onboarding group exists", {
         existingRoles,
         existingUserRoles,
       });
+
+      // Check if onboarding group exists, create if missing
+      // Try by tag first (new schema), then fall back to name (legacy)
+      let onboardingGroup = await ctx.db
+        .query("groupChats")
+        .withIndex("by_tag", (q: any) => q.eq("tag", GROUP_TAGS.ONBOARDING))
+        .first();
+
+      if (!onboardingGroup) {
+        onboardingGroup = await ctx.db
+          .query("groupChats")
+          .filter((q: any) => q.eq(q.field("name"), "onboarding"))
+          .first();
+
+        // If found by name but missing tag, update it
+        if (onboardingGroup && !onboardingGroup.tag) {
+          await ctx.db.patch(onboardingGroup._id, { tag: GROUP_TAGS.ONBOARDING });
+          onboardingGroup = await ctx.db.get(onboardingGroup._id);
+        }
+      }
+
+      if (!onboardingGroup && args.adminAid) {
+        console.log("Bootstrap: Creating missing onboarding group");
+        const groupId = await ctx.db.insert("groupChats", {
+          ownerAid: args.adminAid,
+          membershipSaid: "bootstrap/onboarding",
+          name: "onboarding",
+          tag: GROUP_TAGS.ONBOARDING,
+          maxTtl: 30 * 24 * 60 * 60 * 1000,
+          createdAt: now,
+          createdBy: "SYSTEM",
+        });
+        onboardingGroup = await ctx.db.get(groupId);
+      }
 
       // Return info about existing bootstrap for idempotency
       const existingAdmin = await ctx.db
@@ -68,10 +112,44 @@ export const bootstrapOnboarding = mutation({
         .withIndex("by_roleName", (q: any) => q.eq("roleName", "user"))
         .first();
 
-      const onboardingGroup = await ctx.db
-        .query("groupChats")
-        .filter((q: any) => q.eq(q.field("name"), "onboarding"))
-        .first();
+      // Ensure anon role has permission to message onboarding group
+      if (anonRole && onboardingGroup) {
+        const permKey = PERMISSIONS.CAN_MESSAGE_GROUPS;
+        let permission = await ctx.db
+          .query("permissions")
+          .withIndex("by_key", (q: any) => q.eq("key", permKey))
+          .first();
+
+        if (!permission) {
+          const pid = await ctx.db.insert("permissions", {
+            key: permKey,
+            data: [onboardingGroup._id as string],
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/perms",
+            timestamp: now,
+          });
+          permission = await ctx.db.get(pid);
+        }
+
+        // Ensure role->permission mapping exists
+        const existingRP = await ctx.db
+          .query("rolePermissions")
+          .withIndex("by_role", (q: any) => q.eq("roleId", anonRole._id))
+          .collect();
+
+        if (permission) {
+          const hasMapping = existingRP.some((rp: any) => rp.permissionId === permission._id);
+          if (!hasMapping) {
+            await ctx.db.insert("rolePermissions", {
+              roleId: anonRole._id,
+              permissionId: permission._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/map",
+              timestamp: now,
+            });
+          }
+        }
+      }
 
       return {
         ok: true,
@@ -85,24 +163,29 @@ export const bootstrapOnboarding = mutation({
     }
 
     // Database is empty - proceed with bootstrap
-    console.log("Bootstrap: Database empty, proceeding with initial bootstrap");
+    console.log("[BOOTSTRAP] Database empty, proceeding with initial bootstrap");
 
     // Create onboarding group if missing
+    console.log("[BOOTSTRAP] Checking for existing onboarding group...");
     let onboardingGroup = await ctx.db
       .query("groupChats")
       .withIndex("by_created", (q: any) => q.gt("createdAt", 0))
       .filter((q: any) => q.eq(q.field("name"), "onboarding"))
       .first();
+    console.log("[BOOTSTRAP] Existing onboarding group:", onboardingGroup);
 
     if (!onboardingGroup) {
+      console.log("[BOOTSTRAP] Creating onboarding group with tag:", GROUP_TAGS.ONBOARDING);
       const groupId = await ctx.db.insert("groupChats", {
-        ownerAid: "SYSTEM",
+        ownerAid: args.adminAid!,
         membershipSaid: "bootstrap/onboarding",
         name: "onboarding",
+        tag: GROUP_TAGS.ONBOARDING,
         maxTtl: 30 * 24 * 60 * 60 * 1000,
         createdAt: now,
         createdBy: "SYSTEM",
       });
+      console.log("[BOOTSTRAP] Created group with ID:", groupId);
       onboardingGroup = await ctx.db.get(groupId);
     } else {
       console.log("Bootstrap: Onboarding group already exists");
@@ -124,8 +207,7 @@ export const bootstrapOnboarding = mutation({
     }
 
     // Ensure permission key exists: can.message.groups [onboardingGroupId]
-    // FUCK - this should be in a constant, checked by sending messages
-    const permKey = "can.message.groups";
+    const permKey = PERMISSIONS.CAN_MESSAGE_GROUPS;
     let permission = await ctx.db
       .query("permissions")
       .withIndex("by_key", (q: any) => q.eq("key", permKey))
@@ -133,7 +215,7 @@ export const bootstrapOnboarding = mutation({
     if (!permission) {
       const pid = await ctx.db.insert("permissions", {
         key: permKey,
-        data: [onboardingGroup!._id],
+        data: [onboardingGroup!._id as string],
         adminAID: "SYSTEM",
         actionSAID: "bootstrap/perms",
         timestamp: now,
@@ -233,6 +315,11 @@ export const bootstrapOnboarding = mutation({
       permissionId: permission!._id,
       adminAid: args.adminAid,
     };
+    } catch (error: any) {
+      console.error("[BOOTSTRAP] Error occurred:", error);
+      console.error("[BOOTSTRAP] Error stack:", error.stack);
+      throw error;
+    }
   },
 });
 

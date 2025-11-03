@@ -344,6 +344,18 @@ export class ConvexMeritsClient implements MeritsClient {
     return messageId;
   }
 
+  async getGroupIdByTag(tag: string): Promise<{
+    id: string;
+    name: string;
+    tag?: string;
+    ownerAid: string;
+    membershipSaid: string;
+    createdAt: number;
+    createdBy: string;
+  } | null> {
+    return await this.convex.query(api.groups.getGroupByTag, { tag });
+  }
+
   close(): void {
     this.convex.close();
   }

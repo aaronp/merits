@@ -1,4 +1,5 @@
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 
 export const PERMISSIONS = {
   CAN_MESSAGE_GROUPS: "can.message.groups",
@@ -37,7 +38,7 @@ export async function resolveUserClaims(ctx: MutationCtx | QueryCtx, aid: string
     )
   );
 
-  const permIds = new Set<string>();
+  const permIds = new Set<Id<"permissions">>();
   for (const list of rolePerms) {
     for (const rp of list) permIds.add(rp.permissionId);
   }
@@ -50,7 +51,7 @@ export async function resolveUserClaims(ctx: MutationCtx | QueryCtx, aid: string
   const claims: Claim[] = [];
   await Promise.all(
     Array.from(permIds).map(async (pid) => {
-      const perm = await ctx.db.get(pid as any);
+      const perm = await ctx.db.get(pid);
       if (perm) {
         claims.push({ key: perm.key, data: perm.data });
       }

@@ -186,6 +186,25 @@ export interface MeritsClient {
     options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
   ): Promise<string>;
 
+  /**
+   * Get group by unique tag
+   *
+   * Tags identify system-managed groups (e.g., "onboarding").
+   * Returns the group ID and metadata, or null if not found.
+   *
+   * @param tag - Unique tag identifier (e.g., "onboarding")
+   * @returns Group information or null
+   */
+  getGroupIdByTag(tag: string): Promise<{
+    id: string;
+    name: string;
+    tag?: string;
+    ownerAid: string;
+    membershipSaid: string;
+    createdAt: number;
+    createdBy: string;
+  } | null>;
+
   /** Close the client connection */
   close(): void;
 }

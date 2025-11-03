@@ -101,16 +101,35 @@ export const send = mutation({
       throw new Error("Must provide either sig or auth");
     }
 
-    // AUTHORIZATION: RBAC permission check for direct user messaging
+    // AUTHORIZATION: RBAC permission check
+    // Check if recipient is a group or a user
+    const isGroup = await ctx.db
+      .query("groupChats")
+      .filter((q) => q.eq(q.field("_id"), args.recpAid))
+      .first();
+
     const claims = await resolveUserClaims(ctx, senderAid);
-    const allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
-      if (data === undefined || data === null) return true; // global allow
-      if (Array.isArray(data)) return data.includes(args.recpAid);
-      if (typeof data === "object" && Array.isArray((data as any).aids)) {
-        return (data as any).aids.includes(args.recpAid);
-      }
-      return false;
-    });
+    let allowed = false;
+
+    if (isGroup) {
+      // Check CAN_MESSAGE_GROUPS permission
+      allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_GROUPS, (data) => {
+        if (data === undefined || data === null) return true; // global allow
+        // data should be an array of group IDs
+        if (Array.isArray(data)) return data.includes(args.recpAid);
+        return false;
+      });
+    } else {
+      // Check CAN_MESSAGE_USERS permission
+      allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
+        if (data === undefined || data === null) return true; // global allow
+        if (Array.isArray(data)) return data.includes(args.recpAid);
+        if (typeof data === "object" && Array.isArray((data as any).aids)) {
+          return (data as any).aids.includes(args.recpAid);
+        }
+        return false;
+      });
+    }
 
     if (!allowed) {
       throw new Error("Not permitted to message this recipient");
