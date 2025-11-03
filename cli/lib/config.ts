@@ -27,6 +27,7 @@ export interface MeritsConfig {
   watchInterval?: number; // milliseconds
   verbose?: boolean;
   color?: boolean;
+  defaultIdentity?: string; // Default identity AID
 }
 
 /**
@@ -71,6 +72,7 @@ const CONFIG_SCHEMA = {
     watchInterval: { type: "number", minimum: 100, maximum: 30000 },
     verbose: { type: "boolean" },
     color: { type: "boolean" },
+    defaultIdentity: { type: "string", minLength: 1 },
   },
   required: ["version"],
   additionalProperties: false,

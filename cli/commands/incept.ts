@@ -92,13 +92,25 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const sigs = await signPayload(challenge.payloadToSign, keys.privateKey, 0);
 
   // Step 4: Register user and obtain session token
-  const sessionResult = await ctx.client.registerUser({
-    aid,
-    publicKey: publicKeyB64,
-    challengeId: challenge.challengeId,
-    sigs,
-    ksn: 0,
-  });
+  let sessionResult;
+  try {
+    sessionResult = await ctx.client.registerUser({
+      aid,
+      publicKey: publicKeyB64,
+      challengeId: challenge.challengeId,
+      sigs,
+      ksn: 0,
+    });
+  } catch (err: any) {
+    // If user already exists, provide helpful error message
+    if (err.message && (err.message.includes("already exists") || err.message.includes("AlreadyExistsError"))) {
+      throw new Error(
+        `User ${aid} already exists. Use 'merits sign-in' command to create a new session token instead.`
+      );
+    } else {
+      throw err;
+    }
+  }
 
   // Build output
   const output = {

@@ -1,25 +1,36 @@
 /**
- * E2E Test: Group Messaging (Cohort)
+ * E2E Test: Group Messaging (Cohort) - Token-Based
  *
- * Tests zero-knowledge group messaging where admin creates a cohort group
- * and members can send/receive encrypted group messages.
+ * Tests zero-knowledge group messaging with token-based authentication.
+ * Backend handles all encryption/decryption.
  *
  * Scenario:
  * 1. Bootstrap system (admin with admin role)
  * 2. Create test users (Alice, Bob with user role)
- * 3. Admin creates a cohort group
- * 4. Admin adds Alice and Bob as members
- * 5. Alice sends group message
- * 6. Bob receives and decrypts group message
- * 7. Verify group info shows all members
+ * 3. Admin grants user roles
+ * 4. Alice creates a cohort group
+ * 5. Alice adds Bob as member
+ * 6. Alice sends group message
+ * 7. Bob receives group message (decrypted by backend)
+ * 8. Bob sends reply
+ * 9. Alice receives reply
+ * 10. Alice removes Bob from group
  *
  * Priority: P0 (core group messaging functionality)
  */
 
 import { describe, it, expect, beforeAll } from "bun:test";
 import { runCliInProcess, assertSuccess } from "../helpers/exec";
-import { ensureAdminInitialised, type AdminCredentials } from "../../helpers/admin-bootstrap";
+import {
+  ensureAdminInitialised,
+  getAdminSessionToken,
+  getSessionToken,
+  type AdminCredentials
+} from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario } from "../helpers/workspace";
+import { writeFileSync } from "fs";
+import { join } from "path";
+import { base64UrlToUint8Array } from "../../../core/crypto";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -28,24 +39,32 @@ const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
 const shouldRun = CONVEX_URL && BOOTSTRAP_KEY;
 const runTests = shouldRun ? describe : describe.skip;
 
-runTests("E2E: Group Messaging (Cohort)", () => {
+runTests("E2E: Group Messaging (Cohort) - Token-Based", () => {
   let scenario: ReturnType<typeof mkMultiUserScenario>;
   let admin: AdminCredentials;
+  let adminToken: { token: string; aid: string; ksn: number; expiresAt: number };
   let aliceAid: string;
+  let aliceIdentityPath: string;
   let bobAid: string;
+  let bobIdentityPath: string;
   let groupId: string;
 
   beforeAll(async () => {
-    // Initialize admin
+    // Initialize admin and get admin session token
     admin = await ensureAdminInitialised(CONVEX_URL!);
+    adminToken = await getAdminSessionToken(CONVEX_URL!, admin, { ttlMs: 60000 });
     console.log(`✓ Admin initialized: ${admin.aid}`);
 
     // Create workspace for alice and bob
-    scenario = mkMultiUserScenario("group-messaging", ["alice", "bob"]);
+    scenario = mkMultiUserScenario("group-messaging-token", ["alice", "bob"]);
 
-    // Incept Alice
+    // Use unique timestamp to avoid conflicts with previous test runs
+    const timestamp = Date.now();
+
+    // === Alice Setup ===
+    // 1. Incept Alice (creates identity with keys and session token)
     const aliceResult = await runCliInProcess(
-      ["incept", "--seed", "alice-group-test"],
+      ["incept", "--seed", `alice-group-token-test-${timestamp}`],
       {
         cwd: scenario.users.alice.root,
         env: {
@@ -55,19 +74,26 @@ runTests("E2E: Group Messaging (Cohort)", () => {
       }
     );
     assertSuccess(aliceResult);
-    aliceAid = aliceResult.json.aid;
 
-    // Grant Alice user role
-    await runCliInProcess(
+    // Save Alice's identity file
+    aliceIdentityPath = join(scenario.users.alice.root, "identity.json");
+    writeFileSync(aliceIdentityPath, JSON.stringify(aliceResult.json, null, 2));
+    aliceAid = aliceResult.json.aid;
+    console.log(`✓ Alice incepted: ${aliceAid}`);
+
+    // 2. Admin grants Alice user role (using admin token)
+    // Save admin token to temp file for CLI use
+    const adminTokenPath = join(scenario.users.alice.root, "admin-token.json");
+    writeFileSync(adminTokenPath, JSON.stringify(adminToken, null, 2));
+
+    const grantAliceResult = await runCliInProcess(
       [
         "users",
         "grant-role",
         aliceAid,
         "user",
-        "--adminAID",
-        admin.aid,
-        "--actionSAID",
-        "grant-alice-user-group-test",
+        "--token",
+        adminTokenPath,
       ],
       {
         env: {
@@ -76,11 +102,13 @@ runTests("E2E: Group Messaging (Cohort)", () => {
         },
       }
     );
-    console.log(`✓ Alice incepted and granted user role: ${aliceAid}`);
+    assertSuccess(grantAliceResult);
+    console.log(`✓ Alice granted user role`);
 
-    // Incept Bob
+    // === Bob Setup ===
+    // 1. Incept Bob
     const bobResult = await runCliInProcess(
-      ["incept", "--seed", "bob-group-test"],
+      ["incept", "--seed", `bob-group-token-test-${timestamp}`],
       {
         cwd: scenario.users.bob.root,
         env: {
@@ -90,19 +118,25 @@ runTests("E2E: Group Messaging (Cohort)", () => {
       }
     );
     assertSuccess(bobResult);
-    bobAid = bobResult.json.aid;
 
-    // Grant Bob user role
-    await runCliInProcess(
+    // Save Bob's identity file
+    bobIdentityPath = join(scenario.users.bob.root, "identity.json");
+    writeFileSync(bobIdentityPath, JSON.stringify(bobResult.json, null, 2));
+    bobAid = bobResult.json.aid;
+    console.log(`✓ Bob incepted: ${bobAid}`);
+
+    // 2. Admin grants Bob user role
+    const bobAdminTokenPath = join(scenario.users.bob.root, "admin-token.json");
+    writeFileSync(bobAdminTokenPath, JSON.stringify(adminToken, null, 2));
+
+    const grantBobResult = await runCliInProcess(
       [
         "users",
         "grant-role",
         bobAid,
         "user",
-        "--adminAID",
-        admin.aid,
-        "--actionSAID",
-        "grant-bob-user-group-test",
+        "--token",
+        bobAdminTokenPath,
       ],
       {
         env: {
@@ -111,12 +145,13 @@ runTests("E2E: Group Messaging (Cohort)", () => {
         },
       }
     );
-    console.log(`✓ Bob incepted and granted user role: ${bobAid}`);
+    assertSuccess(grantBobResult);
+    console.log(`✓ Bob granted user role`);
   }, 60000);
 
   it("alice should create a cohort group", async () => {
     const result = await runCliInProcess(
-      ["group", "create", "Intro Cohort A"],
+      ["group", "create", "Intro Cohort A", "--token", aliceIdentityPath],
       {
         cwd: scenario.users.alice.root,
         env: {
@@ -137,7 +172,7 @@ runTests("E2E: Group Messaging (Cohort)", () => {
 
   it("alice should add bob to the group", async () => {
     const result = await runCliInProcess(
-      ["group", "add", groupId, bobAid, "--role", "member"],
+      ["group", "add", groupId, bobAid, "--token", aliceIdentityPath],
       {
         cwd: scenario.users.alice.root,
         env: {
@@ -152,13 +187,16 @@ runTests("E2E: Group Messaging (Cohort)", () => {
   }, 15000);
 
   it("should show both alice and bob in group info", async () => {
-    const result = await runCliInProcess(["group", "info", groupId], {
-      cwd: scenario.users.alice.root,
-      env: {
-        MERITS_VAULT_QUIET: "1",
-        CONVEX_URL: CONVEX_URL!,
-      },
-    });
+    const result = await runCliInProcess(
+      ["group", "info", groupId, "--token", aliceIdentityPath],
+      {
+        cwd: scenario.users.alice.root,
+        env: {
+          MERITS_VAULT_QUIET: "1",
+          CONVEX_URL: CONVEX_URL!,
+        },
+      }
+    );
 
     assertSuccess(result);
     expect(result.json).toBeDefined();
@@ -180,7 +218,7 @@ runTests("E2E: Group Messaging (Cohort)", () => {
 
   it("alice should send group message", async () => {
     const result = await runCliInProcess(
-      ["send", groupId, "--message", "Hello cohort! Welcome to the group."],
+      ["send", groupId, "--message", "Hello cohort! Welcome to the group.", "--token", aliceIdentityPath],
       {
         cwd: scenario.users.alice.root,
         env: {
@@ -193,43 +231,47 @@ runTests("E2E: Group Messaging (Cohort)", () => {
     assertSuccess(result);
     expect(result.json).toBeDefined();
     expect(result.json.messageId).toBeDefined();
-    expect(result.json.groupId).toBe(groupId);
+    expect(result.json.recipient).toBe(groupId);
 
     console.log(`✓ Alice sent group message: ${result.json.messageId}`);
   }, 15000);
 
-  it("bob should receive and decrypt alice's group message", async () => {
+  it("bob should receive alice's group message (backend-decrypted)", async () => {
     // Wait a moment for message propagation
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const result = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: {
-        MERITS_VAULT_QUIET: "1",
-        CONVEX_URL: CONVEX_URL!,
-      },
-    });
+    const result = await runCliInProcess(
+      ["unread", "--token", bobIdentityPath],
+      {
+        cwd: scenario.users.bob.root,
+        env: {
+          MERITS_VAULT_QUIET: "1",
+          CONVEX_URL: CONVEX_URL!,
+        },
+      }
+    );
 
     assertSuccess(result);
     expect(result.json).toBeDefined();
-    expect(Array.isArray(result.json.messages)).toBe(true);
+    expect(Array.isArray(result.json)).toBe(true);
 
     // Find the group message from Alice
-    const groupMsg = result.json.messages.find(
-      (m: any) => m.groupId === groupId && m.sender === aliceAid
+    const groupMsg = result.json.find(
+      (m: any) => m.groupId === groupId && m.from === aliceAid
     );
 
     expect(groupMsg).toBeDefined();
-    expect(groupMsg.typ).toBe("group-encrypted");
-    expect(groupMsg.content).toBe("Hello cohort! Welcome to the group.");
+    expect(groupMsg.isGroupMessage).toBe(true);
+    // Backend decrypts, so we should have plaintext message
+    expect(groupMsg.message).toBe("Hello cohort! Welcome to the group.");
 
-    console.log(`✓ Bob received and decrypted group message`);
-    console.log(`  Content: "${groupMsg.content}"`);
+    console.log(`✓ Bob received backend-decrypted group message`);
+    console.log(`  Content: "${groupMsg.message}"`);
   }, 15000);
 
   it("bob should send reply to group", async () => {
     const result = await runCliInProcess(
-      ["send", groupId, "--message", "Thanks Alice! Happy to be here."],
+      ["send", groupId, "--message", "Thanks Alice! Happy to be here.", "--token", bobIdentityPath],
       {
         cwd: scenario.users.bob.root,
         env: {
@@ -245,35 +287,38 @@ runTests("E2E: Group Messaging (Cohort)", () => {
     console.log(`✓ Bob sent reply to group`);
   }, 15000);
 
-  it("alice should receive bob's reply", async () => {
+  it("alice should receive bob's reply (backend-decrypted)", async () => {
     // Wait for message propagation
     await new Promise((resolve) => setTimeout(resolve, 1000));
 
-    const result = await runCliInProcess(["unread"], {
-      cwd: scenario.users.alice.root,
-      env: {
-        MERITS_VAULT_QUIET: "1",
-        CONVEX_URL: CONVEX_URL!,
-      },
-    });
+    const result = await runCliInProcess(
+      ["unread", "--token", aliceIdentityPath],
+      {
+        cwd: scenario.users.alice.root,
+        env: {
+          MERITS_VAULT_QUIET: "1",
+          CONVEX_URL: CONVEX_URL!,
+        },
+      }
+    );
 
     assertSuccess(result);
 
     // Find Bob's reply
-    const bobReply = result.json.messages.find(
-      (m: any) => m.groupId === groupId && m.sender === bobAid
+    const bobReply = result.json.find(
+      (m: any) => m.groupId === groupId && m.from === bobAid
     );
 
     expect(bobReply).toBeDefined();
-    expect(bobReply.typ).toBe("group-encrypted");
-    expect(bobReply.content).toBe("Thanks Alice! Happy to be here.");
+    expect(bobReply.isGroupMessage).toBe(true);
+    expect(bobReply.message).toBe("Thanks Alice! Happy to be here.");
 
-    console.log(`✓ Alice received Bob's reply`);
+    console.log(`✓ Alice received Bob's reply (backend-decrypted)`);
   }, 15000);
 
   it("alice should be able to remove bob from group", async () => {
     const result = await runCliInProcess(
-      ["group", "remove", groupId, bobAid],
+      ["group", "remove", groupId, bobAid, "--token", aliceIdentityPath],
       {
         cwd: scenario.users.alice.root,
         env: {
@@ -287,13 +332,16 @@ runTests("E2E: Group Messaging (Cohort)", () => {
     console.log(`✓ Alice removed Bob from group`);
 
     // Verify Bob is no longer in group
-    const infoResult = await runCliInProcess(["group", "info", groupId], {
-      cwd: scenario.users.alice.root,
-      env: {
-        MERITS_VAULT_QUIET: "1",
-        CONVEX_URL: CONVEX_URL!,
-      },
-    });
+    const infoResult = await runCliInProcess(
+      ["group", "info", groupId, "--token", aliceIdentityPath],
+      {
+        cwd: scenario.users.alice.root,
+        env: {
+          MERITS_VAULT_QUIET: "1",
+          CONVEX_URL: CONVEX_URL!,
+        },
+      }
+    );
 
     assertSuccess(infoResult);
 
@@ -304,41 +352,42 @@ runTests("E2E: Group Messaging (Cohort)", () => {
   }, 30000);
 });
 
-describe("E2E: Group Messaging Edge Cases", () => {
+describe("E2E: Group Messaging Edge Cases - Token-Based", () => {
   it("should fail when non-member tries to send group message", async () => {
     if (!CONVEX_URL || !BOOTSTRAP_KEY) return;
 
-    const scenario = mkMultiUserScenario("group-edge", ["alice", "charlie"]);
+    // Use unique timestamp to avoid conflicts
+    const timestamp = Date.now();
+    const scenario = mkMultiUserScenario("group-edge-token", ["alice", "charlie"]);
     const admin = await ensureAdminInitialised(CONVEX_URL!);
+    const adminToken = await getAdminSessionToken(CONVEX_URL!, admin, { ttlMs: 60000 });
 
     // Create Alice with user role
     const aliceResult = await runCliInProcess(
-      ["incept", "--seed", "alice-edge-group"],
+      ["incept", "--seed", `alice-edge-group-token-${timestamp}`],
       {
         cwd: scenario.users.alice.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
       }
     );
     assertSuccess(aliceResult);
+
+    const aliceIdentityPath = join(scenario.users.alice.root, "identity.json");
+    writeFileSync(aliceIdentityPath, JSON.stringify(aliceResult.json, null, 2));
     const aliceAid = aliceResult.json.aid;
 
+    // Grant Alice user role
+    const adminTokenPath = join(scenario.users.alice.root, "admin-token.json");
+    writeFileSync(adminTokenPath, JSON.stringify(adminToken, null, 2));
+
     await runCliInProcess(
-      [
-        "users",
-        "grant-role",
-        aliceAid,
-        "user",
-        "--adminAID",
-        admin.aid,
-        "--actionSAID",
-        "grant-alice-edge",
-      ],
+      ["users", "grant-role", aliceAid, "user", "--token", adminTokenPath],
       { env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! } }
     );
 
-    // Create Charlie
+    // Create Charlie (no user role granted)
     const charlieResult = await runCliInProcess(
-      ["incept", "--seed", "charlie-edge-group"],
+      ["incept", "--seed", `charlie-edge-group-token-${timestamp}`],
       {
         cwd: scenario.users.charlie.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
@@ -346,9 +395,12 @@ describe("E2E: Group Messaging Edge Cases", () => {
     );
     assertSuccess(charlieResult);
 
+    const charlieIdentityPath = join(scenario.users.charlie.root, "identity.json");
+    writeFileSync(charlieIdentityPath, JSON.stringify(charlieResult.json, null, 2));
+
     // Alice creates group
     const groupResult = await runCliInProcess(
-      ["group", "create", "Alice Only Group"],
+      ["group", "create", "Alice Only Group", "--token", aliceIdentityPath],
       {
         cwd: scenario.users.alice.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
@@ -359,7 +411,7 @@ describe("E2E: Group Messaging Edge Cases", () => {
 
     // Charlie tries to send message (should fail - not a member)
     const sendResult = await runCliInProcess(
-      ["send", groupId, "--message", "Can I join?"],
+      ["send", groupId, "--message", "Can I join?", "--token", charlieIdentityPath],
       {
         cwd: scenario.users.charlie.root,
         env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },

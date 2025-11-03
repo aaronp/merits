@@ -79,7 +79,10 @@
       "Bash(pkill:*)",
       "Bash(session.json)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex deploy:*)",
-      "Bash(export CONVEX_DEPLOYMENT=dev:aware-tiger-369)"
+      "Bash(export CONVEX_DEPLOYMENT=dev:aware-tiger-369)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex logs:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex env get:*)",
+      "Bash(git stash:*)"
     ],
     "deny": [],
     "ask": []

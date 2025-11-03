@@ -38,31 +38,51 @@ export const bootstrapOnboarding = mutation({
     }
 
     // ============================================================================
-    // SECURITY GUARD #2: Idempotent check - prevent duplicate bootstrap
+    // SECURITY GUARD #2: Database must be empty for initial bootstrap
     // ============================================================================
-    // Check if admin role already exists. If so, bootstrap is already done.
-    const existingAdmin = await ctx.db
-      .query("roles")
-      .withIndex("by_roleName", (q: any) => q.eq("roleName", "admin"))
-      .first();
+    // Prevent bootstrap on a database with existing data to avoid corruption.
+    // Check critical tables: roles, users, userRoles
+    const existingRoles = await ctx.db.query("roles").first();
+    const existingUsers = await ctx.db.query("users").first();
+    const existingUserRoles = await ctx.db.query("userRoles").first();
 
-    if (existingAdmin) {
-      console.log("Bootstrap: Admin role already exists, skipping bootstrap");
+    if (existingRoles || existingUsers || existingUserRoles) {
+      console.log("Bootstrap: Database not empty, bootstrap already completed");
+
+      // Return info about existing bootstrap for idempotency
+      const existingAdmin = await ctx.db
+        .query("roles")
+        .withIndex("by_roleName", (q: any) => q.eq("roleName", "admin"))
+        .first();
+
+      const anonRole = await ctx.db
+        .query("roles")
+        .withIndex("by_roleName", (q: any) => q.eq("roleName", "anon"))
+        .first();
+
+      const userRole = await ctx.db
+        .query("roles")
+        .withIndex("by_roleName", (q: any) => q.eq("roleName", "user"))
+        .first();
+
+      const onboardingGroup = await ctx.db
+        .query("groupChats")
+        .filter((q: any) => q.eq(q.field("name"), "onboarding"))
+        .first();
+
       return {
         ok: true,
         already: true,
-        message: "System already bootstrapped. Admin role exists.",
-        onboardingGroupId: (await ctx.db
-          .query("groupChats")
-          .filter((q: any) => q.eq(q.field("name"), "onboarding"))
-          .first())?._id,
-        anonRoleId: (await ctx.db
-          .query("roles")
-          .withIndex("by_roleName", (q: any) => q.eq("roleName", "anon"))
-          .first())?._id,
-        adminRoleId: existingAdmin._id,
+        message: "System already bootstrapped. Database contains existing roles/users.",
+        onboardingGroupId: onboardingGroup?._id,
+        anonRoleId: anonRole?._id,
+        userRoleId: userRole?._id,
+        adminRoleId: existingAdmin?._id,
       };
     }
+
+    // Database is empty - proceed with bootstrap
+    console.log("Bootstrap: Database empty, proceeding with initial bootstrap");
 
     // Create onboarding group if missing
     let onboardingGroup = await ctx.db

@@ -273,6 +273,84 @@ export function getCurrentAdminSeed(): string | null {
 }
 
 /**
+ * Get a session token for any user with custom scopes
+ *
+ * Generic helper that works for admin, user, or anon scopes.
+ *
+ * @param convexUrl - Convex backend URL
+ * @param credentials - User credentials (aid, privateKeyBytes)
+ * @param scopes - Array of scopes for the session (e.g., ["admin"], ["user"])
+ * @param options - Optional configuration
+ * @returns Session token object with token, aid, ksn, and expiresAt
+ */
+export async function getSessionToken(
+  convexUrl: string,
+  credentials: {
+    aid: string;
+    privateKeyBytes: Uint8Array;
+    ksn?: number;
+  },
+  scopes: string[],
+  options: {
+    /** Token lifetime in milliseconds (default: 60000ms = 1 minute) */
+    ttlMs?: number;
+    /** Path to save session token file (optional) */
+    saveTo?: string;
+  } = {}
+): Promise<{ token: string; aid: string; ksn: number; expiresAt: number }> {
+  const ttlMs = options.ttlMs ?? 60000;
+  const ksn = credentials.ksn ?? 0;
+  const convex = new ConvexClient(convexUrl);
+
+  try {
+    // Compute args hash on server to ensure consistency
+    const args = { scopes, ttlMs };
+    const argsHash = await convex.query(api.auth.computeHash, { args });
+
+    // Issue challenge
+    const challenge = await convex.mutation(api.auth.issueChallenge, {
+      aid: credentials.aid,
+      purpose: "openSession",
+      argsHash,
+      ttl: 120000,
+    });
+
+    // Sign the payload (signPayload handles serialization internally)
+    const sigs = await signPayload(challenge.payload, credentials.privateKeyBytes, 0);
+
+    // Open session
+    const session = await convex.mutation(api.sessions.openSession, {
+      aid: credentials.aid,
+      scopes,
+      ttlMs,
+      auth: {
+        challengeId: challenge.challengeId as any,
+        sigs,
+        ksn,
+      },
+    });
+
+    const sessionData = {
+      token: session.token,
+      aid: credentials.aid,
+      ksn,
+      expiresAt: session.expiresAt,
+    };
+
+    // Save to file if requested
+    if (options.saveTo) {
+      writeFileSync(options.saveTo, JSON.stringify(sessionData, null, 2), "utf-8");
+      console.log(`✅ Session saved to ${options.saveTo}`);
+    }
+
+    console.log(`✅ Session token created for ${credentials.aid} with scopes: ${scopes.join(", ")} (expires in ${ttlMs}ms)`);
+    return sessionData;
+  } finally {
+    convex.close();
+  }
+}
+
+/**
  * Sign in as admin and get a session token
  *
  * This creates a session token with "admin" scope for the admin user.
@@ -293,53 +371,14 @@ export async function getAdminSessionToken(
     saveTo?: string;
   } = {}
 ): Promise<{ token: string; aid: string; ksn: number; expiresAt: number }> {
-  const ttlMs = options.ttlMs ?? 60000;
-  const convex = new ConvexClient(convexUrl);
-
-  try {
-    // Compute args hash on server to ensure consistency
-    const args = { scopes: ["admin"], ttlMs };
-    const argsHash = await convex.query(api.auth.computeHash, { args });
-
-    // Issue challenge
-    const challenge = await convex.mutation(api.auth.issueChallenge, {
+  return getSessionToken(
+    convexUrl,
+    {
       aid: admin.aid,
-      purpose: "openSession",
-      argsHash,
-      ttl: 120000,
-    });
-
-    // Sign the payload (signPayload handles serialization internally)
-    const sigs = await signPayload(challenge.payload, admin.privateKeyBytes, 0);
-
-    // Open session
-    const session = await convex.mutation(api.sessions.openSession, {
-      aid: admin.aid,
-      scopes: ["admin"],
-      ttlMs,
-      auth: {
-        challengeId: challenge.challengeId as any,
-        sigs,
-        ksn: 0,
-      },
-    });
-
-    const sessionData = {
-      token: session.token,
-      aid: admin.aid,
+      privateKeyBytes: admin.privateKeyBytes,
       ksn: 0,
-      expiresAt: session.expiresAt,
-    };
-
-    // Save to file if requested
-    if (options.saveTo) {
-      writeFileSync(options.saveTo, JSON.stringify(sessionData, null, 2), "utf-8");
-      console.log(`✅ Admin session saved to ${options.saveTo}`);
-    }
-
-    console.log(`✅ Admin session token created (expires in ${ttlMs}ms)`);
-    return sessionData;
-  } finally {
-    convex.close();
-  }
+    },
+    ["admin"],
+    options
+  );
 }
