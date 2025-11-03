@@ -21,6 +21,8 @@ import { runCliInProcess, assertSuccess } from "../helpers/exec";
 import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario, writeJSON } from "../helpers/workspace";
 import { join } from "node:path";
+import { eventuallyValue } from "../../helpers/eventually";
+import { TEST_CONFIG } from "../../config";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -133,15 +135,20 @@ runTests("E2E: Unread Message Pipeline", () => {
   }, 60000);
 
   it("bob should list unread message counts", async () => {
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["list-unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find at least 4 messages from Alice
+        const aliceEntry = res.json.senders?.find((s: any) => s.sender === aliceAid);
+        return (aliceEntry && aliceEntry.count >= 4) ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
-    const result = await runCliInProcess(["list-unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(result);
     expect(result.json).toBeDefined();
     expect(Array.isArray(result.json.senders)).toBe(true);
 
@@ -276,15 +283,19 @@ runTests("E2E: Unread Message Pipeline", () => {
   }, 15000);
 
   it("bob should have fewer unread messages after marking", async () => {
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(result);
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        const aliceMessages = res.json.messages?.filter((m: any) => m.sender === aliceAid);
+        // Return result only if Alice has 2 or fewer messages (indicating marking worked)
+        return (aliceMessages && aliceMessages.length <= 2) ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     const aliceMessages = result.json.messages.filter(
       (m: any) => m.sender === aliceAid
@@ -339,15 +350,18 @@ runTests("E2E: Unread Message Pipeline", () => {
   }, 30000);
 
   it("bob should have no unread messages from alice", async () => {
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = await runCliInProcess(["unread", "--from", aliceAid], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(result);
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread", "--from", aliceAid], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if there are no messages from Alice
+        return (res.json.messages?.length === 0) ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Should have no messages from Alice
     expect(result.json.messages.length).toBe(0);

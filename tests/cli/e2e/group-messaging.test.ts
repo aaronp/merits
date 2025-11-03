@@ -31,6 +31,8 @@ import { mkMultiUserScenario } from "../helpers/workspace";
 import { writeFileSync } from "fs";
 import { join } from "path";
 import { base64UrlToUint8Array } from "../../../core/crypto";
+import { eventuallyValue } from "../../helpers/eventually";
+import { TEST_CONFIG } from "../../config";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -237,21 +239,28 @@ runTests("E2E: Group Messaging (Cohort) - Token-Based", () => {
   }, 15000);
 
   it("bob should receive alice's group message (backend-decrypted)", async () => {
-    // Wait a moment for message propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = await runCliInProcess(
-      ["unread", "--token", bobIdentityPath],
-      {
-        cwd: scenario.users.bob.root,
-        env: {
-          MERITS_VAULT_QUIET: "1",
-          CONVEX_URL: CONVEX_URL!,
-        },
-      }
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(
+          ["unread", "--token", bobIdentityPath],
+          {
+            cwd: scenario.users.bob.root,
+            env: {
+              MERITS_VAULT_QUIET: "1",
+              CONVEX_URL: CONVEX_URL!,
+            },
+          }
+        );
+        assertSuccess(res);
+        // Return result only if we find the group message from Alice
+        const groupMsg = res.json?.find(
+          (m: any) => m.groupId === groupId && m.from === aliceAid
+        );
+        return groupMsg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
     );
 
-    assertSuccess(result);
     expect(result.json).toBeDefined();
     expect(Array.isArray(result.json)).toBe(true);
 
@@ -288,21 +297,27 @@ runTests("E2E: Group Messaging (Cohort) - Token-Based", () => {
   }, 15000);
 
   it("alice should receive bob's reply (backend-decrypted)", async () => {
-    // Wait for message propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = await runCliInProcess(
-      ["unread", "--token", aliceIdentityPath],
-      {
-        cwd: scenario.users.alice.root,
-        env: {
-          MERITS_VAULT_QUIET: "1",
-          CONVEX_URL: CONVEX_URL!,
-        },
-      }
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(
+          ["unread", "--token", aliceIdentityPath],
+          {
+            cwd: scenario.users.alice.root,
+            env: {
+              MERITS_VAULT_QUIET: "1",
+              CONVEX_URL: CONVEX_URL!,
+            },
+          }
+        );
+        assertSuccess(res);
+        // Return result only if we find Bob's reply
+        const bobReply = res.json?.find(
+          (m: any) => m.groupId === groupId && m.from === bobAid
+        );
+        return bobReply ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
     );
-
-    assertSuccess(result);
 
     // Find Bob's reply
     const bobReply = result.json.find(

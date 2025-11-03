@@ -82,7 +82,9 @@
       "Bash(export CONVEX_DEPLOYMENT=dev:aware-tiger-369)",
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex logs:*)",
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex env get:*)",
-      "Bash(git stash:*)"
+      "Bash(git stash:*)",
+      "Bash(bunx convex data:*)",
+      "Bash(bunx convex:*)"
     ],
     "deny": [],
     "ask": []

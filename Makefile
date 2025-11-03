@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build-cli clean summarise summarise-convex
+.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build-cli clean clear-db summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -69,6 +69,33 @@ clean:
 	rm -rf coverage
 	rm -f merits-summary.txt
 	rm -f core-summary.txt
+
+# Clear Convex database (requires confirmation)
+clear-db:
+	@if [ ! -f .env.local ]; then \
+		echo "Error: .env.local file not found"; \
+		echo "Please run 'make dev' first to set up your Convex deployment"; \
+		exit 1; \
+	fi
+	@echo "⚠️  WARNING: This will DELETE ALL DATA from your Convex database!"
+	@echo ""
+	@export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && \
+		echo "Deployment: $$CONVEX_DEPLOYMENT" && \
+		echo "URL: $$CONVEX_URL"
+	@echo ""
+	@echo -n "Type 'yes' to confirm: " && \
+		read confirm && \
+		if [ "$$confirm" = "yes" ]; then \
+			export $$(grep -v '^#' .env.local | sed 's/#.*//g' | xargs) && \
+			bunx convex run _dev_utils:clearAllData && \
+			echo "" && \
+			echo "✅ Database cleared successfully" && \
+			echo "" && \
+			echo "Note: You may need to run bootstrap again to initialize the system"; \
+		else \
+			echo "❌ Database clear cancelled"; \
+			exit 1; \
+		fi
 
 # Generate summary of convex files and copy to clipboard
 summarise:

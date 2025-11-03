@@ -13,6 +13,7 @@ import type {
   FilterApi,
   FunctionReference,
 } from "convex/server";
+import type * as _dev_utils from "../_dev_utils.js";
 import type * as accessControl from "../accessControl.js";
 import type * as adapters_ConvexGroupApi from "../adapters/ConvexGroupApi.js";
 import type * as adapters_ConvexGroupChatApi from "../adapters/ConvexGroupChatApi.js";
@@ -41,6 +42,7 @@ import type * as userStatus from "../userStatus.js";
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  _dev_utils: typeof _dev_utils;
   accessControl: typeof accessControl;
   "adapters/ConvexGroupApi": typeof adapters_ConvexGroupApi;
   "adapters/ConvexGroupChatApi": typeof adapters_ConvexGroupChatApi;

@@ -21,6 +21,8 @@ import { runCliInProcess, assertSuccess } from "../helpers/exec";
 import { ensureAdminInitialised, getAdminSessionToken, type AdminCredentials } from "../../helpers/admin-bootstrap";
 import { mkMultiUserScenario } from "../helpers/workspace";
 import { join } from "node:path";
+import { eventuallyValue } from "../../helpers/eventually";
+import { TEST_CONFIG } from "../../config";
 
 // Only run if CONVEX_URL and BOOTSTRAP_KEY are set
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -127,15 +129,20 @@ runTests("E2E: Direct Messaging Flow", () => {
   }, 15000);
 
   it("bob receives and decrypts alice's message", async () => {
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find Alice's message
+        const aliceMsg = res.json.messages?.find((m: any) => m.sender === aliceAid);
+        return aliceMsg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
-    const result = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(result);
     expect(Array.isArray(result.json.messages)).toBe(true);
 
     // Find Alice's message
@@ -170,15 +177,19 @@ runTests("E2E: Direct Messaging Flow", () => {
   }, 15000);
 
   it("alice receives bob's reply", async () => {
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const result = await runCliInProcess(["unread"], {
-      cwd: scenario.users.alice.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(result);
+    const result = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.alice.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find Bob's message
+        const bobMsg = res.json.messages?.find((m: any) => m.sender === bobAid);
+        return bobMsg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Find Bob's message
     const bobMsg = result.json.messages.find(
@@ -205,16 +216,20 @@ runTests("E2E: Direct Messaging Flow", () => {
 
     assertSuccess(sendResult);
 
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     // Bob retrieves message
-    const recvResult = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(recvResult);
+    const recvResult = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find the special characters message
+        const msg = res.json.messages?.find((m: any) => m.content === specialMessage);
+        return msg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Find message with special characters
     const specialMsg = recvResult.json.messages.find(
@@ -240,16 +255,20 @@ runTests("E2E: Direct Messaging Flow", () => {
 
     assertSuccess(sendResult);
 
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     // Bob retrieves message
-    const recvResult = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(recvResult);
+    const recvResult = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find the unicode message
+        const msg = res.json.messages?.find((m: any) => m.content?.includes("世界"));
+        return msg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Find unicode message
     const unicodeMsg = recvResult.json.messages.find(
@@ -275,16 +294,20 @@ runTests("E2E: Direct Messaging Flow", () => {
 
     assertSuccess(sendResult);
 
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     // Bob retrieves message
-    const recvResult = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(recvResult);
+    const recvResult = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find the long message
+        const msg = res.json.messages?.find((m: any) => m.content === longMessage);
+        return msg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Find long message
     const longMsg = recvResult.json.messages.find(
@@ -310,16 +333,20 @@ runTests("E2E: Direct Messaging Flow", () => {
 
     assertSuccess(sendResult);
 
-    // Wait for propagation
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
     // Bob retrieves message
-    const recvResult = await runCliInProcess(["unread"], {
-      cwd: scenario.users.bob.root,
-      env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
-    });
-
-    assertSuccess(recvResult);
+    const recvResult = await eventuallyValue(
+      async () => {
+        const res = await runCliInProcess(["unread"], {
+          cwd: scenario.users.bob.root,
+          env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: CONVEX_URL! },
+        });
+        assertSuccess(res);
+        // Return result only if we find the multiline message
+        const msg = res.json.messages?.find((m: any) => m.content?.includes("Line 1\nLine 2"));
+        return msg ? res : null;
+      },
+      { timeout: TEST_CONFIG.EVENTUALLY_TIMEOUT }
+    );
 
     // Find multiline message
     const multilineMsg = recvResult.json.messages.find(

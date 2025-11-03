@@ -7,11 +7,13 @@
  * Instead of sleep(), we poll at regular intervals.
  */
 
+import { TEST_CONFIG } from "../config";
+
 export interface EventuallyOptions {
-  /** Timeout in milliseconds (default: 5000) */
+  /** Timeout in milliseconds (default: from TEST_CONFIG.EVENTUALLY_TIMEOUT) */
   timeout?: number;
 
-  /** Interval between checks in milliseconds (default: 100) */
+  /** Interval between checks in milliseconds (default: from TEST_CONFIG.EVENTUALLY_INTERVAL) */
   interval?: number;
 
   /** Error message prefix (optional) */
@@ -27,12 +29,17 @@ export interface EventuallyOptions {
  * @example
  * await eventually(() => messages.length > 0);
  * await eventually(() => messages.length > 0, { timeout: 3000, interval: 50 });
+ * await eventually(() => messages.length > 0, { timeout: TEST_CONFIG.NEGATIVE_ASSERTION_TIMEOUT });
  */
 export async function eventually(
   condition: () => boolean | Promise<boolean>,
   options: EventuallyOptions = {}
 ): Promise<void> {
-  const { timeout = 5000, interval = 100, message } = options;
+  const {
+    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
+    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
+    message
+  } = options;
 
   const startTime = Date.now();
 
@@ -72,7 +79,11 @@ export async function eventuallyAssert(
   assertion: () => void | Promise<void>,
   options: EventuallyOptions = {}
 ): Promise<void> {
-  const { timeout = 5000, interval = 100, message } = options;
+  const {
+    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
+    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
+    message
+  } = options;
 
   const startTime = Date.now();
   let lastError: Error | undefined;
@@ -115,7 +126,11 @@ export async function eventuallyValue<T>(
   getValue: () => T | undefined | null | Promise<T | undefined | null>,
   options: EventuallyOptions = {}
 ): Promise<T> {
-  const { timeout = 5000, interval = 100, message } = options;
+  const {
+    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
+    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
+    message
+  } = options;
 
   const startTime = Date.now();
 
