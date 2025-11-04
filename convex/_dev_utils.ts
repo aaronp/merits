@@ -27,6 +27,7 @@ export const clearAllData = mutation({
 
     // Get all tables
     const tables = [
+      "challenges",
       "users",
       "keyStates",
       "roles",
@@ -37,7 +38,7 @@ export const clearAllData = mutation({
       "groupMembers",
       "messages",
       "authChallenges",
-      "sessions",
+      "usedNonces",
     ];
 
     let totalDeleted = 0;

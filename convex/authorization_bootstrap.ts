@@ -160,6 +160,17 @@ export const bootstrapOnboarding = mutation({
             timestamp: now,
           });
           permission = await ctx.db.get(pid);
+        } else {
+          // Update permission data if it doesn't include this group
+          const currentData = (permission.data as string[]) || [];
+          if (!currentData.includes(onboardingGroup._id as string)) {
+            await ctx.db.patch(permission._id, {
+              data: [onboardingGroup._id as string],
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/perms",
+            });
+            permission = await ctx.db.get(permission._id);
+          }
         }
 
         // Ensure role->permission mapping exists
@@ -262,6 +273,17 @@ export const bootstrapOnboarding = mutation({
         timestamp: now,
       });
       permission = await ctx.db.get(pid);
+    } else {
+      // Update permission data if it doesn't include this group
+      const currentData = (permission.data as string[]) || [];
+      if (!currentData.includes(onboardingGroup!._id as string)) {
+        await ctx.db.patch(permission._id, {
+          data: [onboardingGroup!._id as string],
+          adminAID: "SYSTEM",
+          actionSAID: "bootstrap/perms",
+        });
+        permission = await ctx.db.get(permission._id);
+      }
     }
 
     // Ensure role->permission mapping exists

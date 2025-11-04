@@ -69,18 +69,15 @@ describe("User Onboarding", () => {
       { cwd: bobDir.root }
     );
 
-    /** Verify users are not in any groups  */
+    /** Verify users are automatically added to onboarding group */
     const aliceGroup = await runCliInProcess(
       ["group", "list"],
       { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
     );
-    expect(aliceGroup).toEqual({
-      code: 0,
-      stdout: "[]\n",
-      stderr: "",
-      json: [],
-      error: undefined,
-    })
+    expect(aliceGroup.code).toBe(0);
+    expect(aliceGroup.json).toBeArray();
+    expect(aliceGroup.json.length).toBe(1);
+    expect(aliceGroup.json[0].name).toBe("onboarding");
 
 
     /** Verify anon users CANNOT message each other */
@@ -129,23 +126,14 @@ describe("User Onboarding", () => {
 
       console.log(`✅ Onboarding group found with tag: ${onboardingGroup.tag}, ID: ${onboardingGroup.id}`);
 
-      // TODO: Implement group message sending in CLI
-      // Group messaging requires different encryption (ephemeral AES key per message,
-      // encrypted separately for each member). The send command currently only
-      // supports direct user-to-user messaging.
-      //
-      // For now, we've verified that:
-      // 1. Tag-based group lookup works correctly
-      // 2. The onboarding group exists with the correct tag
-      // 3. The bootstrap process creates the group with tag set
-      //
-      // Once group messaging is implemented, uncomment this test:
-      // const aliceSendOnboarding = await runCliInProcess(
-      //   ["send", onboardingGroup.id, "--message", "Hello from Alice!", "--typ", "onboarding.intro"],
-      //   { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
-      // );
-      // expect(aliceSendOnboarding.code).toBe(0);
-      // expect(aliceSendOnboarding.json.messageId).toBeDefined();
+      // Test group messaging with encrypted group encryption
+      const aliceSendOnboarding = await runCliInProcess(
+        ["send", onboardingGroup.id, "--message", "Hello from Alice!", "--typ", "onboarding.intro"],
+        { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+      );
+      expect(aliceSendOnboarding.code).toBe(0);
+      expect(aliceSendOnboarding.json.messageId).toBeDefined();
+      console.log(`✅ Alice sent group message: ${aliceSendOnboarding.json.messageId}`);
     } else {
       console.log("⚠️  Onboarding group not found - skipping group messaging test");
     }
@@ -185,7 +173,9 @@ describe("User Onboarding", () => {
       { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
     );
     expect(alicestatus.json.roles).toEqual(["anon"])
-    expect(alicestatus.json.groups).toEqual([])
+    expect(alicestatus.json.groups).toBeArray()
+    expect(alicestatus.json.groups.length).toBe(1)
+    expect(alicestatus.json.groups[0].groupName).toBe("onboarding")
     expect(alicestatus.json.publicKey).toBeDefined()
     expect(alicestatus.json.publicKeyKsn).toBe(0)
 

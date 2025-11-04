@@ -679,6 +679,30 @@ export const registerUser = mutation({
       });
     }
 
+    // Best-effort: add user to onboarding group if present
+    const onboardingGroup = await ctx.db
+      .query("groupChats")
+      .withIndex("by_tag", (q) => q.eq("tag", "onboarding"))
+      .first();
+    if (onboardingGroup) {
+      // Check if user is already a member (shouldn't happen, but be defensive)
+      const existingMembership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group_aid", (q) =>
+          q.eq("groupChatId", onboardingGroup._id).eq("aid", args.aid)
+        )
+        .first();
+      if (!existingMembership) {
+        await ctx.db.insert("groupMembers", {
+          groupChatId: onboardingGroup._id,
+          aid: args.aid,
+          latestSeqNo: 0,
+          joinedAt: now,
+          role: "member",
+        });
+      }
+    }
+
     return { aid: args.aid };
   },
 });

@@ -95,7 +95,9 @@
       "Bash(xargs grep:*)",
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 timeout 5 bunx convex logs:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud node:*)",
-      "Bash(MERITS_VAULT_QUIET=1 ./merits:*)"
+      "Bash(MERITS_VAULT_QUIET=1 ./merits:*)",
+      "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 timeout 10 bunx convex logs:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex data:*)"
     ],
     "deny": [],
     "ask": []
