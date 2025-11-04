@@ -143,9 +143,11 @@ export const bootstrapOnboarding = mutation({
         }
       }
 
-      // Ensure anon role has permission to message onboarding group
+      // Ensure anon role has permission to message onboarding group (by tag)
       if (anonRole && onboardingGroup) {
         const permKey = PERMISSIONS.CAN_MESSAGE_GROUPS;
+        const tagIdentifier = `tag:${GROUP_TAGS.ONBOARDING}`;
+
         let permission = await ctx.db
           .query("permissions")
           .withIndex("by_key", (q: any) => q.eq("key", permKey))
@@ -154,18 +156,18 @@ export const bootstrapOnboarding = mutation({
         if (!permission) {
           const pid = await ctx.db.insert("permissions", {
             key: permKey,
-            data: [onboardingGroup._id as string],
+            data: [tagIdentifier],
             adminAID: "SYSTEM",
             actionSAID: "bootstrap/perms",
             timestamp: now,
           });
           permission = await ctx.db.get(pid);
         } else {
-          // Update permission data if it doesn't include this group
+          // Update permission data if it doesn't include this tag
           const currentData = (permission.data as string[]) || [];
-          if (!currentData.includes(onboardingGroup._id as string)) {
+          if (!currentData.includes(tagIdentifier)) {
             await ctx.db.patch(permission._id, {
-              data: [onboardingGroup._id as string],
+              data: [...currentData, tagIdentifier],
               adminAID: "SYSTEM",
               actionSAID: "bootstrap/perms",
             });

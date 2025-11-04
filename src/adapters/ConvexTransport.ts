@@ -35,7 +35,7 @@ export class ConvexTransport implements Transport {
       alg: req.alg,
       ttl: req.ttlMs,
       auth: {
-        challengeId: req.auth.challengeId as Id<"challenges">,
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
       },
@@ -46,15 +46,17 @@ export class ConvexTransport implements Transport {
 
   async receiveMessages(req: {
     for: string;
-    auth: AuthProof;
+    auth?: AuthProof;
+    sig?: SignedRequest;
   }): Promise<EncryptedMessage[]> {
     const messages = await this.client.mutation(api.messages.receive, {
       recpAid: req.for,
-      auth: {
-        challengeId: req.auth.challengeId as Id<"challenges">,
+      auth: req.auth ? {
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
-      },
+      } : undefined,
+      sig: req.sig,
     });
 
     return messages.map((m: any) => this.toEncryptedMessage(m, req.for));
@@ -71,7 +73,7 @@ export class ConvexTransport implements Transport {
       receipt: req.receiptSig ?? [],
       auth: req.auth
         ? {
-            challengeId: req.auth.challengeId as Id<"challenges">,
+            challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
             sigs: req.auth.sigs,
             ksn: req.auth.ksn,
           }

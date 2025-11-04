@@ -326,7 +326,7 @@ Output Formats:
     .action(unread);
 
   program
-    .command("mark-as-read")
+    .command("mark-as-read [ids...]")
     .description("Mark messages as read (acknowledges and deletes them)")
     .option("--ids <ids>", "Comma-separated message IDs")
     .option("--ids-data <file>", "Path to JSON file with message IDs")
@@ -590,6 +590,63 @@ Examples:
   $ merits access clear --deny --token $TOKEN
   `)
     .action(accessClear);
+
+  // RBAC command group (alias for users/roles commands)
+  const rbacCmd = program
+    .command("rbac")
+    .description("Role-Based Access Control management (alias for users/roles commands)");
+
+  const rbacUsersCmd = rbacCmd
+    .command("users")
+    .description("Manage user roles");
+
+  rbacUsersCmd
+    .command("grant-role <aid> <roleName>")
+    .option("--credentials <path>", "Admin credentials JSON file")
+    .option("--token <path>", "Admin session token file")
+    .option("--action-said <said>", "Reference to governance action")
+    .action(async (userAid: string, roleName: string, opts: any) => {
+      try {
+        // Get context from global state
+        const ctx = (globalThis as any).__cliContext;
+        if (!ctx) {
+          throw new Error("CLI context not initialized");
+        }
+
+        // Load admin credentials
+        const { requireCredentials } = await import("./lib/credentials");
+        const creds = requireCredentials(opts.credentials);
+
+        // Sign the request
+        const { signMutationArgs } = await import("../core/signatures");
+        const { base64UrlToUint8Array } = await import("../core/crypto");
+        const { api } = await import("../convex/_generated/api");
+
+        const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+        const args = {
+          userAID: userAid,
+          roleName: roleName,
+          actionSAID: opts.actionSaid || "cli/grant-role",
+        };
+        const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+
+        // Call backend mutation
+        await ctx.client.convex.mutation(api.permissions_admin.grantRoleToUser, {
+          ...args,
+          sig,
+        });
+
+        const format = opts.format || "json";
+        if (format === "json") {
+          console.log(JSON.stringify({ success: true, aid: userAid, role: roleName }, null, 2));
+        } else {
+          console.log(`✅ Granted role ${roleName} to ${userAid}`);
+        }
+      } catch (err) {
+        console.error(`Error granting role: ${(err as Error).message}`);
+        process.exit(1);
+      }
+    });
 
   program
     .command("config")

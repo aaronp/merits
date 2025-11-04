@@ -10,7 +10,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { verifyAuth } from "./auth";
+import { verifyAuth, verifySignedRequest } from "./auth";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
 import type { Id } from "./_generated/dataModel";
 
@@ -25,7 +25,7 @@ export const createGroupChat = mutation({
     maxTtl: v.optional(v.number()), // Default 30 days
     initialMembers: v.array(v.string()), // AIDs to add as initial members
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -80,6 +80,197 @@ export const createGroupChat = mutation({
     }
 
     return { groupChatId };
+  },
+});
+
+/**
+ * Create a new group (simplified, signed request API)
+ *
+ * This is a simplified version for the CLI that accepts signed requests directly.
+ */
+export const createGroup = mutation({
+  args: {
+    name: v.string(),
+    initialMembers: v.optional(v.array(v.string())),
+    sig: v.optional(v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Verify signed request
+    if (!args.sig) {
+      throw new Error("Signature required");
+    }
+
+    const verified = await verifySignedRequest(ctx, args);
+    const creatorAid = verified.aid;
+
+    // RBAC: require permission to create groups
+    const claims = await resolveUserClaims(ctx, creatorAid);
+    if (!claimsInclude(claims, PERMISSIONS.CAN_CREATE_GROUPS)) {
+      throw new Error("Not permitted to create groups");
+    }
+
+    // Create the group chat with simplified defaults
+    const groupChatId = await ctx.db.insert("groupChats", {
+      ownerAid: creatorAid,
+      membershipSaid: `group.${args.name}.${now}`, // Simple default SAID
+      name: args.name,
+      maxTtl: 30 * 24 * 60 * 60 * 1000, // 30 days default
+      createdAt: now,
+      createdBy: creatorAid,
+    });
+
+    // Add initial members including creator
+    const memberSet = new Set([creatorAid, ...(args.initialMembers ?? [])]);
+
+    for (const aid of memberSet) {
+      await ctx.db.insert("groupMembers", {
+        groupChatId,
+        aid,
+        latestSeqNo: -1,
+        joinedAt: now,
+        role: aid === creatorAid ? "owner" : "member",
+      });
+    }
+
+    return { groupId: groupChatId };
+  },
+});
+
+/**
+ * Add members to a group (simplified, signed request API)
+ */
+export const addMembers = mutation({
+  args: {
+    groupId: v.string(),
+    members: v.array(v.string()),
+    sig: v.optional(v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const now = Date.now();
+
+    // Verify signed request
+    if (!args.sig) {
+      throw new Error("Signature required");
+    }
+
+    const verified = await verifySignedRequest(ctx, args);
+    const callerAid = verified.aid;
+
+    // Check caller's role
+    const callerMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupId as any).eq("aid", callerAid)
+      )
+      .first();
+
+    if (!callerMembership ||
+        (callerMembership.role !== "admin" && callerMembership.role !== "owner")) {
+      throw new Error("Only admins or owners can add members");
+    }
+
+    // Get existing members
+    const existingMembers = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group", (q) => q.eq("groupChatId", args.groupId as any))
+      .collect();
+
+    const existingAids = new Set(existingMembers.map(m => m.aid));
+
+    // Add new members
+    for (const aid of args.members) {
+      if (!existingAids.has(aid)) {
+        await ctx.db.insert("groupMembers", {
+          groupChatId: args.groupId as any,
+          aid,
+          latestSeqNo: -1,
+          joinedAt: now,
+          role: "member",
+        });
+      }
+    }
+
+    return { ok: true };
+  },
+});
+
+/**
+ * Remove members from a group (simplified, signed request API)
+ */
+export const removeMembers = mutation({
+  args: {
+    groupId: v.string(),
+    members: v.array(v.string()),
+    sig: v.optional(v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    })),
+  },
+  handler: async (ctx, args) => {
+    // Verify signed request
+    if (!args.sig) {
+      throw new Error("Signature required");
+    }
+
+    const verified = await verifySignedRequest(ctx, args);
+    const callerAid = verified.aid;
+
+    // Check caller's role
+    const callerMembership = await ctx.db
+      .query("groupMembers")
+      .withIndex("by_group_aid", (q) =>
+        q.eq("groupChatId", args.groupId as any).eq("aid", callerAid)
+      )
+      .first();
+
+    if (!callerMembership ||
+        (callerMembership.role !== "admin" && callerMembership.role !== "owner")) {
+      throw new Error("Only admins or owners can remove members");
+    }
+
+    // Get group chat to check owner
+    const groupChat = await ctx.db.get(args.groupId as any);
+    if (!groupChat) {
+      throw new Error("Group chat not found");
+    }
+
+    // Prevent removing the owner
+    if (args.members.includes(groupChat.ownerAid)) {
+      throw new Error("Cannot remove the group owner");
+    }
+
+    // Remove members
+    for (const aid of args.members) {
+      const membership = await ctx.db
+        .query("groupMembers")
+        .withIndex("by_group_aid", (q) =>
+          q.eq("groupChatId", args.groupId as any).eq("aid", aid)
+        )
+        .first();
+
+      if (membership) {
+        await ctx.db.delete(membership._id);
+      }
+    }
+
+    return { ok: true };
   },
 });
 
@@ -140,7 +331,7 @@ export const sendGroupMessage = mutation({
       aad: v.optional(v.string()), // base64url - Additional Authenticated Data
     }),
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -167,18 +358,8 @@ export const sendGroupMessage = mutation({
       throw new Error("Sender AID mismatch");
     }
 
-    // RBAC: require permission to message this group
-    const claims = await resolveUserClaims(ctx, senderAid);
-    const canMessage = claimsInclude(
-      claims,
-      PERMISSIONS.CAN_MESSAGE_GROUPS,
-      (data) => Array.isArray(data) && data.includes(args.groupChatId)
-    );
-    if (!canMessage) {
-      throw new Error("Not permitted to send messages to this group");
-    }
-
-    // Verify sender membership OR explicit permission to message this group
+    // Authorization check: Either member OR has RBAC permission
+    // 1. First check membership - members can always message their groups
     const membership = await ctx.db
       .query("groupMembers")
       .withIndex("by_group_aid", (q) =>
@@ -186,15 +367,31 @@ export const sendGroupMessage = mutation({
       )
       .first();
 
+    // 2. If not a member, check RBAC permissions (for special cases like admins)
     if (!membership) {
-      const claimsNoMember = await resolveUserClaims(ctx, senderAid);
-      const allowedNoMember = claimsInclude(
-        claimsNoMember,
+      const claims = await resolveUserClaims(ctx, senderAid);
+
+      // Check if user has permission for this specific group ID
+      let canMessage = claimsInclude(
+        claims,
         PERMISSIONS.CAN_MESSAGE_GROUPS,
         (data) => Array.isArray(data) && data.includes(args.groupChatId)
       );
-      if (!allowedNoMember) {
-        throw new Error("Sender is not a member of this group");
+
+      // If not, check if group has a tag and user has permission for that tag
+      if (!canMessage) {
+        const groupChat = await ctx.db.get(args.groupChatId);
+        if (groupChat?.tag) {
+          canMessage = claimsInclude(
+            claims,
+            PERMISSIONS.CAN_MESSAGE_GROUPS,
+            (data) => Array.isArray(data) && data.includes(`tag:${groupChat.tag}`)
+          );
+        }
+      }
+
+      if (!canMessage) {
+        throw new Error("Role denied");
       }
     }
 
@@ -319,7 +516,7 @@ export const updateMemberSync = mutation({
     groupChatId: v.id("groupChats"),
     latestSeqNo: v.number(),
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -588,7 +785,7 @@ export const addGroupMembers = mutation({
     groupChatId: v.id("groupChats"),
     members: v.array(v.string()), // AIDs to add
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -655,7 +852,7 @@ export const removeGroupMembers = mutation({
     groupChatId: v.id("groupChats"),
     members: v.array(v.string()), // AIDs to remove
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -724,7 +921,7 @@ export const updateMembershipSaid = mutation({
     groupChatId: v.id("groupChats"),
     membershipSaid: v.string(),
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),

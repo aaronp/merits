@@ -111,7 +111,9 @@
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex run:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud BOOTSTRAP_KEY=all-your-base-are-belong-2-us bunx convex run:*)",
       "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex data list:*)",
-      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex data:*)"
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex data:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_CREDENTIALS='{\"\"aid\"\":\"\"DC8-1K1AoLnGJ-7f-D_acNTMDD5DnID7_jIdWwm9lGI8\"\",\"\"privateKey\"\":\"\"test\"\",\"\"publicKey\"\":\"\"test\"\",\"\"ksn\"\":0}' bun run:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex run:*)"
     ],
     "deny": [],
     "ask": []

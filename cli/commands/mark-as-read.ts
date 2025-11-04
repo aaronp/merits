@@ -27,19 +27,26 @@ export interface MarkAsReadOptions extends GlobalOptions {
 /**
  * Mark messages as read
  *
+ * @param positionalIds Positional message IDs (from [ids...] in command definition)
  * @param opts Command options
  */
-export const markAsRead = withGlobalOptions(async (opts: MarkAsReadOptions) => {
+export async function markAsRead(
+  positionalIds: string[],
+  opts: MarkAsReadOptions
+): Promise<void> {
   const format = normalizeFormat(opts.format);
   const ctx = opts._ctx;
 
   // Load and validate credentials
   const creds = requireCredentials(opts.credentials);
 
-  // Parse message IDs from either --ids or --ids-data
+  // Parse message IDs from positional args, --ids, or --ids-data
   let messageIds: string[];
 
-  if (opts.ids) {
+  if (positionalIds && positionalIds.length > 0) {
+    // Use positional arguments
+    messageIds = positionalIds;
+  } else if (opts.ids) {
     // Parse comma-separated IDs
     messageIds = opts.ids.split(",").map((id) => id.trim()).filter(Boolean);
   } else if (opts.idsData) {
@@ -58,19 +65,44 @@ export const markAsRead = withGlobalOptions(async (opts: MarkAsReadOptions) => {
       );
     }
   } else {
-    throw new Error("Either --ids or --ids-data is required");
+    throw new Error("Either positional IDs, --ids, or --ids-data is required");
   }
 
   if (messageIds.length === 0) {
     throw new Error("No message IDs provided");
   }
 
-  // Mark messages as read via backend
-  // TODO: Implement backend mutation when available
-  // For now, return mock data
+  // Mark messages as read via transport API
+  const { signMutationArgs } = await import("../../core/signatures");
+  const { base64UrlToUint8Array } = await import("../../core/crypto");
+
+  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
+
+  // Acknowledge each message
+  const markedAsRead: string[] = [];
+  for (const messageId of messageIds) {
+    try {
+      const args = { messageId, receipt: [] };
+      const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+
+      await ctx.client.transport.ackMessage({
+        messageId,
+        sig,
+        receiptSig: [],
+      });
+
+      markedAsRead.push(messageId);
+    } catch (err) {
+      // Continue on errors but log them
+      if (!opts.noBanner) {
+        console.error(`Warning: Failed to mark message ${messageId} as read: ${(err as Error).message}`);
+      }
+    }
+  }
+
   const result = {
-    markedAsRead: messageIds,
-    deleted: messageIds, // Messages are deleted after acknowledgment
+    markedAsRead,
+    deleted: markedAsRead, // Messages are deleted after acknowledgment
   };
 
   // Output in requested format
@@ -91,7 +123,7 @@ export const markAsRead = withGlobalOptions(async (opts: MarkAsReadOptions) => {
       console.log(JSON.stringify(result));
       break;
   }
-});
+}
 
 /**
  * Canonicalize JSON according to RFC8785

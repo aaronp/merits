@@ -24,11 +24,12 @@ export class ConvexGroupApi implements GroupApi {
     const result = await this.client.mutation(api.groups.createGroup, {
       name: req.name,
       initialMembers: req.initialMembers,
-      auth: {
-        challengeId: req.auth.challengeId as any,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      sig: (req as any).sig, // Pass signed request if available
+      auth: (req as any).auth ? {
+        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+        sigs: (req as any).auth.sigs,
+        ksn: (req as any).auth.ksn,
+      } : undefined,
     });
 
     return { groupId: result.groupId };
@@ -38,11 +39,12 @@ export class ConvexGroupApi implements GroupApi {
     await this.client.mutation(api.groups.addMembers, {
       groupId: req.groupId as any,
       members: req.members,
-      auth: {
-        challengeId: req.auth.challengeId as any,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      sig: (req as any).sig, // Pass signed request if available
+      auth: (req as any).auth ? {
+        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+        sigs: (req as any).auth.sigs,
+        ksn: (req as any).auth.ksn,
+      } : undefined,
     });
   }
 
@@ -50,11 +52,12 @@ export class ConvexGroupApi implements GroupApi {
     await this.client.mutation(api.groups.removeMembers, {
       groupId: req.groupId as any,
       members: req.members,
-      auth: {
-        challengeId: req.auth.challengeId as any,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      sig: (req as any).sig, // Pass signed request if available
+      auth: (req as any).auth ? {
+        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+        sigs: (req as any).auth.sigs,
+        ksn: (req as any).auth.ksn,
+      } : undefined,
     });
   }
 
@@ -65,7 +68,7 @@ export class ConvexGroupApi implements GroupApi {
       typ: req.typ,
       ttl: req.ttlMs,
       auth: {
-        challengeId: req.auth.challengeId as any,
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as any) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
       },
@@ -90,9 +93,16 @@ export class ConvexGroupApi implements GroupApi {
 
   async getGroup(req: GetGroupRequest): Promise<Group> {
     // Resolve caller AID from challengeId (read-only, no verification here)
-    const { aid } = await this.client.query(api.auth.getAidForChallenge as any, {
-      challengeId: req.auth.challengeId as any,
-    });
+    let aid: string;
+    if (req.auth.challengeId) {
+      const result = await this.client.query(api.auth.getAidForChallenge as any, {
+        challengeId: req.auth.challengeId as any,
+      });
+      aid = result.aid;
+    } else {
+      // For signed requests, derive AID from signature verification
+      throw new Error("getGroup with signed requests not yet implemented");
+    }
 
     const group = await this.client.query(api.groups.getGroup, {
       groupId: req.groupId as any,
@@ -106,7 +116,7 @@ export class ConvexGroupApi implements GroupApi {
     await this.client.mutation(api.groups.leaveGroup, {
       groupId: req.groupId as any,
       auth: {
-        challengeId: req.auth.challengeId as any,
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as any) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
       },

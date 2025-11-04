@@ -85,7 +85,7 @@ export class ConvexGroupChatApi {
       maxTtl: req.maxTtl,
       initialMembers: req.initialMembers,
       auth: {
-        challengeId: req.auth.challengeId as any,
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as any) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
       },
@@ -100,7 +100,7 @@ export class ConvexGroupChatApi {
       encryptedMessage: req.encryptedMessage,
       messageType: req.messageType,
       auth: {
-        challengeId: req.auth.challengeId as any,
+        challengeId: req.auth.challengeId ? (req.auth.challengeId as any) : undefined,
         sigs: req.auth.sigs,
         ksn: req.auth.ksn,
       },
@@ -158,7 +158,7 @@ export class ConvexGroupChatApi {
       groupChatId,
       members,
       auth: {
-        challengeId: auth.challengeId as any,
+        challengeId: auth.challengeId ? (auth.challengeId as any) : undefined,
         sigs: auth.sigs,
         ksn: auth.ksn,
       },
@@ -174,7 +174,7 @@ export class ConvexGroupChatApi {
       groupChatId,
       members,
       auth: {
-        challengeId: auth.challengeId as any,
+        challengeId: auth.challengeId ? (auth.challengeId as any) : undefined,
         sigs: auth.sigs,
         ksn: auth.ksn,
       },
@@ -190,7 +190,7 @@ export class ConvexGroupChatApi {
       groupChatId,
       membershipSaid,
       auth: {
-        challengeId: auth.challengeId as any,
+        challengeId: auth.challengeId ? (auth.challengeId as any) : undefined,
         sigs: auth.sigs,
         ksn: auth.ksn,
       },

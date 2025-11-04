@@ -34,38 +34,30 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
     return;
   }
 
-  // Create authentication proof for receiving messages
-  const challenge = await ctx.client.identityAuth.issueChallenge({
-    aid: creds.aid,
-    purpose: "receive" as any,
-    args: { recpAid: creds.aid },
-    ttlMs: 120000, // 2 minutes
-  });
-
-  const { signPayload, base64UrlToUint8Array } = await import("../../core/crypto");
+  // Use signed request authentication via transport API
+  const { signMutationArgs } = await import("../../core/signatures");
+  const { base64UrlToUint8Array } = await import("../../core/crypto");
   const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
-  const sigs = await signPayload(challenge.payloadToSign, privateKeyBytes, 0);
 
-  // Fetch messages using Transport interface
+  // Sign the request
+  const args = { recpAid: creds.aid };
+  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
+
+  // Fetch messages via transport API
   const encryptedMessages = await ctx.client.transport.receiveMessages({
     for: creds.aid,
-    auth: {
-      challengeId: challenge.challengeId,
-      sigs,
-      ksn: 0,
-    },
+    sig,
   });
 
   // TODO: Decrypt messages client-side
   // For now, return messages with encrypted content
   const messages = encryptedMessages.map((m: any) => ({
-    id: m.id,
-    from: m.from,
-    to: m.to,
+    messageId: m.id,
+    senderAid: m.from,
     ct: m.ct,
     alg: m.alg,
     typ: m.typ,
-    createdAt: m.createdAt,
+    createdAt: m.timestamp,
     expiresAt: m.expiresAt,
     // Add placeholder for decrypted content
     decryptedContent: "[Encrypted - decryption not yet implemented]",
@@ -73,7 +65,7 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
 
   // Filter by sender if requested
   const filteredMessages = opts.from
-    ? messages.filter((m: any) => m.from === opts.from)
+    ? messages.filter((m: any) => m.senderAid === opts.from)
     : messages;
 
   // Output in requested format

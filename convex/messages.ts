@@ -183,27 +183,45 @@ export const send = mutation({
 export const receive = mutation({
   args: {
     recpAid: v.string(),
-    auth: v.object({
-      challengeId: v.id("challenges"),
+    auth: v.optional(v.object({
+      challengeId: v.optional(v.id("challenges")),
       sigs: v.array(v.string()),
       ksn: v.number(),
-    }),
+    })),
+    sig: v.optional(v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    })),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    // Verify authentication - argsHash binds to recpAid only
-    const verified = await verifyAuth(
-      ctx,
-      args.auth,
-      "receive",
-      {
-        recpAid: args.recpAid,
-      }
-    );
+    let verifiedAid: string;
+
+    if (args.sig) {
+      // NEW: Signed request
+      const verified = await verifySignedRequest(ctx, args);
+      verifiedAid = verified.aid;
+    } else if (args.auth) {
+      // OLD: Challenge-response
+      const verified = await verifyAuth(
+        ctx,
+        args.auth,
+        "receive",
+        {
+          recpAid: args.recpAid,
+        }
+      );
+      verifiedAid = verified.aid;
+    } else {
+      throw new Error("Must provide either sig or auth");
+    }
 
     // SECURITY: Ensure the verified AID matches the recipient
-    if (verified.aid !== args.recpAid) {
+    if (verifiedAid !== args.recpAid) {
       throw new Error("Cannot receive messages for different AID");
     }
 
