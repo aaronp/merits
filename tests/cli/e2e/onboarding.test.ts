@@ -46,11 +46,9 @@ describe("User Onboarding", () => {
    * ✅ 3. 'unread' shows no messages initially
    * ✅ 4. anon users can use 'group list' (returns empty array)
    * ✅ 5. anon users CAN message the onboarding group (RBAC allows via tag-based permission)
-   *
-   * TODO (requires additional setup):
-   * - Admin messaging users (requires admin CAN_MESSAGE_USERS permission)
-   * - Message decryption (requires client-side libsodium decryption)
-   * - Mark-as-read functionality (requires backend implementation)
+   * ✅ 6. Admin can message users directly (CAN_MESSAGE_USERS permission granted via bootstrap)
+   * ✅ 7. Users can see unread messages from admin
+   * ✅ 8. Users can mark messages as read
    *
    */
   it("should ensure new users have the anon role", async () => {
@@ -140,22 +138,65 @@ describe("User Onboarding", () => {
 
     /**
      * STEP: Have the admin message the users
-     * NOTE: Currently admin doesn't have CAN_MESSAGE_USERS permission by default
-     * TODO: Either grant admin this permission or test via onboarding group
+     * Admin now has CAN_MESSAGE_USERS permission via bootstrap
      */
-    // const adminSendAlice = await runCliInProcess(
-    //   ["send", alice.json.aid, "--message", "Welcome to the system, Alice!"],
-    //   { env: { MERITS_CREDENTIALS: JSON.stringify(admin) } }
-    // );
-    // expect(adminSendAlice.code).toBe(0);
-    // expect(adminSendAlice.json.messageId).toBeDefined();
+    const adminSendAlice = await runCliInProcess(
+      ["send", alice.json.aid, "--message", "Welcome to the system, Alice!", "--typ", "admin.welcome"],
+      { env: { MERITS_CREDENTIALS: JSON.stringify(admin) } }
+    );
+    expect(adminSendAlice.code).toBe(0);
+    expect(adminSendAlice.json.messageId).toBeDefined();
+    console.log(`✅ Admin sent direct message to Alice: ${adminSendAlice.json.messageId}`);
+
+    const adminSendBob = await runCliInProcess(
+      ["send", bob.json.aid, "--message", "Welcome to the system, Bob!", "--typ", "admin.welcome"],
+      { env: { MERITS_CREDENTIALS: JSON.stringify(admin) } }
+    );
+    expect(adminSendBob.code).toBe(0);
+    expect(adminSendBob.json.messageId).toBeDefined();
+    console.log(`✅ Admin sent direct message to Bob: ${adminSendBob.json.messageId}`);
 
     /** Verify the users can see their unread messages */
+    const aliceUnreadAfter = await runCliInProcess(
+      ["unread"],
+      { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+    );
+    expect(aliceUnreadAfter.code).toBe(0);
+    expect(aliceUnreadAfter.json).toBeArray();
+    expect(aliceUnreadAfter.json.length).toBeGreaterThan(0);
+    expect(aliceUnreadAfter.json[0].senderAid).toBe(admin.aid);
+    console.log(`✅ Alice sees ${aliceUnreadAfter.json.length} unread message(s) from admin`);
+
+    const bobUnreadAfter = await runCliInProcess(
+      ["unread"],
+      { cwd: bobDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(bob.json) } }
+    );
+    expect(bobUnreadAfter.code).toBe(0);
+    expect(bobUnreadAfter.json).toBeArray();
+    expect(bobUnreadAfter.json.length).toBeGreaterThan(0);
+    expect(bobUnreadAfter.json[0].senderAid).toBe(admin.aid);
+    console.log(`✅ Bob sees ${bobUnreadAfter.json.length} unread message(s) from admin`);
 
     /** Verify the users can read their messages */
     /** Verify the users can mark their messages as read */
-    /** For now, skip direct messaging tests until admin permissions are configured */
-    // TODO: Complete messaging flow tests once admin has proper permissions or onboarding group is accessible
+    const aliceMessageId = aliceUnreadAfter.json[0].messageId;
+    const aliceMarkRead = await runCliInProcess(
+      ["mark-as-read", aliceMessageId],
+      { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+    );
+    expect(aliceMarkRead.code).toBe(0);
+    console.log(`✅ Alice marked message as read: ${aliceMessageId}`);
+
+    // Verify message is no longer in unread
+    const aliceUnreadFinal = await runCliInProcess(
+      ["unread"],
+      { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+    );
+    expect(aliceUnreadFinal.code).toBe(0);
+    expect(aliceUnreadFinal.json).toBeArray();
+    const stillUnread = aliceUnreadFinal.json.find((m: any) => m.messageId === aliceMessageId);
+    expect(stillUnread).toBeUndefined();
+    console.log(`✅ Alice's unread list no longer contains marked message`);
 
     /** Verify the users can reply to the onboarding group */
     // TODO: Re-enable once onboarding group test is fixed

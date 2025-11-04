@@ -67,7 +67,7 @@ export default defineSchema({
     senderKsn: v.number(), // Key sequence at send
     senderEvtSaid: v.string(), // Last event SAID at send
     envelopeHash: v.string(), // hash(headers+ctHash) - audit anchor
-    usedChallengeId: v.id("challenges"), // Which challenge authorized insertion
+    usedChallengeId: v.optional(v.id("challenges")), // Which challenge authorized insertion (not needed for signed requests)
     // Receipt fields (non-repudiable proof of delivery)
     receiptSig: v.optional(v.array(v.string())), // Recipient's indexed sigs over envelopeHash
     receiptKsn: v.optional(v.number()), // Recipient's KSN at acknowledgment

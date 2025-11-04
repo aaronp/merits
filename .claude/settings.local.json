@@ -101,7 +101,17 @@
       "Bash(awk:*)",
       "Bash(while read id)",
       "Bash(do echo \"Deleting $id\" CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex data delete groupMessages \"$id\" done)",
-      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_VAULT_QUIET=1 ./merits send:*)"
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_VAULT_QUIET=1 ./merits send:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bun run:*)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_VAULT_QUIET=1 bun run:*)",
+      "Bash(/tmp/admin-creds.json)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex logs:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud MERITS_VAULT_QUIET=1 bun run:*)",
+      "Bash(/tmp/bob-only-creds.json)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex run:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud BOOTSTRAP_KEY=all-your-base-are-belong-2-us bunx convex run:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex data list:*)",
+      "Bash(CONVEX_URL=https://accurate-penguin-901.convex.cloud bunx convex data:*)"
     ],
     "deny": [],
     "ask": []

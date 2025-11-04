@@ -193,6 +193,71 @@ export const bootstrapOnboarding = mutation({
         }
       }
 
+      // Ensure admin role has permission to message users directly
+      if (existingAdmin) {
+        const messageUsersPermKey = PERMISSIONS.CAN_MESSAGE_USERS;
+        let messageUsersPermission = await ctx.db
+          .query("permissions")
+          .withIndex("by_key", (q: any) => q.eq("key", messageUsersPermKey))
+          .first();
+
+        if (!messageUsersPermission) {
+          const pid = await ctx.db.insert("permissions", {
+            key: messageUsersPermKey,
+            data: undefined, // No restrictions - admin can message all users
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/perms",
+            timestamp: now,
+          });
+          messageUsersPermission = await ctx.db.get(pid);
+          console.log("Bootstrap: Created CAN_MESSAGE_USERS permission (idempotent)");
+        }
+
+        // Ensure role->permission mapping exists
+        const existingAdminRP = await ctx.db
+          .query("rolePermissions")
+          .withIndex("by_role", (q: any) => q.eq("roleId", existingAdmin._id))
+          .collect();
+
+        if (messageUsersPermission) {
+          const hasMapping = existingAdminRP.some(
+            (rp: any) => rp.permissionId === messageUsersPermission._id
+          );
+          if (!hasMapping) {
+            await ctx.db.insert("rolePermissions", {
+              roleId: existingAdmin._id,
+              permissionId: messageUsersPermission._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/map",
+              timestamp: now,
+            });
+            console.log("Bootstrap: Linked admin role to CAN_MESSAGE_USERS permission (idempotent)");
+          }
+        }
+
+        // Ensure admin AID is assigned the admin role
+        if (args.adminAid) {
+          const existingAssignment = await ctx.db
+            .query("userRoles")
+            .withIndex("by_user", (q: any) => q.eq("userAID", args.adminAid))
+            .filter((q: any) => q.eq(q.field("roleId"), existingAdmin._id))
+            .first();
+
+          if (!existingAssignment) {
+            await ctx.db.insert("userRoles", {
+              userAID: args.adminAid,
+              roleId: existingAdmin._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/assign",
+              timestamp: now,
+            });
+            console.log(`Bootstrap: Assigned admin role to ${args.adminAid} (idempotent)`);
+          } else {
+            console.log(`Bootstrap: ${args.adminAid} already has admin role`);
+          }
+        }
+      }
+
       return {
         ok: true,
         already: true,
@@ -321,6 +386,46 @@ export const bootstrapOnboarding = mutation({
       });
       adminRole = await ctx.db.get(adminRoleId);
       console.log("Bootstrap: Created admin role");
+    }
+
+    // Grant admin permission to message users directly
+    const messageUsersPermKey = PERMISSIONS.CAN_MESSAGE_USERS;
+    let messageUsersPermission = await ctx.db
+      .query("permissions")
+      .withIndex("by_key", (q: any) => q.eq("key", messageUsersPermKey))
+      .first();
+
+    if (!messageUsersPermission) {
+      const pid = await ctx.db.insert("permissions", {
+        key: messageUsersPermKey,
+        data: undefined, // No restrictions - admin can message all users
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/perms",
+        timestamp: now,
+      });
+      messageUsersPermission = await ctx.db.get(pid);
+      console.log("Bootstrap: Created CAN_MESSAGE_USERS permission");
+    }
+
+    // Link admin role to CAN_MESSAGE_USERS permission
+    const existingAdminRP = await ctx.db
+      .query("rolePermissions")
+      .withIndex("by_role", (q: any) => q.eq("roleId", adminRole!._id))
+      .collect();
+
+    const hasMessageUsersMapping = existingAdminRP.some(
+      (rp: any) => rp.permissionId === messageUsersPermission!._id
+    );
+
+    if (!hasMessageUsersMapping) {
+      await ctx.db.insert("rolePermissions", {
+        roleId: adminRole!._id,
+        permissionId: messageUsersPermission!._id,
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/map",
+        timestamp: now,
+      });
+      console.log("Bootstrap: Linked admin role to CAN_MESSAGE_USERS permission");
     }
 
     // Create user role (elevated from anon)

@@ -69,7 +69,8 @@ export function claimsInclude(
   for (const c of claims) {
     if (c.key !== key) continue;
     if (!predicate) return true;
-    return !!predicate(c.data);
+    const result = predicate(c.data);
+    return !!result;
   }
   return false;
 }

@@ -108,6 +108,7 @@ export const send = mutation({
       .filter((q) => q.eq(q.field("_id"), args.recpAid))
       .first();
 
+
     const claims = await resolveUserClaims(ctx, senderAid);
     let allowed = false;
 
@@ -122,7 +123,8 @@ export const send = mutation({
     } else {
       // Check CAN_MESSAGE_USERS permission
       allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
-        if (data === undefined || data === null) return true; // global allow
+        const result = data === undefined || data === null;
+        if (result) return true; // global allow
         if (Array.isArray(data)) return data.includes(args.recpAid);
         if (typeof data === "object" && Array.isArray((data as any).aids)) {
           return (data as any).aids.includes(args.recpAid);
@@ -130,6 +132,7 @@ export const send = mutation({
         return false;
       });
     }
+
 
     if (!allowed) {
       throw new Error("Not permitted to message this recipient");
