@@ -187,6 +187,26 @@ export interface MeritsClient {
   ): Promise<string>;
 
   /**
+   * Send an encrypted group message
+   *
+   * High-level API that handles group encryption, authentication, and sending.
+   * Implements zero-knowledge encryption where the backend cannot decrypt messages.
+   * Uses ephemeral AES-256-GCM keys with per-member key distribution via X25519 ECDH.
+   *
+   * @param groupId - ID of the group to send to
+   * @param plaintext - Message content (will be encrypted)
+   * @param credentials - Sender's credentials
+   * @param options - Optional message type
+   * @returns Result with messageId, seqNo, and sentAt timestamp
+   */
+  sendGroupMessage(
+    groupId: string,
+    plaintext: string,
+    credentials: any,
+    options?: { typ?: string }
+  ): Promise<{ messageId: string; seqNo: number; sentAt: number }>;
+
+  /**
    * Get group by unique tag
    *
    * Tags identify system-managed groups (e.g., "onboarding").

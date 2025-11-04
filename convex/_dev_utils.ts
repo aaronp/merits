@@ -6,6 +6,7 @@
  */
 
 import { mutation } from "./_generated/server";
+import { v } from "convex/values";
 
 /**
  * Clear all data from the database
@@ -36,6 +37,7 @@ export const clearAllData = mutation({
       "permissions",
       "groupChats",
       "groupMembers",
+      "groupMessages",
       "messages",
       "authChallenges",
       "usedNonces",
@@ -68,6 +70,62 @@ export const clearAllData = mutation({
       tablesCleared: tables.length,
       documentsDeleted: totalDeleted,
       message: `Cleared ${totalDeleted} documents from ${tables.length} tables`,
+    };
+  },
+});
+
+/**
+ * Delete a specific document by ID
+ *
+ * ⚠️  DANGER: This deletes a document!
+ * Only use in development environments.
+ */
+export const deleteDocument = mutation({
+  args: {
+    table: v.string(),
+    id: v.id("groupMessages"), // We'll use this for groupMessages
+  },
+  handler: async (ctx, args) => {
+    // Security check: Only allow in dev with BOOTSTRAP_KEY set
+    const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
+    if (!BOOTSTRAP_KEY) {
+      throw new Error(
+        "DELETE_DISABLED - Document deletion is not available in this environment. " +
+        "For dev setup, set BOOTSTRAP_KEY environment variable."
+      );
+    }
+
+    await ctx.db.delete(args.id);
+
+    return {
+      success: true,
+      deletedId: args.id,
+      message: `Deleted document ${args.id} from ${args.table}`,
+    };
+  },
+});
+
+/**
+ * Clear all groupMessages
+ *
+ * ⚠️  WARNING: This deletes ALL group messages!
+ * Only use in development environments for testing.
+ */
+export const clearGroupMessages = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const messages = await ctx.db.query("groupMessages").collect();
+
+    let deleted = 0;
+    for (const msg of messages) {
+      await ctx.db.delete(msg._id);
+      deleted++;
+    }
+
+    return {
+      success: true,
+      deletedCount: deleted,
+      message: `Deleted ${deleted} group messages`,
     };
   },
 });

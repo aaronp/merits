@@ -374,10 +374,6 @@ export default defineSchema({
     encryptedKeys: v.any(), // Record<aid, {encryptedKey, nonce}> - per-recipient keys
     aad: v.optional(v.string()), // base64url - Additional Authenticated Data
 
-    // Legacy fields for backwards compatibility
-    encryptedMessage: v.optional(v.string()), // Deprecated - use encryptedContent
-    messageType: v.optional(v.string()), // Type of message (text, file, system, etc.)
-
     // Sender information
     senderAid: v.string(), // AID of message sender
 

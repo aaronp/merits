@@ -97,7 +97,11 @@
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud node:*)",
       "Bash(MERITS_VAULT_QUIET=1 ./merits:*)",
       "Bash(CONVEX_DEPLOYMENT=dev:aware-tiger-369 timeout 10 bunx convex logs:*)",
-      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex data:*)"
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex data:*)",
+      "Bash(awk:*)",
+      "Bash(while read id)",
+      "Bash(do echo \"Deleting $id\" CONVEX_DEPLOYMENT=dev:aware-tiger-369 bunx convex data delete groupMessages \"$id\" done)",
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_VAULT_QUIET=1 ./merits send:*)"
     ],
     "deny": [],
     "ask": []

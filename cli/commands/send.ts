@@ -25,9 +25,6 @@
 
 import { requireCredentials } from "../lib/credentials";
 import type { GlobalOptions } from "../lib/options";
-import { encryptForGroup, type GroupMessage } from "../lib/crypto-group";
-import { api } from "../../convex/_generated/api";
-import type { ConvexMeritsClient } from "../../src/client/convex";
 
 export interface SendOptions extends GlobalOptions {
   message?: string;
@@ -167,72 +164,22 @@ async function sendGroupMessage(
     throw new Error("No message provided (use --message or pipe to stdin)");
   }
 
-  // Step 1: Fetch group members with their public keys
-  const client = ctx.client as ConvexMeritsClient;
-  const membersResponse = await client.connection.query(api.groups.getMembers, {
-    groupChatId: groupId as any, // Cast to Id<"groupChats">
-    callerAid: creds.aid,
-  });
-
-  if (!membersResponse || !membersResponse.members || membersResponse.members.length === 0) {
-    throw new Error(`No members found for group ${groupId}. You may not be a member of this group.`);
-  }
-
-  // Step 2: Convert members to Record<aid, publicKey> format
-  const members: Record<string, string> = {};
-  for (const member of membersResponse.members) {
-    if (!member.publicKey) {
-      throw new Error(`Member ${member.aid} has no public key`);
-    }
-    members[member.aid] = member.publicKey; // Ed25519 public keys in base64url
-  }
-
-  // Step 3: Get sender's private key from credentials
-  const senderPrivateKey = Buffer.from(creds.privateKey, "base64url");
-
-  // Step 4: Encrypt message for all group members using group encryption
-  const groupMessage: GroupMessage = await encryptForGroup(
-    plaintext,
-    members,
-    senderPrivateKey,
+  // Use high-level API that handles encryption and authentication
+  const result = await ctx.client.sendGroupMessage(
     groupId,
-    creds.aid
+    plaintext,
+    creds,
+    {
+      typ: opts.typ,
+    }
   );
-
-  // Step 5: Issue challenge for authentication
-  const contentHash = groupMessage.encryptedContent.substring(0, 32);
-  const challenge = await client.identityAuth.issueChallenge({
-    aid: creds.aid,
-    purpose: "sendGroupMessage" as any,
-    args: {
-      groupChatId: groupId,
-      contentHash,
-    },
-    ttlMs: 120000, // 2 minutes
-  });
-
-  // Step 6: Sign the challenge
-  const { signPayload } = await import("../../core/crypto");
-  const privateKeyBytes = Buffer.from(creds.privateKey, "base64url");
-  const sigs = await signPayload(challenge.payloadToSign, privateKeyBytes, creds.ksn);
-
-  // Step 7: Send encrypted GroupMessage to backend
-  const result = await client.connection.mutation(api.groups.sendGroupMessage, {
-    groupChatId: groupId as any, // Cast to Id<"groupChats">
-    groupMessage,
-    auth: {
-      challengeId: challenge.challengeId as any,
-      sigs,
-      ksn: creds.ksn,
-    },
-  });
 
   // Output result as JSON
   console.log(JSON.stringify({
     groupId,
     messageId: result.messageId,
     seqNo: result.seqNo,
-    sentAt: result.sentAt || Date.now(),
+    sentAt: result.sentAt,
   }));
 }
 

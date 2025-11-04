@@ -220,16 +220,15 @@ export const sendGroupMessage = mutation({
       ? now + groupChat.maxTtl
       : undefined;
 
-    // Insert the message with new GroupMessage structure
+    // Insert the message with GroupMessage structure
     const messageId = await ctx.db.insert("groupMessages", {
       groupChatId: args.groupChatId,
-      // New GroupMessage fields
+      // GroupMessage fields
       encryptedContent: args.groupMessage.encryptedContent,
       nonce: args.groupMessage.nonce,
       encryptedKeys: args.groupMessage.encryptedKeys,
       aad: args.groupMessage.aad,
-      // Legacy fields (optional for backwards compatibility)
-      messageType: "group-encrypted",
+      // Message metadata
       senderAid,
       seqNo,
       received: now,
@@ -294,18 +293,16 @@ export const getGroupMessages = query({
 
     return messages.map(msg => ({
       id: msg._id,
-      // Return GroupMessage structure if available
-      groupMessage: msg.encryptedContent ? {
+      // GroupMessage structure with encrypted content
+      groupMessage: {
         encryptedContent: msg.encryptedContent,
         nonce: msg.nonce,
         encryptedKeys: msg.encryptedKeys,
         senderAid: msg.senderAid,
         groupId: args.groupChatId,
         aad: msg.aad,
-      } : undefined,
-      // Legacy fields for backwards compatibility
-      encryptedMessage: msg.encryptedMessage,
-      messageType: msg.messageType,
+      },
+      // Message metadata
       senderAid: msg.senderAid,
       seqNo: msg.seqNo,
       received: msg.received,
