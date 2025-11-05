@@ -361,6 +361,7 @@ export class ConvexMeritsClient implements MeritsClient {
    *
    * High-level API that handles group encryption, authentication, and sending.
    * Implements zero-knowledge encryption where the backend cannot decrypt messages.
+   * Uses signed request authentication (not challenge-response).
    *
    * @param groupId - ID of the group to send to
    * @param plaintext - Message content (will be encrypted)
@@ -419,31 +420,22 @@ export class ConvexMeritsClient implements MeritsClient {
       credentials.aid
     );
 
-    // Step 5: Issue challenge for authentication
-    const contentHash = groupMessage.encryptedContent.substring(0, 32);
-    const challenge = await this.identityAuth.issueChallenge({
-      aid: credentials.aid,
-      purpose: "sendGroupMessage" as any,
-      args: {
-        groupChatId: groupId,
-        contentHash,
-      },
-      ttlMs: 120000, // 2 minutes
-    });
-
-    // Step 6: Sign the challenge
+    // Step 5: Sign the request using signed request authentication
+    const { signMutationArgs } = await import("../../core/signatures");
     const privateKeyBytes = base64UrlToUint8Array(credentials.privateKey);
-    const sigs = await signPayload(challenge.payloadToSign, privateKeyBytes, credentials.ksn);
 
-    // Step 7: Send encrypted GroupMessage to backend
-    const result = await this.convex.mutation(api.groups.sendGroupMessage, {
-      groupChatId: groupId as any,
+    const sendArgs = {
+      groupChatId: groupId,
       groupMessage,
-      auth: {
-        challengeId: challenge.challengeId as any,
-        sigs,
-        ksn: credentials.ksn,
-      },
+    };
+
+    const sig = await signMutationArgs(sendArgs, privateKeyBytes, credentials.aid);
+
+    // Step 6: Send encrypted GroupMessage to backend with signed request
+    const result = await this.convex.mutation(api.groups.sendGroupMessage, {
+      ...sendArgs,
+      groupChatId: groupId as any,
+      sig,
     });
 
     return {

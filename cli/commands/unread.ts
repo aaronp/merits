@@ -1,7 +1,11 @@
 /**
- * Unread Command - Retrieve unread messages
+ * Unread Command - Retrieve unread messages (direct + group)
  *
- * Simplified credentials-based message retrieval. Backend handles all decryption.
+ * Fetches a unified inbox containing both:
+ * - Direct messages (peer-to-peer encrypted)
+ * - Group messages (zero-knowledge group encrypted)
+ *
+ * Messages are returned sorted by timestamp (newest first).
  *
  * Usage:
  *   merits unread --credentials identity.json
@@ -34,34 +38,33 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
     return;
   }
 
-  // Use signed request authentication via transport API
-  const { signMutationArgs } = await import("../../core/signatures");
-  const { base64UrlToUint8Array } = await import("../../core/crypto");
-  const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
-
-  // Sign the request
-  const args = { recpAid: creds.aid };
-  const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
-
-  // Fetch messages via transport API
-  const encryptedMessages = await ctx.client.transport.receiveMessages({
-    for: creds.aid,
-    sig,
+  // Fetch unified unread messages (direct + group) from backend
+  // This query returns both message types, already sorted by timestamp (newest first)
+  const { api } = await import("../../convex/_generated/api");
+  const result = await ctx.client.connection.query(api.messages.getUnread, {
+    aid: creds.aid,
+    includeGroupMessages: true,
   });
 
   // TODO: Decrypt messages client-side
   // For now, return messages with encrypted content
-  const messages = encryptedMessages.map((m: any) => ({
-    messageId: m.id,
-    senderAid: m.from,
-    ct: m.ct,
-    alg: m.alg,
-    typ: m.typ,
-    createdAt: m.timestamp,
-    expiresAt: m.expiresAt,
-    // Add placeholder for decrypted content
-    decryptedContent: "[Encrypted - decryption not yet implemented]",
-  }));
+  const messages = result.messages.map((m: any) => {
+    const msg: any = {
+      messageId: m.id,
+      senderAid: m.from,
+      ct: m.ct,
+      typ: m.typ,
+      createdAt: m.createdAt,
+      isGroupMessage: m.isGroupMessage ?? false,
+      decryptedContent: "[Encrypted - decryption not yet implemented]",
+    };
+
+    // Only include optional fields if they're defined
+    if (m.alg !== undefined) msg.alg = m.alg;
+    if (m.groupId !== undefined) msg.groupId = m.groupId;
+
+    return msg;
+  });
 
   // Filter by sender if requested
   const filteredMessages = opts.from
@@ -78,7 +81,7 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
       console.log(JSON.stringify(filteredMessages, null, 2));
       // Add human-readable summary (to stderr, not stdout)
       if (!opts.noBanner && filteredMessages.length > 0) {
-        const groupCount = filteredMessages.filter((m: any) => m.typ?.includes("group")).length;
+        const groupCount = filteredMessages.filter((m: any) => m.isGroupMessage).length;
         const directCount = filteredMessages.length - groupCount;
         console.error(`\nRetrieved ${filteredMessages.length} unread messages (${directCount} direct, ${groupCount} group)`);
       }

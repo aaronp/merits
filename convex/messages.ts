@@ -1,17 +1,13 @@
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { verifyAuth, verifySignedRequest, computeCtHash, computeEnvelopeHash } from "./auth";
+import { verifySignedRequest, computeCtHash, computeEnvelopeHash } from "./auth";
 import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
 import { canMessage, canMessageBatch } from "./accessControl";
 
 /**
- * Send a message to a recipient (authenticated)
+ * Send a message to a recipient (authenticated via signed request)
  *
  * SECURITY: senderAid is DERIVED from verified signature, never trusted from client!
- *
- * Supports two authentication methods:
- * - sig (NEW): Per-request signature (preferred)
- * - auth (OLD): Challenge-response (backward compatibility)
  */
 export const send = mutation({
   args: {
@@ -21,24 +17,13 @@ export const send = mutation({
     ek: v.optional(v.string()), // Ephemeral key for PFS
     alg: v.optional(v.string()), // Algorithm identifier
     ttl: v.optional(v.number()), // TTL in milliseconds
-    // NEW: Signed request (preferred)
-    sig: v.optional(
-      v.object({
-        signature: v.string(),
-        timestamp: v.number(),
-        nonce: v.string(),
-        keyId: v.string(),
-        signedFields: v.array(v.string()),
-      })
-    ),
-    // OLD: Challenge-response (backward compatibility)
-    auth: v.optional(
-      v.object({
-        challengeId: v.id("challenges"),
-        sigs: v.array(v.string()),
-        ksn: v.number(),
-      })
-    ),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    }),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
@@ -63,43 +48,12 @@ export const send = mutation({
     // Compute ctHash for binding
     const ctHash = await computeCtHash(args.ct);
 
-    // Verify authentication - support both sig and auth
-    let senderAid: string;
-    let senderKsn: number;
-    let senderEvtSaid: string;
-    let senderSigs: string[];
-    let usedChallengeId: string | undefined;
-
-    if (args.sig) {
-      // NEW: Signed request (preferred)
-      const verified = await verifySignedRequest(ctx, args);
-      senderAid = verified.aid;
-      senderKsn = verified.ksn;
-      senderEvtSaid = verified.evtSaid;
-      senderSigs = [args.sig.signature];
-      usedChallengeId = undefined;
-    } else if (args.auth) {
-      // OLD: Challenge-response (backward compatibility)
-      const verified = await verifyAuth(
-        ctx,
-        args.auth,
-        "send",
-        {
-          recpAid: args.recpAid,
-          ctHash, // Bind to hash, not plaintext
-          ttl, // Use ttl, not expiresAt (timing-independent)
-          alg: args.alg ?? "",
-          ek: args.ek ?? "",
-        }
-      );
-      senderAid = verified.aid;
-      senderKsn = verified.ksn;
-      senderEvtSaid = verified.evtSaid;
-      senderSigs = args.auth.sigs;
-      usedChallengeId = verified.challengeId;
-    } else {
-      throw new Error("Must provide either sig or auth");
-    }
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
+    const senderAid = verified.aid;
+    const senderKsn = verified.ksn;
+    const senderEvtSaid = verified.evtSaid;
+    const senderSigs = [args.sig.signature];
 
     // AUTHORIZATION: RBAC permission check
     // Check if recipient is a group or a user
@@ -170,7 +124,6 @@ export const send = mutation({
       senderKsn,
       senderEvtSaid,
       envelopeHash,
-      usedChallengeId,
     });
 
     return messageId;
@@ -178,47 +131,25 @@ export const send = mutation({
 });
 
 /**
- * Retrieve messages for a recipient (authenticated)
+ * Retrieve messages for a recipient (authenticated via signed request)
  */
 export const receive = mutation({
   args: {
     recpAid: v.string(),
-    auth: v.optional(v.object({
-      challengeId: v.optional(v.id("challenges")),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
-    })),
-    sig: v.optional(v.object({
+    sig: v.object({
       signature: v.string(),
       timestamp: v.number(),
       nonce: v.string(),
       keyId: v.string(),
       signedFields: v.array(v.string()),
-    })),
+    }),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    let verifiedAid: string;
-
-    if (args.sig) {
-      // NEW: Signed request
-      const verified = await verifySignedRequest(ctx, args);
-      verifiedAid = verified.aid;
-    } else if (args.auth) {
-      // OLD: Challenge-response
-      const verified = await verifyAuth(
-        ctx,
-        args.auth,
-        "receive",
-        {
-          recpAid: args.recpAid,
-        }
-      );
-      verifiedAid = verified.aid;
-    } else {
-      throw new Error("Must provide either sig or auth");
-    }
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
+    const verifiedAid = verified.aid;
 
     // SECURITY: Ensure the verified AID matches the recipient
     if (verifiedAid !== args.recpAid) {
@@ -261,9 +192,7 @@ export const receive = mutation({
 });
 
 /**
- * Mark a message as retrieved (acknowledge receipt) - authenticated
- *
- * Authentication: Accepts either challenge-response (auth) OR signed request (sig)
+ * Mark a message as retrieved (acknowledge receipt) - authenticated via signed request
  *
  * SECURITY: Stores recipient's signature over envelopeHash for non-repudiable
  * proof of delivery.
@@ -272,23 +201,13 @@ export const acknowledge = mutation({
   args: {
     messageId: v.id("messages"),
     receipt: v.optional(v.array(v.string())), // Recipient signs envelopeHash (optional)
-    // Accept either challenge-response OR signed request
-    auth: v.optional(
-      v.object({
-        challengeId: v.id("challenges"),
-        sigs: v.array(v.string()),
-        ksn: v.number(),
-      })
-    ),
-    sig: v.optional(
-      v.object({
-        signature: v.string(),
-        timestamp: v.number(),
-        nonce: v.string(),
-        keyId: v.string(),
-        signedFields: v.array(v.string()),
-      })
-    ),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
+    }),
   },
   handler: async (ctx, args) => {
     // Fetch message to get recpAid
@@ -297,29 +216,11 @@ export const acknowledge = mutation({
       throw new Error("Message not found");
     }
 
-    let verifiedAid: string;
-    let verifiedKsn: number;
-    let verifiedEvtSaid: string | undefined;
-
-    // Support both auth methods: signed request OR challenge-response
-    if (args.sig) {
-      // Signed request (replaces session tokens)
-      const verified = await verifySignedRequest(ctx, args);
-      verifiedAid = verified.aid;
-      verifiedKsn = verified.ksn;
-      verifiedEvtSaid = verified.evtSaid;
-    } else if (args.auth) {
-      // Traditional challenge-response auth
-      const verified = await verifyAuth(ctx, args.auth, "ack", {
-        recpAid: message.recpAid,
-        messageId: args.messageId,
-      });
-      verifiedAid = verified.aid;
-      verifiedKsn = verified.ksn;
-      verifiedEvtSaid = verified.evtSaid;
-    } else {
-      throw new Error("Must provide either auth or sig");
-    }
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
+    const verifiedAid = verified.aid;
+    const verifiedKsn = verified.ksn;
+    const verifiedEvtSaid = verified.evtSaid;
 
     // SECURITY: Ensure the verified AID matches the recipient
     if (verifiedAid !== message.recpAid) {
@@ -533,6 +434,7 @@ export const getUnread = query({
           .filter((q) =>
             q.and(
               q.gt(q.field("seqNo"), membership.latestSeqNo),
+              q.neq(q.field("senderAid"), args.aid), // Don't show user's own messages
               q.or(
                 q.eq(q.field("expiresAt"), undefined),
                 q.gt(q.field("expiresAt"), now)

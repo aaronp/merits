@@ -132,10 +132,19 @@ export const bootstrapOnboarding = mutation({
           .first();
 
         if (!existingMembership) {
+          // Get current max seqNo so new members only see NEW messages
+          const allMessages = await ctx.db
+            .query("groupMessages")
+            .withIndex("by_group_seq", (q: any) => q.eq("groupChatId", onboardingGroup._id))
+            .collect();
+          const currentSeqNo = allMessages.length > 0
+            ? Math.max(...allMessages.map((m: any) => m.seqNo))
+            : -1;
+
           await ctx.db.insert("groupMembers", {
             groupChatId: onboardingGroup._id,
             aid: args.adminAid,
-            latestSeqNo: 0,
+            latestSeqNo: currentSeqNo, // Start from current seqNo, so they only see NEW messages
             joinedAt: now,
             role: "owner",
           });

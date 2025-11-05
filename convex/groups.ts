@@ -92,22 +92,18 @@ export const createGroup = mutation({
   args: {
     name: v.string(),
     initialMembers: v.optional(v.array(v.string())),
-    sig: v.optional(v.object({
+    sig: v.object({
       signature: v.string(),
       timestamp: v.number(),
       nonce: v.string(),
       keyId: v.string(),
       signedFields: v.array(v.string()),
-    })),
+    }),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
     // Verify signed request
-    if (!args.sig) {
-      throw new Error("Signature required");
-    }
-
     const verified = await verifySignedRequest(ctx, args);
     const creatorAid = verified.aid;
 
@@ -151,22 +147,18 @@ export const addMembers = mutation({
   args: {
     groupId: v.string(),
     members: v.array(v.string()),
-    sig: v.optional(v.object({
+    sig: v.object({
       signature: v.string(),
       timestamp: v.number(),
       nonce: v.string(),
       keyId: v.string(),
       signedFields: v.array(v.string()),
-    })),
+    }),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
     // Verify signed request
-    if (!args.sig) {
-      throw new Error("Signature required");
-    }
-
     const verified = await verifySignedRequest(ctx, args);
     const callerAid = verified.aid;
 
@@ -191,13 +183,24 @@ export const addMembers = mutation({
 
     const existingAids = new Set(existingMembers.map(m => m.aid));
 
+    // Get the current highest seqNo in the group to initialize new members
+    // New members should only see messages sent AFTER they join
+    const allMessages = await ctx.db
+      .query("groupMessages")
+      .withIndex("by_group_seq", (q) => q.eq("groupChatId", args.groupId as any))
+      .collect();
+
+    const currentSeqNo = allMessages.length > 0
+      ? Math.max(...allMessages.map(m => m.seqNo))
+      : -1;
+
     // Add new members
     for (const aid of args.members) {
       if (!existingAids.has(aid)) {
         await ctx.db.insert("groupMembers", {
           groupChatId: args.groupId as any,
           aid,
-          latestSeqNo: -1,
+          latestSeqNo: currentSeqNo, // Start from current seqNo, so they only see NEW messages
           joinedAt: now,
           role: "member",
         });
@@ -215,62 +218,78 @@ export const removeMembers = mutation({
   args: {
     groupId: v.string(),
     members: v.array(v.string()),
-    sig: v.optional(v.object({
+    sig: v.object({
       signature: v.string(),
       timestamp: v.number(),
       nonce: v.string(),
       keyId: v.string(),
       signedFields: v.array(v.string()),
-    })),
+    }),
   },
   handler: async (ctx, args) => {
-    // Verify signed request
-    if (!args.sig) {
-      throw new Error("Signature required");
-    }
+    try {
+      // Verify signed request (required)
 
-    const verified = await verifySignedRequest(ctx, args);
-    const callerAid = verified.aid;
+      const verified = await verifySignedRequest(ctx, args);
+      const callerAid = verified.aid;
 
-    // Check caller's role
-    const callerMembership = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_group_aid", (q) =>
-        q.eq("groupChatId", args.groupId as any).eq("aid", callerAid)
-      )
-      .first();
-
-    if (!callerMembership ||
-        (callerMembership.role !== "admin" && callerMembership.role !== "owner")) {
-      throw new Error("Only admins or owners can remove members");
-    }
-
-    // Get group chat to check owner
-    const groupChat = await ctx.db.get(args.groupId as any);
-    if (!groupChat) {
-      throw new Error("Group chat not found");
-    }
-
-    // Prevent removing the owner
-    if (args.members.includes(groupChat.ownerAid)) {
-      throw new Error("Cannot remove the group owner");
-    }
-
-    // Remove members
-    for (const aid of args.members) {
-      const membership = await ctx.db
+      // Check caller's role and membership
+      const callerMembership = await ctx.db
         .query("groupMembers")
         .withIndex("by_group_aid", (q) =>
-          q.eq("groupChatId", args.groupId as any).eq("aid", aid)
+          q.eq("groupChatId", args.groupId as any).eq("aid", callerAid)
         )
         .first();
 
-      if (membership) {
-        await ctx.db.delete(membership._id);
+      if (!callerMembership) {
+        throw new Error("You are not a member of this group");
       }
-    }
 
-    return { ok: true };
+      // Authorization:
+      // - Empty members array = leave group (remove self)
+      // - Members can remove themselves (leave group)
+      // - Admins/owners can remove any member
+      const isLeavingGroup = args.members.length === 0;
+      const isAdminOrOwner = callerMembership.role === "admin" || callerMembership.role === "owner";
+      const isRemovingSelf = args.members.length === 1 && args.members[0] === callerAid;
+
+      if (!isLeavingGroup && !isAdminOrOwner && !isRemovingSelf) {
+        throw new Error("Only admins or owners can remove other members");
+      }
+
+      // If leaving group (empty members array), add caller to members list
+      const membersToRemove = isLeavingGroup ? [callerAid] : args.members;
+
+      // Get group chat to check owner
+      const groupChat = await ctx.db.get(args.groupId as any);
+      if (!groupChat) {
+        throw new Error(`Group chat not found: ${args.groupId}`);
+      }
+
+      // Prevent removing the owner
+      if (membersToRemove.includes(groupChat.ownerAid)) {
+        throw new Error("Cannot remove the group owner. Transfer ownership first.");
+      }
+
+      // Remove members
+      for (const aid of membersToRemove) {
+        const membership = await ctx.db
+          .query("groupMembers")
+          .withIndex("by_group_aid", (q) =>
+            q.eq("groupChatId", args.groupId as any).eq("aid", aid)
+          )
+          .first();
+
+        if (membership) {
+          await ctx.db.delete(membership._id);
+        }
+      }
+
+      return { ok: true };
+    } catch (error) {
+      console.error("[removeMembers] Error:", error);
+      throw error;
+    }
   },
 });
 
@@ -330,28 +349,22 @@ export const sendGroupMessage = mutation({
       groupId: v.string(),
       aad: v.optional(v.string()), // base64url - Additional Authenticated Data
     }),
-    auth: v.object({
-      challengeId: v.optional(v.id("challenges")), // Optional for signed requests
-      sigs: v.array(v.string()),
-      ksn: v.number(),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
     }),
   },
   handler: async (ctx, args) => {
     const now = Date.now();
 
-    // Verify authentication
-    const verified = await verifyAuth(
-      ctx,
-      args.auth,
-      "sendGroupMessage",
-      {
-        groupChatId: args.groupChatId,
-        // Bind to the encrypted content hash for integrity
-        contentHash: args.groupMessage.encryptedContent.substring(0, 32),
-      }
-    );
-
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
     const senderAid = verified.aid;
+    const senderKsn = verified.ksn;
+    const senderEvtSaid = verified.evtSaid;
 
     // SECURITY: Verify sender AID matches the one in the groupMessage
     if (args.groupMessage.senderAid !== senderAid) {

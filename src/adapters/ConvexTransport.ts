@@ -24,9 +24,6 @@ export class ConvexTransport implements Transport {
   constructor(private client: ConvexClient) { }
 
   async sendMessage(req: MessageSendRequest): Promise<{ messageId: string }> {
-    // Compute ctHash client-side for binding
-    const ctHash = this.computeCtHash(req.ct);
-
     const messageId = await this.client.mutation(api.messages.send, {
       recpAid: req.to,
       ct: req.ct,
@@ -34,11 +31,7 @@ export class ConvexTransport implements Transport {
       ek: req.ek,
       alg: req.alg,
       ttl: req.ttlMs,
-      auth: {
-        challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      sig: req.sig,
     });
 
     return { messageId };
@@ -46,16 +39,10 @@ export class ConvexTransport implements Transport {
 
   async receiveMessages(req: {
     for: string;
-    auth?: AuthProof;
-    sig?: SignedRequest;
+    sig: SignedRequest;
   }): Promise<EncryptedMessage[]> {
     const messages = await this.client.mutation(api.messages.receive, {
       recpAid: req.for,
-      auth: req.auth ? {
-        challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      } : undefined,
       sig: req.sig,
     });
 
@@ -64,20 +51,12 @@ export class ConvexTransport implements Transport {
 
   async ackMessage(req: {
     messageId: string;
-    auth?: AuthProof;
-    sig?: SignedRequest;
+    sig: SignedRequest;
     receiptSig?: string[];
   }): Promise<void> {
     await this.client.mutation(api.messages.acknowledge, {
       messageId: req.messageId as Id<"messages">,
       receipt: req.receiptSig ?? [],
-      auth: req.auth
-        ? {
-            challengeId: req.auth.challengeId ? (req.auth.challengeId as Id<"challenges">) : undefined,
-            sigs: req.auth.sigs,
-            ksn: req.auth.ksn,
-          }
-        : undefined,
       sig: req.sig,
     });
   }

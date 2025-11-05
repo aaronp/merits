@@ -253,8 +253,10 @@ export async function leaveGroup(
   const creds = requireCredentials(opts.credentials);
 
   // Build and sign mutation args
+  // Note: members=[] signals to backend to remove the caller (leave group)
   const args = {
     groupId,
+    members: [],
   };
   const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
   const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);

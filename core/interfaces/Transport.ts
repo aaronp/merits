@@ -44,8 +44,8 @@ export interface MessageSendRequest {
   /** Time-to-live in milliseconds (how long server keeps this message) */
   ttlMs?: number;
 
-  /** Authentication proof (sender proves control of their AID) */
-  auth: AuthProof;
+  /** Signed request authentication */
+  sig: SignedRequest;
 }
 
 /**
@@ -188,12 +188,12 @@ export interface Transport {
    * Returns all unretrieved, non-expired messages for the recipient.
    * Messages remain in the queue until acknowledged.
    *
-   * Authentication required - recipient must prove control of their AID.
-   * Server enforces that auth.aid === req.for (can't receive for others).
+   * Authentication required - recipient must prove control of their AID via signed request.
+   * Server enforces that verified AID === req.for (can't receive for others).
    */
   receiveMessages(req: {
     for: AID;
-    auth: AuthProof;
+    sig: SignedRequest;
   }): Promise<EncryptedMessage[]>;
 
   /**
@@ -203,13 +203,11 @@ export interface Transport {
    * Optionally includes recipient's signature over envelopeHash for
    * non-repudiation proof of delivery.
    *
-   * Authentication required - must be the message recipient.
-   * Provide either auth (challenge-response) OR sig (signed request).
+   * Authentication required - must be the message recipient (via signed request).
    */
   ackMessage(req: {
     messageId: string;
-    auth?: AuthProof;
-    sig?: SignedRequest; // Signed request (replaces session tokens)
+    sig: SignedRequest;
     receiptSig?: string[]; // Recipient's indexed sigs over envelopeHash
   }): Promise<void>;
 

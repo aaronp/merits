@@ -113,13 +113,12 @@ export class ConvexGroupApi implements GroupApi {
   }
 
   async leaveGroup(req: LeaveGroupRequest): Promise<void> {
-    await this.client.mutation(api.groups.leaveGroup, {
+    // leaveGroup is implemented by calling removeMembers with the caller's own AID
+    // The backend will verify the signature and extract the caller's AID
+    await this.client.mutation(api.groups.removeMembers, {
       groupId: req.groupId as any,
-      auth: {
-        challengeId: req.auth.challengeId ? (req.auth.challengeId as any) : undefined,
-        sigs: req.auth.sigs,
-        ksn: req.auth.ksn,
-      },
+      members: [], // Empty array - backend will infer caller from sig and remove them
+      sig: (req as any).sig, // Pass signed request
     });
   }
 }
