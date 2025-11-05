@@ -246,6 +246,78 @@ export const bootstrapOnboarding = mutation({
           }
         }
 
+        // Ensure admin role has permission to create groups
+        const createGroupsPermKey = PERMISSIONS.CAN_CREATE_GROUPS;
+        let createGroupsPermission = await ctx.db
+          .query("permissions")
+          .withIndex("by_key", (q: any) => q.eq("key", createGroupsPermKey))
+          .first();
+
+        if (!createGroupsPermission) {
+          const pid = await ctx.db.insert("permissions", {
+            key: createGroupsPermKey,
+            data: undefined, // No restrictions - admin can create any groups
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/perms",
+            timestamp: now,
+          });
+          createGroupsPermission = await ctx.db.get(pid);
+          console.log("Bootstrap: Created CAN_CREATE_GROUPS permission (idempotent)");
+        }
+
+        // Ensure role->permission mapping exists for createGroups
+        if (createGroupsPermission) {
+          const hasCreateGroupsMapping = existingAdminRP.some(
+            (rp: any) => rp.permissionId === createGroupsPermission._id
+          );
+          if (!hasCreateGroupsMapping) {
+            await ctx.db.insert("rolePermissions", {
+              roleId: existingAdmin._id,
+              permissionId: createGroupsPermission._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/map",
+              timestamp: now,
+            });
+            console.log("Bootstrap: Linked admin role to CAN_CREATE_GROUPS permission (idempotent)");
+          }
+        }
+
+        // Ensure admin role has permission to assign roles
+        const assignRolesPermKey = PERMISSIONS.CAN_ASSIGN_ROLES;
+        let assignRolesPermission = await ctx.db
+          .query("permissions")
+          .withIndex("by_key", (q: any) => q.eq("key", assignRolesPermKey))
+          .first();
+
+        if (!assignRolesPermission) {
+          const pid = await ctx.db.insert("permissions", {
+            key: assignRolesPermKey,
+            data: undefined, // No restrictions - admin can assign any roles
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/perms",
+            timestamp: now,
+          });
+          assignRolesPermission = await ctx.db.get(pid);
+          console.log("Bootstrap: Created CAN_ASSIGN_ROLES permission (idempotent)");
+        }
+
+        // Ensure role->permission mapping exists for assignRoles
+        if (assignRolesPermission) {
+          const hasAssignRolesMapping = existingAdminRP.some(
+            (rp: any) => rp.permissionId === assignRolesPermission._id
+          );
+          if (!hasAssignRolesMapping) {
+            await ctx.db.insert("rolePermissions", {
+              roleId: existingAdmin._id,
+              permissionId: assignRolesPermission._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/map",
+              timestamp: now,
+            });
+            console.log("Bootstrap: Linked admin role to CAN_ASSIGN_ROLES permission (idempotent)");
+          }
+        }
+
         // Ensure admin AID is assigned the admin role
         if (args.adminAid) {
           const existingAssignment = await ctx.db
@@ -437,6 +509,76 @@ export const bootstrapOnboarding = mutation({
         timestamp: now,
       });
       console.log("Bootstrap: Linked admin role to CAN_MESSAGE_USERS permission");
+    }
+
+    // Grant admin permission to create groups
+    const createGroupsPermKey = PERMISSIONS.CAN_CREATE_GROUPS;
+    let createGroupsPermission = await ctx.db
+      .query("permissions")
+      .withIndex("by_key", (q: any) => q.eq("key", createGroupsPermKey))
+      .first();
+
+    if (!createGroupsPermission) {
+      const pid = await ctx.db.insert("permissions", {
+        key: createGroupsPermKey,
+        data: undefined, // No restrictions - admin can create any groups
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/perms",
+        timestamp: now,
+      });
+      createGroupsPermission = await ctx.db.get(pid);
+      console.log("Bootstrap: Created CAN_CREATE_GROUPS permission");
+    }
+
+    // Link admin role to CAN_CREATE_GROUPS permission
+    const hasCreateGroupsMapping = existingAdminRP.some(
+      (rp: any) => rp.permissionId === createGroupsPermission!._id
+    );
+
+    if (!hasCreateGroupsMapping) {
+      await ctx.db.insert("rolePermissions", {
+        roleId: adminRole!._id,
+        permissionId: createGroupsPermission!._id,
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/map",
+        timestamp: now,
+      });
+      console.log("Bootstrap: Linked admin role to CAN_CREATE_GROUPS permission");
+    }
+
+    // Grant admin permission to assign roles
+    const assignRolesPermKey = PERMISSIONS.CAN_ASSIGN_ROLES;
+    let assignRolesPermission = await ctx.db
+      .query("permissions")
+      .withIndex("by_key", (q: any) => q.eq("key", assignRolesPermKey))
+      .first();
+
+    if (!assignRolesPermission) {
+      const pid = await ctx.db.insert("permissions", {
+        key: assignRolesPermKey,
+        data: undefined, // No restrictions - admin can assign any roles
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/perms",
+        timestamp: now,
+      });
+      assignRolesPermission = await ctx.db.get(pid);
+      console.log("Bootstrap: Created CAN_ASSIGN_ROLES permission");
+    }
+
+    // Link admin role to CAN_ASSIGN_ROLES permission
+    const hasAssignRolesMapping = existingAdminRP.some(
+      (rp: any) => rp.permissionId === assignRolesPermission!._id
+    );
+
+    if (!hasAssignRolesMapping) {
+      await ctx.db.insert("rolePermissions", {
+        roleId: adminRole!._id,
+        permissionId: assignRolesPermission!._id,
+        adminAID: "SYSTEM",
+        actionSAID: "bootstrap/map",
+        timestamp: now,
+      });
+      console.log("Bootstrap: Linked admin role to CAN_ASSIGN_ROLES permission");
     }
 
     // Create user role (elevated from anon)
