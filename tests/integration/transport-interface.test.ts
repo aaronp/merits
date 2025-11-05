@@ -12,12 +12,12 @@ import { ConvexTransport } from "../../src/adapters/ConvexTransport";
 import { ConvexIdentityAuth } from "../../src/adapters/ConvexIdentityAuth";
 import { Transport } from "../../core/interfaces/Transport";
 import { IdentityAuth } from "../../core/interfaces/IdentityAuth";
-import { AuthProof } from "../../core/types";
+import { SignedRequest } from "../../core/types";
+import { signMutationArgs } from "../../core/signatures";
 import {
   generateKeyPair,
   createAID,
   encodeCESRKey,
-  sign,
 } from "../helpers/crypto-utils";
 import { eventually, eventuallyValue } from "../helpers/eventually";
 
@@ -38,40 +38,14 @@ describe("Transport Interface (Convex implementation)", () => {
   let bobAid: string;
 
   /**
-   * Helper to create auth proof for a user
+   * Helper to create signed request for a user
    */
-  async function createAuthProof(
+  async function createSignedRequest(
     aid: string,
     privateKey: Uint8Array,
-    purpose: "send" | "receive" | "ack",
     args: Record<string, unknown>
-  ): Promise<AuthProof> {
-    const challenge = await identityAuth.issueChallenge({
-      aid,
-      purpose,
-      args,
-    });
-
-    // Sign the payload
-    const canonical = JSON.stringify(
-      challenge.payloadToSign,
-      Object.keys(challenge.payloadToSign).sort()
-    );
-    const encoder = new TextEncoder();
-    const data = encoder.encode(canonical);
-    const signature = await sign(data, privateKey);
-
-    // Create indexed signature
-    const sigB64 = btoa(String.fromCharCode(...signature))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=/g, "");
-
-    return {
-      challengeId: challenge.challengeId,
-      sigs: [`0-${sigB64}`],
-      ksn: 0,
-    };
+  ): Promise<SignedRequest> {
+    return await signMutationArgs(args, privateKey, aid);
   }
 
   beforeAll(async () => {
@@ -118,12 +92,11 @@ describe("Transport Interface (Convex implementation)", () => {
   });
 
   test("sendMessage returns messageId", async () => {
-    const auth = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sig = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash("test-message"),
+      ct: "test-message",
+      typ: "chat.text.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     const result = await transport.sendMessage({
@@ -131,7 +104,7 @@ describe("Transport Interface (Convex implementation)", () => {
       ct: "test-message",
       typ: "chat.text.v1",
       ttlMs: 60000,
-      auth,
+      sig,
     });
 
     expect(result.messageId).toBeTruthy();
@@ -139,12 +112,11 @@ describe("Transport Interface (Convex implementation)", () => {
 
   test("receiveMessages returns sent messages", async () => {
     // Alice sends to Bob
-    const sendAuth = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash("message-for-bob"),
+      ct: "message-for-bob",
+      typ: "test.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     const { messageId } = await transport.sendMessage({
@@ -152,11 +124,11 @@ describe("Transport Interface (Convex implementation)", () => {
       ct: "message-for-bob",
       typ: "test.v1",
       ttlMs: 60000,
-      auth: sendAuth,
+      sig: sendSig,
     });
 
     // Bob receives - use eventually to wait for message to appear
-    const receiveAuth = await createAuthProof(bobAid, bobKeys.privateKey, "receive", {
+    const receiveSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
       recpAid: bobAid,
     });
 
@@ -164,7 +136,7 @@ describe("Transport Interface (Convex implementation)", () => {
       async () => {
         const messages = await transport.receiveMessages({
           for: bobAid,
-          auth: receiveAuth,
+          sig: receiveSig,
         });
         return messages.find((m) => m.id === messageId);
       },
@@ -180,23 +152,23 @@ describe("Transport Interface (Convex implementation)", () => {
 
   test("ackMessage removes message from receive queue", async () => {
     // Alice sends to Bob
-    const sendAuth = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash("msg-to-ack"),
+      ct: "msg-to-ack",
+      typ: "test.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     const { messageId } = await transport.sendMessage({
       to: bobAid,
       ct: "msg-to-ack",
+      typ: "test.v1",
       ttlMs: 60000,
-      auth: sendAuth,
+      sig: sendSig,
     });
 
     // Bob receives - wait for message to appear
-    const receiveAuth = await createAuthProof(bobAid, bobKeys.privateKey, "receive", {
+    const receiveSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
       recpAid: bobAid,
     });
 
@@ -204,7 +176,7 @@ describe("Transport Interface (Convex implementation)", () => {
       async () => {
         const messages = await transport.receiveMessages({
           for: bobAid,
-          auth: receiveAuth,
+          sig: receiveSig,
         });
         return messages.find((m) => m.id === messageId);
       },
@@ -214,25 +186,25 @@ describe("Transport Interface (Convex implementation)", () => {
     expect(msgToAck).toBeDefined();
 
     // Bob acknowledges
-    const ackAuth = await createAuthProof(bobAid, bobKeys.privateKey, "ack", {
-      recpAid: bobAid,
+    const ackSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
       messageId,
+      receipt: [],
     });
 
     await transport.ackMessage({
       messageId,
-      auth: ackAuth,
+      sig: ackSig,
     });
 
     // Message should eventually disappear
     await eventually(
       async () => {
-        const receiveAuth2 = await createAuthProof(bobAid, bobKeys.privateKey, "receive", {
+        const receiveSig2 = await createSignedRequest(bobAid, bobKeys.privateKey, {
           recpAid: bobAid,
         });
         const messages = await transport.receiveMessages({
           for: bobAid,
-          auth: receiveAuth2,
+          sig: receiveSig2,
         });
         return messages.find((m) => m.id === messageId) === undefined;
       },
@@ -244,26 +216,25 @@ describe("Transport Interface (Convex implementation)", () => {
     const receivedMessages: string[] = [];
 
     // Subscribe as Bob
-    const subscribeAuth = await createAuthProof(bobAid, bobKeys.privateKey, "receive", {
+    const subscribeSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
       recpAid: bobAid,
     });
 
     const cancel = await transport.subscribe({
       for: bobAid,
-      auth: subscribeAuth,
+      sig: subscribeSig,
       onMessage: async (msg) => {
         receivedMessages.push(msg.ct);
-        return false; // Do not auto-ack in this test (no 'ack' auth)
+        return false; // Do not auto-ack in this test
       },
     });
 
     // Alice sends a message
-    const sendAuth = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash("live-message"),
+      ct: "live-message",
+      typ: "chat.text.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     await transport.sendMessage({
@@ -271,7 +242,7 @@ describe("Transport Interface (Convex implementation)", () => {
       ct: "live-message",
       typ: "chat.text.v1",
       ttlMs: 60000,
-      auth: sendAuth,
+      sig: sendSig,
     });
 
     // Wait for push notification to arrive
@@ -285,15 +256,4 @@ describe("Transport Interface (Convex implementation)", () => {
     // Clean up subscription
     cancel();
   }, 10000); // Longer timeout for subscribe test
-
-  /**
-   * Helper to compute ciphertext hash
-   */
-  async function computeCtHash(ct: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(ct);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
-  }
 });

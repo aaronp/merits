@@ -12,11 +12,12 @@ import { ConvexTransport } from "../../src/adapters/ConvexTransport";
 import { ConvexIdentityAuth } from "../../src/adapters/ConvexIdentityAuth";
 import { createMessageRouter } from "../../core/runtime/router";
 import { eventually, eventuallyValue } from "../helpers/eventually";
+import { SignedRequest } from "../../core/types";
+import { signMutationArgs } from "../../core/signatures";
 import {
   generateKeyPair,
   createAID,
   encodeCESRKey,
-  sign,
 } from "../helpers/crypto-utils";
 
 const CONVEX_URL = process.env.CONVEX_URL;
@@ -87,12 +88,11 @@ describe("Router Integration: Full Flow", () => {
     });
 
     // Alice sends two different message types to Bob
-    const sendAuth1 = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig1 = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash(mockEncrypt({ text: "Hello Bob!" })),
+      ct: mockEncrypt({ text: "Hello Bob!" }),
+      typ: "chat.text.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     await transport.sendMessage({
@@ -100,15 +100,14 @@ describe("Router Integration: Full Flow", () => {
       ct: mockEncrypt({ text: "Hello Bob!" }),
       typ: "chat.text.v1",
       ttlMs: 60000,
-      auth: sendAuth1,
+      sig: sendSig1,
     });
 
-    const sendAuth2 = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig2 = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash(mockEncrypt({ action: "ping", value: 42 })),
+      ct: mockEncrypt({ action: "ping", value: 42 }),
+      typ: "app.custom.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     await transport.sendMessage({
@@ -116,17 +115,19 @@ describe("Router Integration: Full Flow", () => {
       ct: mockEncrypt({ action: "ping", value: 42 }),
       typ: "app.custom.v1",
       ttlMs: 60000,
-      auth: sendAuth2,
+      sig: sendSig2,
     });
 
     // Bob receives and routes messages
-    const receiveAuth = await createAuthProof(bobAid, bobKeys.privateKey, "receive", { recpAid: bobAid });
+    const receiveSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
+      recpAid: bobAid,
+    });
 
     const messages = await eventuallyValue(
       async () => {
         const msgs = await transport.receiveMessages({
           for: bobAid,
-          auth: receiveAuth,
+          sig: receiveSig,
         });
         return msgs.length >= 2 ? msgs : undefined;
       },
@@ -162,28 +163,29 @@ describe("Router Integration: Full Flow", () => {
     });
 
     // Bob subscribes with auto-routing
-    const subscribeAuth = await createAuthProof(bobAid, bobKeys.privateKey, "receive", { recpAid: bobAid });
+    const subscribeSig = await createSignedRequest(bobAid, bobKeys.privateKey, {
+      recpAid: bobAid,
+    });
 
     const cancel = await transport.subscribe({
       for: bobAid,
-      auth: subscribeAuth,
+      sig: subscribeSig,
       onMessage: async (msg) => {
         // Route through router on each message
         await router.dispatch(
           { decrypt: async (m) => mockDecrypt(m.ct) },
           msg
         );
-        return false; // Do not auto-ack (ack requires per-message auth)
+        return false; // Do not auto-ack
       },
     });
 
     // Alice sends a live message
-    const sendAuth = await createAuthProof(aliceAid, aliceKeys.privateKey, "send", {
+    const sendSig = await createSignedRequest(aliceAid, aliceKeys.privateKey, {
       recpAid: bobAid,
-      ctHash: await computeCtHash(mockEncrypt({ content: "Live update!" })),
+      ct: mockEncrypt({ content: "Live update!" }),
+      typ: "live.test.v1",
       ttl: 60000,
-      alg: "",
-      ek: "",
     });
 
     await transport.sendMessage({
@@ -191,7 +193,7 @@ describe("Router Integration: Full Flow", () => {
       ct: mockEncrypt({ content: "Live update!" }),
       typ: "live.test.v1",
       ttlMs: 60000,
-      auth: sendAuth,
+      sig: sendSig,
     });
 
     // Wait for message to be routed
@@ -206,38 +208,14 @@ describe("Router Integration: Full Flow", () => {
   }, 10000);
 
   /**
-   * Helper to create auth proof
+   * Helper to create signed request
    */
-  async function createAuthProof(
+  async function createSignedRequest(
     aid: string,
     privateKey: Uint8Array,
-    purpose: "send" | "receive" | "ack",
     args: Record<string, unknown>
-  ) {
-    const challenge = await identityAuth.issueChallenge({
-      aid,
-      purpose,
-      args,
-    });
-
-    const canonical = JSON.stringify(
-      challenge.payloadToSign,
-      Object.keys(challenge.payloadToSign).sort()
-    );
-    const encoder = new TextEncoder();
-    const data = encoder.encode(canonical);
-    const signature = await sign(data, privateKey);
-
-    const sigB64 = btoa(String.fromCharCode(...signature))
-      .replace(/\+/g, "-")
-      .replace(/\//g, "_")
-      .replace(/=/g, "");
-
-    return {
-      challengeId: challenge.challengeId,
-      sigs: [`0-${sigB64}`],
-      ksn: 0,
-    };
+  ): Promise<SignedRequest> {
+    return await signMutationArgs(args, privateKey, aid);
   }
 
   /**
@@ -252,16 +230,5 @@ describe("Router Integration: Full Flow", () => {
    */
   function mockDecrypt(ciphertext: string): any {
     return JSON.parse(Buffer.from(ciphertext, "base64").toString("utf-8"));
-  }
-
-  /**
-   * Compute ciphertext hash
-   */
-  async function computeCtHash(ct: string): Promise<string> {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(ct);
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
   }
 });
