@@ -424,6 +424,12 @@ export const getUnread = query({
         .withIndex("by_aid", (q) => q.eq("aid", args.aid))
         .collect();
 
+      // Collect all group messages first (before fetching sender keys)
+      const allGroupMessages: Array<{
+        msg: any;
+        membership: any;
+      }> = [];
+
       // For each group, get unread messages
       for (const membership of memberships) {
         const groupMessages = await ctx.db
@@ -443,43 +449,64 @@ export const getUnread = query({
           )
           .collect();
 
-        // ACCESS CONTROL: Filter out group messages from blocked senders
-        const groupSenderAids = [...new Set(groupMessages.map((m) => m.senderAid))];
-        const groupAccessMap = await canMessageBatch(ctx, groupSenderAids, args.aid);
-
-        // Get sender public keys for decryption
+        // Store messages with their membership context
         for (const msg of groupMessages) {
-          // Check access control
-          const access = groupAccessMap.get(msg.senderAid);
-          if (!access?.allowed) {
-            continue; // Skip messages from blocked senders
-          }
-          const senderUser = await ctx.db
-            .query("users")
-            .withIndex("by_aid", (q) => q.eq("aid", msg.senderAid))
-            .first();
-
-          result.push({
-            id: msg._id,
-            from: msg.senderAid,
-            to: args.aid,
-            // Return the full GroupMessage structure
-            ct: {
-              encryptedContent: msg.encryptedContent,
-              nonce: msg.nonce,
-              encryptedKeys: msg.encryptedKeys,
-              senderAid: msg.senderAid,
-              groupId: membership.groupChatId,
-              aad: msg.aad,
-            },
-            typ: "group-encrypted",
-            createdAt: msg.received,
-            isGroupMessage: true,
-            groupId: membership.groupChatId,
-            senderPublicKey: senderUser?.publicKey,
-            seqNo: msg.seqNo,
-          });
+          allGroupMessages.push({ msg, membership });
         }
+      }
+
+      // ACCESS CONTROL: Batch filter out messages from blocked senders
+      const allSenderAids = [...new Set(allGroupMessages.map((m) => m.msg.senderAid))];
+      const allAccessMap = await canMessageBatch(ctx, allSenderAids, args.aid);
+
+      // Filter messages by access control
+      const accessibleMessages = allGroupMessages.filter((item) => {
+        const access = allAccessMap.get(item.msg.senderAid);
+        return access?.allowed ?? true;
+      });
+
+      // PERFORMANCE FIX: Batch fetch all sender public keys at once
+      // This eliminates the N+1 query problem (was querying once per message)
+      const uniqueSenderAids = [...new Set(accessibleMessages.map((m) => m.msg.senderAid))];
+      const senderUsers = await Promise.all(
+        uniqueSenderAids.map((aid) =>
+          ctx.db
+            .query("users")
+            .withIndex("by_aid", (q) => q.eq("aid", aid))
+            .first()
+        )
+      );
+
+      // Create lookup map for O(1) access
+      const senderPublicKeyMap = new Map<string, string | undefined>();
+      for (const user of senderUsers) {
+        if (user) {
+          senderPublicKeyMap.set(user.aid, user.publicKey);
+        }
+      }
+
+      // Build result array with all data pre-fetched
+      for (const { msg, membership } of accessibleMessages) {
+        result.push({
+          id: msg._id,
+          from: msg.senderAid,
+          to: args.aid,
+          // Return the full GroupMessage structure
+          ct: {
+            encryptedContent: msg.encryptedContent,
+            nonce: msg.nonce,
+            encryptedKeys: msg.encryptedKeys,
+            senderAid: msg.senderAid,
+            groupId: membership.groupChatId,
+            aad: msg.aad,
+          },
+          typ: "group-encrypted",
+          createdAt: msg.received,
+          isGroupMessage: true,
+          groupId: membership.groupChatId,
+          senderPublicKey: senderPublicKeyMap.get(msg.senderAid),
+          seqNo: msg.seqNo,
+        });
       }
     }
 

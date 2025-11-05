@@ -20,7 +20,7 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { verifyAuth } from "./auth";
+import { verifySignedRequest } from "./auth";
 
 /**
  * Add an AID to the user's allow-list
@@ -46,17 +46,17 @@ export const add = mutation({
   args: {
     allowedAid: v.string(),
     note: v.optional(v.string()),
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
     }),
   },
   handler: async (ctx, args) => {
-    // Verify authentication
-    const verified = await verifyAuth(ctx, args.auth, "addToAllowList", {
-      allowedAid: args.allowedAid,
-    });
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
 
     const ownerAid = verified.aid;
 
@@ -107,17 +107,17 @@ export const add = mutation({
 export const remove = mutation({
   args: {
     allowedAid: v.string(),
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
     }),
   },
   handler: async (ctx, args) => {
-    // Verify authentication
-    const verified = await verifyAuth(ctx, args.auth, "removeFromAllowList", {
-      allowedAid: args.allowedAid,
-    });
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
 
     const ownerAid = verified.aid;
 
@@ -199,15 +199,17 @@ export const list = query({
  */
 export const clear = mutation({
   args: {
-    auth: v.object({
-      challengeId: v.id("challenges"),
-      sigs: v.array(v.string()),
-      ksn: v.number(),
+    sig: v.object({
+      signature: v.string(),
+      timestamp: v.number(),
+      nonce: v.string(),
+      keyId: v.string(),
+      signedFields: v.array(v.string()),
     }),
   },
   handler: async (ctx, args) => {
-    // Verify authentication
-    const verified = await verifyAuth(ctx, args.auth, "clearAllowList", {});
+    // Verify signed request authentication
+    const verified = await verifySignedRequest(ctx, args);
 
     const ownerAid = verified.aid;
 
