@@ -67,6 +67,23 @@ export class GroupApi {
   }
 
   /**
+   * Get group by tag (e.g., "onboarding")
+   *
+   * Returns null if no group with the specified tag exists.
+   */
+  async getGroupByTag(tag: string): Promise<{
+    id: string;
+    name: string;
+    tag?: string;
+    ownerAid: string;
+    membershipSaid: string;
+    createdAt: number;
+    createdBy: string;
+  } | null> {
+    return await this.convex.query(api.groups.getGroupByTag, { tag });
+  }
+
+  /**
    * Add members to a group
    */
   async addMembers(groupId: string, members: string[]): Promise<void> {

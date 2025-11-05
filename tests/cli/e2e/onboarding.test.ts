@@ -22,6 +22,23 @@ import { assertSuccess } from "../helpers/exec";
 import { cleanTestDir, mkScenario } from "../helpers/workspace";
 import { ConvexMeritsClient } from "../../../src/client/convex";
 
+/**
+ * Helper: Get group by tag using the backend-agnostic MeritsClient API
+ */
+async function getGroupByTag(tag: string) {
+  const convexUrl = process.env.CONVEX_URL;
+  if (!convexUrl) {
+    throw new Error("CONVEX_URL environment variable not set");
+  }
+
+  const client = new ConvexMeritsClient(convexUrl);
+  try {
+    return await client.getGroupIdByTag(tag);
+  } finally {
+    client.close();
+  }
+}
+
 
 describe("User Onboarding", () => {
 
@@ -108,15 +125,8 @@ describe("User Onboarding", () => {
     expect(aliceUnread.json).toEqual([]);
 
     /** Verify anon users CAN message the onboarding group */
-    // Query the onboarding group using the new tag-based API
-    const convexUrl = process.env.CONVEX_URL;
-    if (!convexUrl) {
-      throw new Error("CONVEX_URL environment variable not set");
-    }
-
-    const client = new ConvexMeritsClient(convexUrl);
-    const onboardingGroup = await client.getGroupIdByTag("onboarding");
-    client.close();
+    // Query the onboarding group using the backend-agnostic API
+    const onboardingGroup = await getGroupByTag("onboarding");
 
     if (onboardingGroup) {
       expect(onboardingGroup.name).toBe("onboarding");
@@ -199,15 +209,15 @@ describe("User Onboarding", () => {
     console.log(`✅ Alice's unread list no longer contains marked message`);
 
     /** Verify the users can reply to the onboarding group */
-    // TODO: Re-enable once onboarding group test is fixed
-    // const aliceReplyOnboarding = await runCliInProcess(
-    //   ["send", onboardingGroup.id, "--message", "Thank you for the welcome!"],
-    //   { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
-    // );
-    // expect(aliceReplyOnboarding.code).toBe(0);
-    // expect(aliceReplyOnboarding.json.messageId).toBeDefined();
-
-
+    if (onboardingGroup) {
+      const aliceReplyOnboarding = await runCliInProcess(
+        ["send", onboardingGroup.id, "--message", "Thank you for the welcome!", "--typ", "onboarding.reply"],
+        { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+      );
+      expect(aliceReplyOnboarding.code).toBe(0);
+      expect(aliceReplyOnboarding.json.messageId).toBeDefined();
+      console.log(`✅ Alice replied to onboarding group`);
+    }
 
     const alicestatus = await runCliInProcess(
       ["status"],
@@ -349,6 +359,43 @@ describe("User Onboarding", () => {
     );
     expect(aliceGroupListAfter.code).toBe(0);
     expect(aliceGroupListAfter.json.length).toBe(1); // Only onboarding now
+
+    /**
+     * Verify that after Alice leaves:
+     * 1. Bob (remaining member) can still send messages to the group
+     * 2. Bob doesn't see his own message in unread
+     * 3. Alice (who left) does NOT see Bob's new messages
+     */
+    const bobSendAfterAliceLeft = await runCliInProcess(
+      ["send", testGroupId, "--message", "Alice is gone, just me now!", "--typ", "chat.text"],
+      { cwd: bobDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(bob.json) } }
+    );
+    expect(bobSendAfterAliceLeft.code).toBe(0);
+    console.log(`✅ Bob sent message after Alice left`);
+
+    // Bob should NOT see his own message in unread
+    const bobUnreadAfterLeave = await runCliInProcess(
+      ["unread"],
+      { cwd: bobDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(bob.json) } }
+    );
+    expect(bobUnreadAfterLeave.code).toBe(0);
+    const bobOwnMessageAfterLeave = bobUnreadAfterLeave.json.find(
+      (msg: any) => msg.messageId === bobSendAfterAliceLeft.json.messageId
+    );
+    expect(bobOwnMessageAfterLeave).toBeUndefined();
+    console.log(`✅ Bob doesn't see his own message in unread`);
+
+    // Alice should NOT see Bob's message (she left the group)
+    const aliceUnreadAfterLeave = await runCliInProcess(
+      ["unread"],
+      { cwd: aliceDir.root, env: { MERITS_CREDENTIALS: JSON.stringify(alice.json) } }
+    );
+    expect(aliceUnreadAfterLeave.code).toBe(0);
+    const bobMessageForAlice = aliceUnreadAfterLeave.json.find(
+      (msg: any) => msg.messageId === bobSendAfterAliceLeft.json.messageId
+    );
+    expect(bobMessageForAlice).toBeUndefined();
+    console.log(`✅ Alice doesn't see messages from group she left`);
   }, MAX_TEST_TIMEOUT)
 
   /**
