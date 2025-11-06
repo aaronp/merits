@@ -86,8 +86,9 @@ function ensureCredentialsDir(credentialsPath: string): void {
  *
  * Priority:
  * 1. MERITS_CREDENTIALS environment variable (for scripting)
- * 2. File at specified path
- * 3. File at default path
+ * 2. .merits file in CWD (project-level config from incept)
+ * 3. File at specified path
+ * 4. File at default path
  *
  * @param path - Optional path to credentials file
  * @returns Credentials object or null if not found
@@ -126,6 +127,26 @@ export function loadCredentials(path?: string): Credentials | null {
     } catch (err) {
       console.error("Failed to parse MERITS_CREDENTIALS environment variable:", err);
       return null;
+    }
+  }
+
+  // Check .merits file in CWD (project-level config)
+  const projectConfigPath = join(process.cwd(), ".merits");
+  if (!path && existsSync(projectConfigPath)) {
+    try {
+      const content = readFileSync(projectConfigPath, "utf-8");
+      const parsed = JSON.parse(content);
+
+      if (parsed.credentials) {
+        return {
+          aid: parsed.credentials.aid,
+          privateKey: parsed.credentials.privateKey,
+          publicKey: parsed.credentials.publicKey,
+          ksn: parsed.credentials.ksn ?? 0,
+        };
+      }
+    } catch (err) {
+      // Silently ignore - will try other paths
     }
   }
 

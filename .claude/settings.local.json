@@ -116,7 +116,10 @@
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud bunx convex run:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_CREDENTIALS='{\"aid\":\"DC8-1K1AoLnGJ-7f-D_acNTMDD5DnID7_jIdWwm9lGI8\",\"privateKey\":\"test\",\"publicKey\":\"test\",\"ksn\":0}' MERITS_VAULT_QUIET=1 bun run:*)",
       "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud timeout 300 bun test:*)",
-      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_CREDENTIALS='{\"\"aid\"\":\"\"DC8-1K1AoLnGJ-7f-D_acNTMDD5DnID7_jIdWwm9lGI8\"\",\"\"privateKey\"\":\"\"test\"\",\"\"publicKey\"\":\"\"test\"\",\"\"ksn\"\":0}' MERITS_VAULT_QUIET=1 bun run:*)"
+      "Bash(CONVEX_URL=https://aware-tiger-369.convex.cloud MERITS_CREDENTIALS='{\"\"aid\"\":\"\"DC8-1K1AoLnGJ-7f-D_acNTMDD5DnID7_jIdWwm9lGI8\"\",\"\"privateKey\"\":\"\"test\"\",\"\"publicKey\"\":\"\"test\"\",\"\"ksn\"\":0}' MERITS_VAULT_QUIET=1 bun run:*)",
+      "Bash(/Users/aaron/dev/sandbox/kerits/merits/merits status)",
+      "Bash(/Users/aaron/dev/sandbox/kerits/merits/merits:*)",
+      "Bash(env)"
     ],
     "deny": [],
     "ask": []

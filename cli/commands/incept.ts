@@ -34,6 +34,7 @@ import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/o
 import { generateKeyPair, createAID, signPayload, sha256 } from "../../core/crypto";
 import * as ed from "@noble/ed25519";
 import type { CLIContext } from "../lib/context";
+import { saveProjectConfig } from "../lib/config";
 
 export interface InceptOptions extends GlobalOptions {
   seed?: string; // Deterministic seed for testing
@@ -130,6 +131,20 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
     },
   };
 
+  // Save to .merits file for easy reuse
+  saveProjectConfig({
+    backend: {
+      type: ctx.config.backend.type,
+      url: ctx.config.backend.url,
+    },
+    credentials: {
+      aid,
+      privateKey: privateKeyB64,
+      publicKey: publicKeyB64,
+      ksn: 0,
+    },
+  });
+
   // Output in requested format
   switch (format) {
     case "json":
@@ -147,10 +162,11 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   // Hint for next step (only in pretty mode)
   if (format === "pretty" && !opts.noBanner) {
     console.error("\n✅ User inception complete!");
+    console.error("   Configuration saved to .merits file");
     console.error("   Session token obtained and ready to use.");
     console.error("\nNext steps:");
-    console.error("  Save your keys securely (especially privateKey)");
-    console.error("  Use the session token for authenticated operations");
+    console.error("  Run commands without credentials flag (e.g., 'merits status')");
+    console.error("  Backend URL and credentials are now configured for this directory");
   }
 });
 

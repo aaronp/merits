@@ -1,8 +1,10 @@
 /**
  * Configuration Management
  *
- * 4-layer precedence: CLI flags > env vars > config file > defaults
- * Config location: ~/.merits/config.json
+ * 5-layer precedence: CLI flags > env vars > .merits (cwd) > config file > defaults
+ * Config locations:
+ *   - ./.merits (project-level, created by incept)
+ *   - ~/.merits/config.json (global)
  * Secure permissions: 0600
  * Schema validation with Ajv
  */
@@ -12,6 +14,28 @@ import addFormats from "ajv-formats";
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+
+/**
+ * Default backend URL for development
+ * Used when no backend is configured anywhere
+ */
+export const DEFAULT_BACKEND_URL = "https://accurate-penguin-901.convex.cloud";
+
+/**
+ * Project-level config (stored in CWD after incept)
+ */
+export interface ProjectConfig {
+  backend: {
+    type: "convex" | "rest" | "local";
+    url: string;
+  };
+  credentials?: {
+    aid: string;
+    privateKey: string;
+    publicKey: string;
+    ksn: number;
+  };
+}
 
 /**
  * Configuration schema (backend-agnostic)
@@ -125,7 +149,7 @@ export function resolveVaultPath(config: Partial<MeritsConfig>): string {
 }
 
 /**
- * Load configuration with 4-layer precedence
+ * Load configuration with 5-layer precedence
  *
  * @param configPath - Path to config file (default: ~/.merits/config.json)
  * @param overrides - CLI flags and env var overrides
@@ -144,10 +168,12 @@ export function loadConfig(
   configPath?: string,
   overrides?: Partial<MeritsConfig>
 ): ResolvedConfig {
+  let usingDefaultBackend = false;
+
   // 1. Start with defaults
   let config: MeritsConfig = { ...DEFAULT_CONFIG };
 
-  // 2. Load from file
+  // 2. Load from global config file
   const filePath = resolveConfigPath(configPath);
   if (fs.existsSync(filePath)) {
     try {
@@ -163,33 +189,42 @@ export function loadConfig(
     }
   }
 
-  // 3. Apply environment variables
+  // 3. Load from project-level .merits file (CWD)
+  const projectConfig = loadProjectConfig();
+  if (projectConfig) {
+    config.backend = projectConfig.backend;
+  }
+
+  // 4. Apply environment variables
   const envConfig = loadEnvConfig();
   config = { ...config, ...envConfig };
 
-  // 4. Apply CLI overrides
+  // 5. Apply CLI overrides
   if (overrides) {
     config = { ...config, ...filterUndefined(overrides) };
+  }
+
+  // 6. Fall back to default backend if still not set
+  if (!config.backend) {
+    config.backend = {
+      type: "convex",
+      url: DEFAULT_BACKEND_URL,
+    };
+    usingDefaultBackend = true;
   }
 
   // Validate final config
   validateConfig(config);
 
-  // Ensure required fields are present
-  if (!config.backend) {
-    const error = new ConfigError(
-      "backend is required (set via --backend-url + --backend-type, CONVEX_URL env var, or config file)",
-      "MISSING_REQUIRED"
+  // Show warning if using default backend
+  if (usingDefaultBackend && !process.env.MERITS_VAULT_QUIET) {
+    console.warn(
+      `⚠️  Using default development backend: ${DEFAULT_BACKEND_URL}`
     );
-    throw error;
-  }
-
-  if (!config.backend.url) {
-    const error = new ConfigError(
-      "backend.url is required (set via --backend-url, CONVEX_URL env var, or config file)",
-      "MISSING_REQUIRED"
+    console.warn(
+      `   Set CONVEX_URL, use --convex-url, or run 'merits incept' to configure`
     );
-    throw error;
+    console.warn("");
   }
 
   return config as ResolvedConfig;
@@ -361,4 +396,41 @@ function filterUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
     }
   }
   return result;
+}
+
+/**
+ * Load project-level config from .merits in CWD
+ */
+function loadProjectConfig(): ProjectConfig | null {
+  const projectConfigPath = path.join(process.cwd(), ".merits");
+  if (!fs.existsSync(projectConfigPath)) {
+    return null;
+  }
+
+  try {
+    const json = fs.readFileSync(projectConfigPath, "utf-8");
+    return JSON.parse(json);
+  } catch (err) {
+    // Silently ignore errors - project config is optional
+    return null;
+  }
+}
+
+/**
+ * Save project-level config to .merits in CWD
+ */
+export function saveProjectConfig(config: ProjectConfig): void {
+  const projectConfigPath = path.join(process.cwd(), ".merits");
+
+  // Write with secure permissions
+  const json = JSON.stringify(config, null, 2);
+  fs.writeFileSync(projectConfigPath, json, { mode: 0o600 });
+}
+
+/**
+ * Load credentials from project-level .merits file
+ */
+export function loadProjectCredentials(): ProjectConfig["credentials"] | null {
+  const projectConfig = loadProjectConfig();
+  return projectConfig?.credentials || null;
 }

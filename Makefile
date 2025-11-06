@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build-cli clean clear-db set-env get-env summarise summarise-convex
+.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build build-cli clean clear-db set-env get-env summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -59,8 +59,11 @@ cli:
 	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && bun run cli
 
 # Build CLI binary
-build-cli:
+build:
 	@cd cli && $(MAKE) build
+
+# Alias for build
+build-cli: build
 
 # Clean up generated files
 clean:
