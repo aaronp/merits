@@ -42,3 +42,4 @@ merits
 
 # dev/test admin seed (contains private key seed)
 .admin-seed
+.meritsrc

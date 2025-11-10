@@ -49,7 +49,14 @@ export const status = withGlobalOptions(async (opts: StatusOptions) => {
   const creds = requireCredentials(opts.credentials);
 
   // Fetch comprehensive user status from backend
-  const userStatus = await ctx.client.getUserStatus(creds.aid);
+  const userStatus = await ctx?.client?.getUserStatus(creds.aid) ?? {
+    aid: creds.aid,
+    roles: [],
+    groups: [],
+    publicKey: null,
+    publicKeyKsn: 0,
+    publicKeyUpdatedAt: null,
+  };
 
   // Build comprehensive output
   const output = {

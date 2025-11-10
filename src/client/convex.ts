@@ -28,12 +28,15 @@ class ConvexIdentityRegistry implements IdentityRegistry {
     publicKey: Uint8Array;
     ksn: number;
   }): Promise<void> {
-    // In our testing setup, AID === public key with 'D' prefix
-    // So we just use the AID directly (it's already in CESR format)
+    // Convert public key to CESR format
+    // AID and public key are separate - AID is an identifier, public key is for verification
+    const publicKeyBase64url = this.uint8ArrayToBase64Url(req.publicKey);
+    const publicKeyCESR = `D${publicKeyBase64url}`;
+
     await this.convex.mutation(api.auth.registerKeyState, {
       aid: req.aid,
       ksn: req.ksn,
-      keys: [req.aid], // AID is the public key in CESR format
+      keys: [publicKeyCESR], // Use the actual public key, not the AID
       threshold: "1",
       lastEvtSaid: "", // Empty for initial registration
     });
@@ -69,8 +72,8 @@ class ConvexIdentityRegistry implements IdentityRegistry {
       throw new Error(`Identity not found: ${aid}`);
     }
 
-    // In our testing setup, AID === public key with 'D' prefix
-    // The key is stored as the AID itself
+    // Extract the public key from the key state
+    // Keys are stored in CESR format (e.g., "D<base64url>")
     const publicKeyCESR = keyState.keys[0];
     if (!publicKeyCESR || !publicKeyCESR.startsWith("D")) {
       throw new Error(`Invalid public key format for ${aid}`);
