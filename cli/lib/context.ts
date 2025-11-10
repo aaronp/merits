@@ -5,15 +5,18 @@
  * Provides access to config and client.
  */
 
-import type { MeritsClient } from "../../src/client";
+import type { MeritsClient } from "../../src/client/types";
 import type { ResolvedConfig } from "./config";
 
 /**
  * CLI context passed to all commands
+ *
+ * Note: client may be null for commands that don't require authentication
+ * (e.g., incept, gen-key). Commands that need the client should check for null.
  */
 export interface CLIContext {
   config: ResolvedConfig;
-  client: MeritsClient;
+  client: MeritsClient | null;
 }
 
 /**

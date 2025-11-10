@@ -5,51 +5,113 @@
  * The CLI uses this factory to get a client based on configuration.
  */
 
-import type { MeritsClient } from "./types";
+import type { MeritsClient as MeritsClientInterface, Signer } from "./types";
 import { ConvexMeritsClient } from "./convex";
 import type { ResolvedConfig } from "../../cli/lib/config";
+import type { Credentials } from "../../cli/lib/credentials";
+import { Ed25519Signer } from "../../core/Ed25519Signer";
 
 /**
- * Create a Merits client based on backend configuration
+ * Create MeritsClient with signer
  *
- * @param config - Resolved configuration with backend settings
- * @returns Backend-specific MeritsClient implementation
+ * Main factory method for creating authenticated clients.
+ * Stores the signer and private key internally so individual operations
+ * don't need credentials.
+ *
+ * @param aid - User's AID
+ * @param signer - Signer for authentication and message signing
+ * @param privateKeyBytes - Private key bytes for encryption operations (X25519 ECDH)
+ * @param config - Optional backend configuration (uses defaults if omitted)
+ * @returns MeritsClient instance with stored authentication context
  *
  * @example
  * ```typescript
- * const config = loadConfig();
- * const client = createMeritsClient(config);
+ * const privateKey = new Uint8Array(32); // Your Ed25519 private key
+ * const publicKey = new Uint8Array(32);  // Your Ed25519 public key
+ * const signer = new Ed25519Signer(privateKey, publicKey);
+ * const client = MeritsClient.getOrCreate(aid, signer, privateKey, config);
  *
- * // Use backend-agnostic interface
- * await client.identityRegistry.registerIdentity({...});
- * await client.transport.sendMessage({...});
+ * // Operations use stored signer and keys automatically
+ * await client.sendMessage(recipientAid, "Hello!");
+ * await client.sendGroupMessage(groupId, "Hello team!");
  * ```
  */
-export function createMeritsClient(config: ResolvedConfig): MeritsClient {
-  switch (config.backend.type) {
+export function getOrCreate(
+  aid: string,
+  signer: Signer,
+  privateKeyBytes: Uint8Array,
+  config?: Partial<ResolvedConfig>
+): MeritsClientInterface {
+  // Use provided config or defaults
+  const backendType = config?.backend?.type ?? "convex";
+  const backendUrl = config?.backend?.url ?? process.env.CONVEX_URL;
+
+  if (!backendUrl) {
+    throw new Error(
+      "Backend URL is required. Set CONVEX_URL environment variable or pass config with backend.url"
+    );
+  }
+
+  const ksn = 0; // Default to initial key
+
+  switch (backendType) {
     case "convex":
-      return new ConvexMeritsClient(config.backend.url);
+      return new ConvexMeritsClient(backendUrl, aid, signer, privateKeyBytes, ksn);
 
     case "rest":
-      // Future: implement REST client
       throw new Error(
         "REST backend not yet implemented. " +
         "Please use Convex backend or contribute a REST implementation!"
       );
 
     case "local":
-      // Future: implement local dev backend
       throw new Error(
         "Local backend not yet implemented. " +
         "Please use Convex backend or contribute a local implementation!"
       );
 
     default:
-      // TypeScript should ensure this is unreachable
-      const exhaustiveCheck: never = config.backend.type;
+      const exhaustiveCheck: never = backendType;
       throw new Error(`Unknown backend type: ${exhaustiveCheck}`);
   }
 }
 
+/**
+ * Convenience factory from CLI credentials
+ *
+ * Creates a client from credentials loaded via loadCredentials().
+ * Automatically creates the signer from private/public key pair.
+ *
+ * @param credentials - Credentials from loadCredentials()
+ * @param config - Optional backend configuration
+ * @returns MeritsClient instance
+ *
+ * @example
+ * ```typescript
+ * const creds = loadCredentials();
+ * const client = MeritsClient.fromCredentials(creds, config);
+ * ```
+ */
+export function fromCredentials(
+  credentials: Credentials,
+  config?: Partial<ResolvedConfig>
+): MeritsClientInterface {
+  // Decode private and public keys from base64url
+  const privateKeyBytes = Buffer.from(credentials.privateKey, "base64url");
+  const publicKeyBytes = Buffer.from(credentials.publicKey, "base64url");
+
+  // Create signer
+  const signer = new Ed25519Signer(privateKeyBytes, publicKeyBytes);
+
+  // Create client with signer and private key bytes (for encryption)
+  return getOrCreate(credentials.aid, signer, privateKeyBytes, config);
+}
+
+// Create a namespace-like object for the API
+export const MeritsClient = {
+  getOrCreate,
+  fromCredentials,
+};
+
 // Re-export types for convenience
-export type { MeritsClient, IdentityRegistry, AuthCredentials } from "./types";
+export type { IdentityRegistry, Signer } from "./types";

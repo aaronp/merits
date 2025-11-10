@@ -12,8 +12,8 @@ import { ConvexGroupApi } from "../adapters/ConvexGroupApi";
 import { AdminApi } from "./admin";
 import { GroupApi } from "./group-api";
 import { createMessageRouter } from "../../core/runtime/router";
-import { computeArgsHash, signPayload, sha256Hex } from "../../core/crypto";
-import type { MeritsClient, IdentityRegistry, AuthCredentials } from "./types";
+import { computeArgsHash, signPayload, sha256Hex, signPayloadWithSigner } from "../../core/crypto";
+import type { MeritsClient, IdentityRegistry, AuthCredentials, Signer } from "./types";
 import type { AuthProof } from "../../core/types";
 import type { Credentials } from "../../cli/lib/credentials";
 
@@ -113,14 +113,28 @@ class ConvexIdentityRegistry implements IdentityRegistry {
  */
 export class ConvexMeritsClient implements MeritsClient {
   private convex: ConvexClient;
+  private privateKeyBytes: Uint8Array; // Stored for encryption operations (X25519 ECDH)
+  public readonly aid: string;
+  public readonly signer: Signer;
+  public readonly ksn: number;
   public identityAuth: ConvexIdentityAuth;
   public transport: ConvexTransport;
   public group: ConvexGroupApi;
   public identityRegistry: IdentityRegistry;
   public router: ReturnType<typeof createMessageRouter>;
 
-  constructor(convexUrl: string) {
+  constructor(
+    convexUrl: string,
+    aid: string,
+    signer: Signer,
+    privateKeyBytes: Uint8Array,
+    ksn: number = 0
+  ) {
     this.convex = new ConvexClient(convexUrl);
+    this.aid = aid;
+    this.signer = signer;
+    this.privateKeyBytes = privateKeyBytes;
+    this.ksn = ksn;
     this.identityAuth = new ConvexIdentityAuth(this.convex);
     this.transport = new ConvexTransport(this.convex);
     this.group = new ConvexGroupApi(this.convex);
@@ -191,6 +205,39 @@ export class ConvexMeritsClient implements MeritsClient {
     };
   }
 
+  /**
+   * Create authenticated proof using stored signer
+   *
+   * Preferred method over createAuth() as it uses the client's stored signer.
+   * Automatically uses the client's AID and signer without passing credentials.
+   *
+   * @param purpose - Purpose of the authentication (e.g., "sendMessage")
+   * @param args - Arguments to authenticate
+   * @returns Authentication proof
+   */
+  async createAuthWithSigner(
+    purpose: string,
+    args: Record<string, any>
+  ): Promise<AuthProof> {
+    const argsHash = computeArgsHash(args);
+    const challenge = await this.identityAuth.issueChallenge({
+      aid: this.aid,
+      purpose: purpose as any,
+      args,
+    });
+    const sigs = await signPayloadWithSigner(
+      challenge.payloadToSign,
+      this.signer,
+      0
+    );
+
+    return {
+      challengeId: challenge.challengeId,
+      sigs,
+      ksn: this.ksn,
+    };
+  }
+
   computeArgsHash(args: Record<string, any>): string {
     return computeArgsHash(args);
   }
@@ -239,10 +286,10 @@ export class ConvexMeritsClient implements MeritsClient {
    * Send an encrypted message to a recipient
    *
    * High-level API that handles encryption and authentication internally.
+   * Uses the client's stored signer for authentication.
    *
    * @param recipient - Recipient's AID
    * @param plaintext - Message content (will be encrypted)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type and TTL
    * @returns Message ID
    *
@@ -251,7 +298,6 @@ export class ConvexMeritsClient implements MeritsClient {
    * const messageId = await client.sendMessage(
    *   recipientAid,
    *   "Hello, World!",
-   *   senderCredentials,
    *   { typ: "chat.text" }
    * );
    * ```
@@ -259,7 +305,6 @@ export class ConvexMeritsClient implements MeritsClient {
   async sendMessage(
     recipient: string,
     plaintext: string,
-    credentials: Credentials,
     options?: { typ?: string; ttl?: number }
   ): Promise<string> {
     // Import libsodium
@@ -283,7 +328,7 @@ export class ConvexMeritsClient implements MeritsClient {
     const ct = Buffer.from(cipherBytes).toString("base64url");
 
     // Send the encrypted message
-    return this.sendRawMessage(recipient, ct, credentials, {
+    return this.sendRawMessage(recipient, ct, {
       ...options,
       alg: "x25519-xsalsa20poly1305",
     });
@@ -293,11 +338,10 @@ export class ConvexMeritsClient implements MeritsClient {
    * Send a pre-encrypted (raw) message to a recipient
    *
    * Lower-level API for sending already-encrypted ciphertext.
-   * Use this when you've encrypted the message yourself or need custom encryption.
+   * Uses the client's stored signer for authentication.
    *
    * @param recipient - Recipient's AID
    * @param ciphertext - Already-encrypted message (base64url)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type, algorithm, and TTL
    * @returns Message ID
    *
@@ -306,7 +350,6 @@ export class ConvexMeritsClient implements MeritsClient {
    * const messageId = await client.sendRawMessage(
    *   recipientAid,
    *   encryptedData,
-   *   senderCredentials,
    *   { typ: "chat.text", alg: "x25519-xsalsa20poly1305" }
    * );
    * ```
@@ -314,11 +357,9 @@ export class ConvexMeritsClient implements MeritsClient {
   async sendRawMessage(
     recipient: string,
     ciphertext: string,
-    credentials: Credentials,
     options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
   ): Promise<string> {
-    const { signMutationArgs } = await import("../../core/signatures");
-    const { base64UrlToUint8Array } = await import("../../core/crypto");
+    const { signMutationArgsWithSigner } = await import("../../core/signatures");
 
     // Build mutation args
     const ttl = options?.ttl ?? 24 * 60 * 60 * 1000; // Default 24 hours
@@ -331,9 +372,8 @@ export class ConvexMeritsClient implements MeritsClient {
       ek: options?.ek ?? "",
     };
 
-    // Sign the request
-    const privateKeyBytes = base64UrlToUint8Array(credentials.privateKey);
-    const sig = await signMutationArgs(sendArgs, privateKeyBytes, credentials.aid);
+    // Sign the request using stored signer
+    const sig = await signMutationArgsWithSigner(sendArgs, this.signer, this.aid);
 
     // Send with signed request
     const messageId = await this.convex.mutation(api.messages.send, {
@@ -361,11 +401,10 @@ export class ConvexMeritsClient implements MeritsClient {
    *
    * High-level API that handles group encryption, authentication, and sending.
    * Implements zero-knowledge encryption where the backend cannot decrypt messages.
-   * Uses signed request authentication (not challenge-response).
+   * Uses the client's stored signer for authentication.
    *
    * @param groupId - ID of the group to send to
    * @param plaintext - Message content (will be encrypted)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type
    * @returns Result with messageId and seqNo
    *
@@ -374,7 +413,6 @@ export class ConvexMeritsClient implements MeritsClient {
    * const result = await client.sendGroupMessage(
    *   groupId,
    *   "Hello team!",
-   *   senderCredentials,
    *   { typ: "chat.text" }
    * );
    * console.log(result.messageId);
@@ -383,16 +421,15 @@ export class ConvexMeritsClient implements MeritsClient {
   async sendGroupMessage(
     groupId: string,
     plaintext: string,
-    credentials: Credentials,
     options?: { typ?: string }
   ): Promise<{ messageId: string; seqNo: number; sentAt: number }> {
     const { encryptForGroup } = await import("../../cli/lib/crypto-group");
-    const { base64UrlToUint8Array } = await import("../../core/crypto");
+    const { signMutationArgsWithSigner } = await import("../../core/signatures");
 
     // Step 1: Fetch group members with their public keys
     const membersResponse = await this.convex.query(api.groups.getMembers, {
       groupChatId: groupId as any,
-      callerAid: credentials.aid,
+      callerAid: this.aid,
     });
 
     if (!membersResponse || !membersResponse.members || membersResponse.members.length === 0) {
@@ -408,30 +445,24 @@ export class ConvexMeritsClient implements MeritsClient {
       members[member.aid] = member.publicKey;
     }
 
-    // Step 3: Get sender's private key from credentials
-    const senderPrivateKey = base64UrlToUint8Array(credentials.privateKey);
-
-    // Step 4: Encrypt message for all group members using group encryption
+    // Step 3: Encrypt message for all group members using group encryption
     const groupMessage = await encryptForGroup(
       plaintext,
       members,
-      senderPrivateKey,
+      this.privateKeyBytes,
       groupId,
-      credentials.aid
+      this.aid
     );
 
-    // Step 5: Sign the request using signed request authentication
-    const { signMutationArgs } = await import("../../core/signatures");
-    const privateKeyBytes = base64UrlToUint8Array(credentials.privateKey);
-
+    // Step 4: Sign the request using stored signer
     const sendArgs = {
       groupChatId: groupId,
       groupMessage,
     };
 
-    const sig = await signMutationArgs(sendArgs, privateKeyBytes, credentials.aid);
+    const sig = await signMutationArgsWithSigner(sendArgs, this.signer, this.aid);
 
-    // Step 6: Send encrypted GroupMessage to backend with signed request
+    // Step 5: Send encrypted GroupMessage to backend with signed request
     const result = await this.convex.mutation(api.groups.sendGroupMessage, {
       ...sendArgs,
       groupChatId: groupId as any,

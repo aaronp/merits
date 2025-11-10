@@ -16,7 +16,8 @@
 
 import { Command } from "commander";
 import { loadConfig } from "./lib/config";
-import { createMeritsClient } from "../src/client";
+import { fromCredentials as createMeritsClientFromCredentials } from "../src/client/index";
+import { loadCredentials } from "./lib/credentials";
 import type { CLIContext } from "./lib/context";
 
 // Import commands (new CLI spec from cli.md)
@@ -115,7 +116,7 @@ Documentation:
     // Merge program opts with command opts (command takes precedence)
     const mergedOpts = { ...opts, ...cmdOpts };
 
-    // Load config with 4-layer precedence
+    // Load config with 5-layer precedence
     const config = loadConfig(mergedOpts.config, {
       dataDir: mergedOpts.dataDir,
       backend: mergedOpts.convexUrl ? { type: "convex", url: mergedOpts.convexUrl } : undefined,
@@ -124,8 +125,13 @@ Documentation:
       color: mergedOpts.color,
     });
 
-    // Create Merits client (backend-agnostic)
-    const client = createMeritsClient(config);
+    // Try to load credentials (may not exist for incept, gen-key, etc.)
+    const credentials = loadCredentials();
+
+    // Create Merits client with credentials if available
+    const client = credentials
+      ? createMeritsClientFromCredentials(credentials, config)
+      : null; // Commands without credentials will need to handle this
 
     // Inject context into command options
     const ctx: CLIContext = { config, client };
@@ -166,7 +172,7 @@ Documentation:
     const opts = actionCommand.opts();
     const ctx = opts._ctx as CLIContext | undefined;
 
-    if (ctx) {
+    if (ctx && ctx.client) {
       // Close client connection
       ctx.client.close();
     }

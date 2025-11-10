@@ -355,11 +355,9 @@ export function mockDecrypt(ciphertext: string): string {
 /**
  * LEGACY: Unified Merits Client (backward compatibility)
  *
- * @deprecated Use the new backend-agnostic client from ./client/index.ts
- *
  * This legacy interface is kept for backward compatibility with existing code.
- * New code should use createMeritsClient from ./client/index.ts which supports
- * multiple backends (Convex, REST, local).
+ * New code should use MeritsClient from ./client/index.ts which supports
+ * multiple backends (Convex, REST, local) and the Signer abstraction.
  */
 export interface LegacyMeritsClient {
   /** Identity authentication (challenge/response) */
@@ -394,20 +392,20 @@ export interface LegacyMeritsClient {
 /**
  * LEGACY: Create a unified Merits client (Convex only)
  *
- * @deprecated Use the new backend-agnostic createMeritsClient from ./client/index.ts
+ * Kept for backward compatibility with existing code.
  *
  * @param convexUrl - Convex deployment URL
  * @returns LegacyMeritsClient for backward compatibility
  *
  * @example
  * ```typescript
- * // OLD (deprecated):
- * const client = createMeritsClient(process.env.CONVEX_URL);
+ * // Legacy approach:
+ * const client = createLegacyMeritsClient(process.env.CONVEX_URL);
  *
- * // NEW (recommended):
- * import { createMeritsClient } from "./client";
- * const config = loadConfig();
- * const client = createMeritsClient(config);
+ * // New approach with Signer abstraction:
+ * import { MeritsClient } from "./client";
+ * const signer = new Ed25519Signer(privateKey, publicKey);
+ * const client = MeritsClient.getOrCreate(aid, signer, config);
  * ```
  */
 export function createLegacyMeritsClient(convexUrl: string): LegacyMeritsClient {
@@ -463,6 +461,6 @@ export function createLegacyMeritsClient(convexUrl: string): LegacyMeritsClient 
   };
 }
 
-// Re-export new client for convenience
-export { createMeritsClient } from "./client/index";
-export type { MeritsClient } from "./client/types";
+// Re-export new client namespace for convenience
+export { MeritsClient } from "./client/index";
+export type { MeritsClient as MeritsClientInterface } from "./client/types";

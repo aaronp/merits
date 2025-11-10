@@ -24,6 +24,7 @@ import {
   base64UrlToUint8Array,
 } from "./crypto";
 import type { SignedRequest } from "./types";
+import type { Signer } from "../client/types";
 
 /**
  * Canonicalize mutation arguments for signing
@@ -216,6 +217,69 @@ export async function verifyMutationSignature(
   } catch (error) {
     throw new Error(`Signature verification failed: ${error}`);
   }
+}
+
+/**
+ * Sign mutation arguments using Signer interface
+ *
+ * Similar to signMutationArgs but uses the Signer abstraction instead of raw private keys.
+ * This is the preferred method as it keeps private keys encapsulated.
+ *
+ * @param args - Mutation arguments to sign
+ * @param signer - Signer instance for signing
+ * @param keyId - AID of the signer
+ * @param nonce - Optional nonce (generates UUID if not provided)
+ * @param timestamp - Optional timestamp (uses Date.now() if not provided)
+ * @returns SignedRequest with signature and metadata
+ *
+ * @example
+ * ```typescript
+ * const signer = new Ed25519Signer(privateKey, publicKey);
+ * const sig = await signMutationArgsWithSigner(
+ *   { recpAid: "D123...", ct: "encrypted" },
+ *   signer,
+ *   "Dabc123..."
+ * );
+ * ```
+ */
+export async function signMutationArgsWithSigner(
+  args: Record<string, any>,
+  signer: Signer,
+  keyId: string,
+  nonce?: string,
+  timestamp?: number
+): Promise<SignedRequest> {
+  // Generate metadata
+  const ts = timestamp ?? Date.now();
+  const n = nonce ?? crypto.randomUUID();
+
+  // Get list of fields being signed (all except 'sig')
+  const signedFields = Object.keys(args).filter((k) => k !== "sig").sort();
+
+  // Canonicalize arguments (exclude 'sig' field)
+  const canonicalArgs = canonicalizeMutationArgs(args, ["sig"]);
+
+  // Build payload
+  const payload = buildSignaturePayload(canonicalArgs, ts, n, keyId);
+
+  // Sign using Signer
+  const encoder = new TextEncoder();
+  const payloadBytes = encoder.encode(payload);
+  const signatureCESR = await signer.sign(payloadBytes);
+
+  // Extract signature from CESR format (remove "0B" prefix)
+  // CESR format: "0B" + base64url signature
+  const signature = signatureCESR.startsWith("0B")
+    ? signatureCESR.substring(2)
+    : signatureCESR;
+
+  return {
+    signature,
+    timestamp: ts,
+    nonce: n,
+    keyId,
+    signedFields,
+  };
 }
 
 /**

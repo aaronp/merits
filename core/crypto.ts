@@ -90,6 +90,46 @@ export async function signPayload(
   return [indexedSig];
 }
 
+/**
+ * Sign a payload object using Signer interface
+ *
+ * Same as signPayload but uses the Signer abstraction to keep private keys encapsulated.
+ * This is the preferred method for new code.
+ *
+ * @param payload The payload object to sign
+ * @param signer The Signer instance to sign with
+ * @param keyIndex The index of the key (for indexed signatures)
+ * @returns Array of indexed signatures (format: "idx-signature_base64url")
+ *
+ * @example
+ * ```typescript
+ * const signer = new Ed25519Signer(privateKey, publicKey);
+ * const sigs = await signPayloadWithSigner(challenge.payload, signer, 0);
+ * ```
+ */
+export async function signPayloadWithSigner(
+  payload: Record<string, any>,
+  signer: any, // Signer interface (avoid circular dependency)
+  keyIndex: number
+): Promise<string[]> {
+  // Canonicalize payload (sort keys deterministically)
+  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  const data = new TextEncoder().encode(canonical);
+
+  // Sign using Signer - returns CESR format with "0B" prefix
+  const signatureCESR = await signer.sign(data);
+
+  // Extract raw signature from CESR (remove "0B" prefix)
+  const signatureB64 = signatureCESR.startsWith("0B")
+    ? signatureCESR.substring(2)
+    : signatureCESR;
+
+  // Create indexed signature
+  const indexedSig = `${keyIndex}-${signatureB64}`;
+
+  return [indexedSig];
+}
+
 // ============================================================================
 // CESR Encoding (KERI)
 // ============================================================================

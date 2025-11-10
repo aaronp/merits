@@ -31,10 +31,12 @@
  */
 
 import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { generateKeyPair, createAID, signPayload, sha256 } from "../../core/crypto";
+import { generateKeyPair, createAID, signPayload, sha256, signPayloadWithSigner } from "../../core/crypto";
 import * as ed from "@noble/ed25519";
 import type { CLIContext } from "../lib/context";
 import { saveProjectConfig } from "../lib/config";
+import { getOrCreate as createMeritsClient } from "../../src/client/index";
+import { Ed25519Signer } from "../../core/Ed25519Signer";
 
 export interface InceptOptions extends GlobalOptions {
   seed?: string; // Deterministic seed for testing
@@ -70,11 +72,16 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const publicKeyB64 = Buffer.from(keys.publicKey).toString("base64url");
   const privateKeyB64 = Buffer.from(keys.privateKey).toString("base64url");
 
-  // Step 2: Register identity and get challenge
+  // Step 2: Create a temporary client with the new signer for registration
+  // (incept doesn't have credentials yet, so ctx.client will be null)
+  const signer = new Ed25519Signer(keys.privateKey, keys.publicKey);
+  const tempClient = createMeritsClient(aid, signer, keys.privateKey, ctx.config);
+
+  // Step 3: Register identity and get challenge
   const publicKeyBytes = Buffer.from(publicKeyB64, "base64url");
 
   // Register key state first
-  await ctx.client.identityRegistry.registerIdentity({
+  await tempClient.identityRegistry.registerIdentity({
     aid,
     publicKey: publicKeyBytes,
     ksn: 0,
@@ -82,20 +89,20 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
 
   // Issue challenge for user registration
   const args = { aid, publicKey: publicKeyB64 };
-  const challenge = await ctx.client.identityAuth.issueChallenge({
+  const challenge = await tempClient.identityAuth.issueChallenge({
     aid,
     purpose: "registerUser" as any,
     args,
     ttlMs: 120000, // 2 minutes
   });
 
-  // Step 3: Sign the challenge
-  const sigs = await signPayload(challenge.payloadToSign, keys.privateKey, 0);
+  // Step 4: Sign the challenge using signer
+  const sigs = await signPayloadWithSigner(challenge.payloadToSign, signer, 0);
 
-  // Step 4: Register user and obtain session token
+  // Step 5: Register user and obtain session token
   let sessionResult;
   try {
-    sessionResult = await ctx.client.registerUser({
+    sessionResult = await tempClient.registerUser({
       aid,
       publicKey: publicKeyB64,
       challengeId: challenge.challengeId,
@@ -111,6 +118,9 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
     } else {
       throw err;
     }
+  } finally {
+    // Clean up temporary client
+    tempClient.close();
   }
 
   // Build output

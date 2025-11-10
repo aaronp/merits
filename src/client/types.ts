@@ -11,7 +11,24 @@ import type { MessageRouter } from "../../core/runtime/router";
 import type { AuthProof } from "../../core/types";
 
 /**
+ * Signer interface - Abstracts signing operations
+ *
+ * Encapsulates private key operations without exposing key material.
+ * Implementations can use libsodium, WebCrypto, hardware keys, etc.
+ */
+export interface Signer {
+  /** Sign data and return CESR-encoded signature */
+  sign(data: Uint8Array): Promise<string>;
+
+  /** Get current public key (verifier) in CESR format */
+  verifier(): string;
+}
+
+/**
  * Authentication credentials for operations
+ *
+ * Legacy interface for backward compatibility with existing code.
+ * New code should use Signer interface instead.
  */
 export interface AuthCredentials {
   aid: string;
@@ -96,8 +113,20 @@ export interface UserStatus {
  *
  * Provides backend-agnostic access to all Merits operations.
  * The CLI uses only this interface, never touching backend-specific APIs.
+ *
+ * The client stores authentication context (AID + Signer) so individual
+ * operations don't need to pass credentials repeatedly.
  */
 export interface MeritsClient {
+  /** Authenticated user's AID */
+  readonly aid: string;
+
+  /** Signer for authentication and message signing */
+  readonly signer: Signer;
+
+  /** Current key sequence number */
+  readonly ksn: number;
+
   /** Identity authentication (challenge/response) */
   identityAuth: IdentityAuth;
 
@@ -153,17 +182,16 @@ export interface MeritsClient {
    *
    * High-level API that handles encryption and authentication internally.
    * Encrypts the plaintext message with the recipient's public key.
+   * Uses the client's stored signer for authentication.
    *
    * @param recipient - Recipient's AID
    * @param plaintext - Message content (will be encrypted)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type and TTL
    * @returns Message ID
    */
   sendMessage(
     recipient: string,
     plaintext: string,
-    credentials: any,
     options?: { typ?: string; ttl?: number }
   ): Promise<string>;
 
@@ -171,18 +199,16 @@ export interface MeritsClient {
    * Send a pre-encrypted (raw) message to a recipient
    *
    * Lower-level API for sending already-encrypted ciphertext.
-   * Use this when you've encrypted the message yourself or need custom encryption.
+   * Uses the client's stored signer for authentication.
    *
    * @param recipient - Recipient's AID
    * @param ciphertext - Already-encrypted message (base64url)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type, algorithm, and TTL
    * @returns Message ID
    */
   sendRawMessage(
     recipient: string,
     ciphertext: string,
-    credentials: any,
     options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
   ): Promise<string>;
 
@@ -192,17 +218,16 @@ export interface MeritsClient {
    * High-level API that handles group encryption, authentication, and sending.
    * Implements zero-knowledge encryption where the backend cannot decrypt messages.
    * Uses ephemeral AES-256-GCM keys with per-member key distribution via X25519 ECDH.
+   * Uses the client's stored signer for authentication.
    *
    * @param groupId - ID of the group to send to
    * @param plaintext - Message content (will be encrypted)
-   * @param credentials - Sender's credentials
    * @param options - Optional message type
    * @returns Result with messageId, seqNo, and sentAt timestamp
    */
   sendGroupMessage(
     groupId: string,
     plaintext: string,
-    credentials: any,
     options?: { typ?: string }
   ): Promise<{ messageId: string; seqNo: number; sentAt: number }>;
 

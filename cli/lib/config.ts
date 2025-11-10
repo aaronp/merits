@@ -1,9 +1,9 @@
 /**
  * Configuration Management
  *
- * 5-layer precedence: CLI flags > env vars > .merits (cwd) > config file > defaults
+ * 5-layer precedence: CLI flags > env vars > .meritsrc (cwd) > config file > defaults
  * Config locations:
- *   - ./.merits (project-level, created by incept)
+ *   - ./.meritsrc (project-level, created by incept)
  *   - ~/.merits/config.json (global)
  * Secure permissions: 0600
  * Schema validation with Ajv
@@ -399,10 +399,10 @@ function filterUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
 }
 
 /**
- * Load project-level config from .merits in CWD
+ * Load project-level config from .meritsrc in CWD
  */
 function loadProjectConfig(): ProjectConfig | null {
-  const projectConfigPath = path.join(process.cwd(), ".merits");
+  const projectConfigPath = path.join(process.cwd(), ".meritsrc");
   if (!fs.existsSync(projectConfigPath)) {
     return null;
   }
@@ -417,10 +417,10 @@ function loadProjectConfig(): ProjectConfig | null {
 }
 
 /**
- * Save project-level config to .merits in CWD
+ * Save project-level config to .meritsrc in CWD
  */
 export function saveProjectConfig(config: ProjectConfig): void {
-  const projectConfigPath = path.join(process.cwd(), ".merits");
+  const projectConfigPath = path.join(process.cwd(), ".meritsrc");
 
   // Write with secure permissions
   const json = JSON.stringify(config, null, 2);
@@ -428,7 +428,7 @@ export function saveProjectConfig(config: ProjectConfig): void {
 }
 
 /**
- * Load credentials from project-level .merits file
+ * Load credentials from project-level .meritsrc file
  */
 export function loadProjectCredentials(): ProjectConfig["credentials"] | null {
   const projectConfig = loadProjectConfig();

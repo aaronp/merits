@@ -8,11 +8,14 @@
  * - Secure file storage with 0600 permissions
  * - Environment variable fallback (MERITS_CREDENTIALS)
  * - Default path: .merits/credentials.json
+ * - Signer abstraction for encapsulating private keys
  */
 
 import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "fs";
 import { join, dirname } from "path";
 import { homedir } from "os";
+import { Ed25519Signer } from "../../core/Ed25519Signer";
+import type { Signer } from "../../src/client/types";
 
 /**
  * Credentials structure for signing requests
@@ -86,7 +89,7 @@ function ensureCredentialsDir(credentialsPath: string): void {
  *
  * Priority:
  * 1. MERITS_CREDENTIALS environment variable (for scripting)
- * 2. .merits file in CWD (project-level config from incept)
+ * 2. .meritsrc file in CWD (project-level config from incept)
  * 3. File at specified path
  * 4. File at default path
  *
@@ -130,8 +133,8 @@ export function loadCredentials(path?: string): Credentials | null {
     }
   }
 
-  // Check .merits file in CWD (project-level config)
-  const projectConfigPath = join(process.cwd(), ".merits");
+  // Check .meritsrc file in CWD (project-level config)
+  const projectConfigPath = join(process.cwd(), ".meritsrc");
   if (!path && existsSync(projectConfigPath)) {
     try {
       const content = readFileSync(projectConfigPath, "utf-8");
@@ -253,4 +256,29 @@ export function requireCredentials(path?: string): Credentials {
   }
 
   return creds;
+}
+
+/**
+ * Create a Signer from credentials
+ *
+ * Converts base64url-encoded credentials into a Signer instance.
+ * The Signer encapsulates private key operations without exposing key material.
+ *
+ * @param credentials - Credentials with base64url-encoded keys
+ * @returns Signer instance for signing operations
+ *
+ * @example
+ * ```typescript
+ * const creds = loadCredentials();
+ * const signer = createSignerFromCredentials(creds);
+ * const signature = await signer.sign(data);
+ * ```
+ */
+export function createSignerFromCredentials(credentials: Credentials): Signer {
+  // Decode private and public keys from base64url
+  const privateKeyBytes = Buffer.from(credentials.privateKey, "base64url");
+  const publicKeyBytes = Buffer.from(credentials.publicKey, "base64url");
+
+  // Create and return Ed25519Signer
+  return new Ed25519Signer(privateKeyBytes, publicKeyBytes);
 }
