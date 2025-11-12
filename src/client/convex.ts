@@ -495,18 +495,21 @@ export class ConvexMeritsClient implements MeritsClient {
       this.aid
     );
 
-    // Step 4: Sign the request using stored signer
+    // Step 4: Prepare arguments for signing and sending
+    // Note: groupChatId must be a string for signing, but will be cast to ID type for Convex
     const sendArgs = {
       groupChatId: groupId,
       groupMessage,
     };
 
+    // Step 5: Sign the request using stored signer (signs the exact args we'll send)
     const sig = await signMutationArgsWithSigner(sendArgs, this.signer, this.aid);
 
-    // Step 5: Send encrypted GroupMessage to backend with signed request
+    // Step 6: Send encrypted GroupMessage to backend with signed request
+    // Cast groupChatId to ID type for Convex validation, but keep structure identical to what was signed
     const result = await this.convex.mutation(api.groups.sendGroupMessage, {
-      ...sendArgs,
       groupChatId: groupId as any,
+      groupMessage,
       sig,
     });
 

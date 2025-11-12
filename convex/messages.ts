@@ -67,7 +67,7 @@ export const send = mutation({
     console.log('[MESSAGES] Sender AID:', senderAid);
     console.log('[MESSAGES] Resolved claims:', JSON.stringify(claims, null, 2));
     console.log('[MESSAGES] Is group?', !!isGroup);
-    
+
     let allowed = false;
 
     if (isGroup) {

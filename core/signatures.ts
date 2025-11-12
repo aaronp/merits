@@ -40,6 +40,26 @@ export function canonicalizeMutationArgs(
   args: Record<string, any>,
   excludeFields: string[] = []
 ): string {
+  // Recursively sort object keys for deterministic canonicalization
+  const canonicalizeValue = (value: any): any => {
+    if (value === null || value === undefined) {
+      return value;
+    }
+    if (Array.isArray(value)) {
+      return value.map(canonicalizeValue);
+    }
+    if (typeof value === 'object') {
+      // Sort object keys and recursively canonicalize values
+      const sortedKeys = Object.keys(value).sort();
+      const sorted: Record<string, any> = {};
+      for (const key of sortedKeys) {
+        sorted[key] = canonicalizeValue(value[key]);
+      }
+      return sorted;
+    }
+    return value;
+  };
+
   // Filter out excluded fields
   const filtered: Record<string, any> = {};
   for (const key of Object.keys(args)) {
@@ -48,11 +68,11 @@ export function canonicalizeMutationArgs(
     }
   }
 
-  // Sort keys and build new object with sorted keys to ensure deterministic order
+  // Sort top-level keys and recursively canonicalize nested objects
   const sortedKeys = Object.keys(filtered).sort();
   const sorted: Record<string, any> = {};
   for (const key of sortedKeys) {
-    sorted[key] = filtered[key];
+    sorted[key] = canonicalizeValue(filtered[key]);
   }
   const canonical = JSON.stringify(sorted);
   return canonical;
