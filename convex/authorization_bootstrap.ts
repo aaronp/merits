@@ -341,6 +341,53 @@ export const bootstrapOnboarding = mutation({
         }
       }
 
+      // Even though system is already bootstrapped, ensure all permissions are properly assigned
+      // This handles cases where bootstrap was run before permission assignments were added
+      console.log("[BOOTSTRAP] System already bootstrapped, ensuring permissions are assigned...");
+      
+      // Ensure user role has permission to message users directly
+      if (userRole) {
+        const messageUsersPermKey = PERMISSIONS.CAN_MESSAGE_USERS;
+        let messageUsersPermission = await ctx.db
+          .query("permissions")
+          .withIndex("by_key", (q: any) => q.eq("key", messageUsersPermKey))
+          .first();
+
+        if (!messageUsersPermission) {
+          const pid = await ctx.db.insert("permissions", {
+            key: messageUsersPermKey,
+            data: undefined, // No restrictions - users with 'user' role can message all users
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/perms",
+            timestamp: now,
+          });
+          messageUsersPermission = await ctx.db.get(pid);
+          console.log("Bootstrap: Created CAN_MESSAGE_USERS permission");
+        }
+
+        // Ensure role->permission mapping exists
+        const existingUserRP = await ctx.db
+          .query("rolePermissions")
+          .withIndex("by_role", (q: any) => q.eq("roleId", userRole!._id))
+          .collect();
+
+        if (messageUsersPermission) {
+          const hasMapping = existingUserRP.some(
+            (rp: any) => rp.permissionId === messageUsersPermission!._id
+          );
+          if (!hasMapping) {
+            await ctx.db.insert("rolePermissions", {
+              roleId: userRole!._id,
+              permissionId: messageUsersPermission!._id,
+              adminAID: "SYSTEM",
+              actionSAID: "bootstrap/map",
+              timestamp: now,
+            });
+            console.log("Bootstrap: Linked user role to CAN_MESSAGE_USERS permission");
+          }
+        }
+      }
+
       return {
         ok: true,
         already: true,
@@ -596,6 +643,49 @@ export const bootstrapOnboarding = mutation({
       });
       userRole = await ctx.db.get(userRoleId);
       console.log("Bootstrap: Created user role");
+    }
+
+    // Ensure user role has permission to message users directly
+    if (userRole) {
+      const messageUsersPermKey = PERMISSIONS.CAN_MESSAGE_USERS;
+      let messageUsersPermission = await ctx.db
+        .query("permissions")
+        .withIndex("by_key", (q: any) => q.eq("key", messageUsersPermKey))
+        .first();
+
+      if (!messageUsersPermission) {
+        const pid = await ctx.db.insert("permissions", {
+          key: messageUsersPermKey,
+          data: undefined, // No restrictions - users with 'user' role can message all users
+          adminAID: "SYSTEM",
+          actionSAID: "bootstrap/perms",
+          timestamp: now,
+        });
+        messageUsersPermission = await ctx.db.get(pid);
+        console.log("Bootstrap: Created CAN_MESSAGE_USERS permission");
+      }
+
+      // Ensure role->permission mapping exists
+      const existingUserRP = await ctx.db
+        .query("rolePermissions")
+        .withIndex("by_role", (q: any) => q.eq("roleId", userRole!._id))
+        .collect();
+
+      if (messageUsersPermission) {
+        const hasMapping = existingUserRP.some(
+          (rp: any) => rp.permissionId === messageUsersPermission!._id
+        );
+        if (!hasMapping) {
+          await ctx.db.insert("rolePermissions", {
+            roleId: userRole!._id,
+            permissionId: messageUsersPermission!._id,
+            adminAID: "SYSTEM",
+            actionSAID: "bootstrap/map",
+            timestamp: now,
+          });
+          console.log("Bootstrap: Linked user role to CAN_MESSAGE_USERS permission");
+        }
+      }
     }
 
     // ============================================================================

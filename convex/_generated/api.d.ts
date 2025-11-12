@@ -8,11 +8,6 @@
  * @module
  */
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
 import type * as _dev_utils from "../_dev_utils.js";
 import type * as accessControl from "../accessControl.js";
 import type * as allowList from "../allowList.js";
@@ -26,8 +21,15 @@ import type * as groups from "../groups.js";
 import type * as messages from "../messages.js";
 import type * as permissions from "../permissions.js";
 import type * as permissions_admin from "../permissions_admin.js";
+import type * as signatureTest from "../signatureTest.js";
 import type * as testHelpers from "../testHelpers.js";
 import type * as userStatus from "../userStatus.js";
+
+import type {
+  ApiFromModules,
+  FilterApi,
+  FunctionReference,
+} from "convex/server";
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -51,14 +53,19 @@ declare const fullApi: ApiFromModules<{
   messages: typeof messages;
   permissions: typeof permissions;
   permissions_admin: typeof permissions_admin;
+  signatureTest: typeof signatureTest;
   testHelpers: typeof testHelpers;
   userStatus: typeof userStatus;
 }>;
+declare const fullApiWithMounts: typeof fullApi;
+
 export declare const api: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "public">
 >;
 export declare const internal: FilterApi<
-  typeof fullApi,
+  typeof fullApiWithMounts,
   FunctionReference<any, "internal">
 >;
+
+export declare const components: {};

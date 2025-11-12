@@ -1,4 +1,4 @@
-.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build build-cli clean clear-db set-env get-env summarise summarise-convex
+.PHONY: test test-unit test-integration test-cli test-e2e test-watch test-coverage install dev cli build build-cli clean clear-db set-env get-env bootstrap summarise summarise-convex
 
 # Run all tests
 test: test-unit test-integration
@@ -125,6 +125,24 @@ get-env:
 		echo "Deployment: $$CONVEX_DEPLOYMENT" && \
 		echo "" && \
 		bunx convex env list
+
+# Run bootstrap to initialize the system (roles, permissions, etc.)
+# Usage: 
+#   make bootstrap                    # Run without assigning admin
+#   make bootstrap adminAid=YOUR_AID  # Run and assign admin role to AID
+bootstrap:
+	@if [ ! -f .env ]; then \
+		echo "Error: .env file not found"; \
+		echo "Please run 'make dev' first to set up your Convex deployment"; \
+		exit 1; \
+	fi
+	@echo "Running bootstrap..."
+	@export $$(grep -v '^#' .env | sed 's/#.*//g' | xargs) && \
+		if [ -n "$(adminAid)" ]; then \
+			bun run scripts/bootstrap.ts "$(adminAid)"; \
+		else \
+			bun run scripts/bootstrap.ts; \
+		fi
 
 # Generate summary of convex files and copy to clipboard
 summarise:

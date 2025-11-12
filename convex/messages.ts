@@ -64,6 +64,10 @@ export const send = mutation({
 
 
     const claims = await resolveUserClaims(ctx, senderAid);
+    console.log('[MESSAGES] Sender AID:', senderAid);
+    console.log('[MESSAGES] Resolved claims:', JSON.stringify(claims, null, 2));
+    console.log('[MESSAGES] Is group?', !!isGroup);
+    
     let allowed = false;
 
     if (isGroup) {
@@ -74,9 +78,10 @@ export const send = mutation({
         if (Array.isArray(data)) return data.includes(args.recpAid);
         return false;
       });
+      console.log('[MESSAGES] CAN_MESSAGE_GROUPS check result:', allowed);
     } else {
       // Check CAN_MESSAGE_USERS permission
-      allowed = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
+      const hasPermission = claimsInclude(claims, PERMISSIONS.CAN_MESSAGE_USERS, (data) => {
         const result = data === undefined || data === null;
         if (result) return true; // global allow
         if (Array.isArray(data)) return data.includes(args.recpAid);
@@ -85,6 +90,12 @@ export const send = mutation({
         }
         return false;
       });
+      allowed = hasPermission;
+      console.log('[MESSAGES] CAN_MESSAGE_USERS check result:', allowed);
+      console.log('[MESSAGES] Permission key:', PERMISSIONS.CAN_MESSAGE_USERS);
+      if (!allowed) {
+        console.log('[MESSAGES] Permission check failed. Claims:', JSON.stringify(claims, null, 2));
+      }
     }
 
 

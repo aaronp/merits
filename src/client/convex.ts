@@ -14,7 +14,7 @@ import { GroupApi } from "./group-api";
 import { createMessageRouter } from "../../core/runtime/router";
 import { computeArgsHash, signPayload, sha256Hex, signPayloadWithSigner } from "../../core/crypto";
 import type { MeritsClient, IdentityRegistry, AuthCredentials, Signer } from "./types";
-import type { AuthProof } from "../../core/types";
+import type { AuthProof, SignedRequest } from "../../core/types";
 import type { Credentials } from "../../cli/lib/credentials";
 
 /**
@@ -27,11 +27,24 @@ class ConvexIdentityRegistry implements IdentityRegistry {
     aid: string;
     publicKey: Uint8Array;
     ksn: number;
+    publicKeyCESR?: string; // Optional: if provided, use this directly instead of re-encoding
   }): Promise<void> {
-    // Convert public key to CESR format
-    // AID and public key are separate - AID is an identifier, public key is for verification
-    const publicKeyBase64url = this.uint8ArrayToBase64Url(req.publicKey);
-    const publicKeyCESR = `D${publicKeyBase64url}`;
+    // Use provided CESR string if available, otherwise convert bytes to CESR format
+    // IMPORTANT: We use encodeCESRKey from merits/core/crypto which creates simple D+base64url
+    // This matches what Convex can decode with simple base64url decode (not codex's proper CESR)
+    let publicKeyCESR: string;
+    if (req.publicKeyCESR) {
+      // If codex CESR is provided, we need to convert it to simple base64url format
+      // that Convex can decode. Extract the raw bytes and re-encode with encodeCESRKey
+      const { decodeKey } = await import('@kv4/codex');
+      const decoded = decodeKey(req.publicKeyCESR);
+      const { encodeCESRKey } = await import('../../core/crypto');
+      publicKeyCESR = encodeCESRKey(decoded.raw);
+    } else {
+      // Convert public key to CESR format using merits encodeCESRKey (simple base64url)
+      const { encodeCESRKey } = await import('../../core/crypto');
+      publicKeyCESR = encodeCESRKey(req.publicKey);
+    }
 
     await this.convex.mutation(api.auth.registerKeyState, {
       aid: req.aid,
@@ -245,6 +258,20 @@ export class ConvexMeritsClient implements MeritsClient {
     return computeArgsHash(args);
   }
 
+  /**
+   * Create a signed request for use with the transport API
+   *
+   * Uses the client's stored signer to create a SignedRequest for mutation args.
+   * This is the proper way to create signatures for transport.sendMessage().
+   *
+   * @param args - Mutation arguments to sign (without 'sig' field)
+   * @returns SignedRequest with signature and metadata
+   */
+  async createSignedRequest(args: Record<string, any>): Promise<SignedRequest> {
+    const { signMutationArgsWithSigner } = await import("../../core/signatures");
+    return await signMutationArgsWithSigner(args, this.signer, this.aid);
+  }
+
   computeCtHash(ct: string): string {
     const encoder = new TextEncoder();
     const data = encoder.encode(ct);
@@ -362,29 +389,40 @@ export class ConvexMeritsClient implements MeritsClient {
     ciphertext: string,
     options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
   ): Promise<string> {
-    const { signMutationArgsWithSigner } = await import("../../core/signatures");
-
-    // Build mutation args
+    // Build the exact args that will be sent to the mutation (matching ConvexTransport.sendMessage exactly)
+    // ConvexTransport passes all fields directly, including undefined ones (which JSON.stringify will omit)
     const ttl = options?.ttl ?? 24 * 60 * 60 * 1000; // Default 24 hours
-    const sendArgs = {
+    const mutationArgs: Record<string, any> = {
       recpAid: recipient,
       ct: ciphertext,
-      typ: options?.typ,
+      typ: options?.typ,  // May be undefined, but ConvexTransport passes it directly
+      ek: options?.ek,    // May be undefined, but ConvexTransport passes it directly
+      alg: options?.alg ?? "",  // Default empty string if not provided
       ttl,
-      alg: options?.alg ?? "",
-      ek: options?.ek ?? "",
     };
 
-    // Sign the request using stored signer
-    const sig = await signMutationArgsWithSigner(sendArgs, this.signer, this.aid);
+    // Use client API to create signed request (uses stored signer)
+    const sig = await this.createSignedRequest(mutationArgs);
 
-    // Send with signed request
-    const messageId = await this.convex.mutation(api.messages.send, {
-      ...sendArgs,
+    // DEBUG: Log what's being sent
+    if (process.env.DEBUG_SIGNATURES === 'true') {
+      console.log('[SEND] Using transport API to send message');
+      console.log('[SEND] Mutation args (without sig):', JSON.stringify({ ...mutationArgs }, null, 2));
+      console.log('[SEND] Sig being sent:', JSON.stringify(sig, null, 2));
+    }
+
+    // Use transport API - it will convert the request to mutation args and add the sig
+    const result = await this.transport.sendMessage({
+      to: recipient,
+      ct: ciphertext,
+      typ: options?.typ,
+      ek: options?.ek,
+      alg: options?.alg,
+      ttlMs: ttl,
       sig,
     });
 
-    return messageId;
+    return result.messageId;
   }
 
   async getGroupIdByTag(tag: string): Promise<{

@@ -48,9 +48,13 @@ export function canonicalizeMutationArgs(
     }
   }
 
-  // Sort keys and stringify
+  // Sort keys and build new object with sorted keys to ensure deterministic order
   const sortedKeys = Object.keys(filtered).sort();
-  const canonical = JSON.stringify(filtered, sortedKeys);
+  const sorted: Record<string, any> = {};
+  for (const key of sortedKeys) {
+    sorted[key] = filtered[key];
+  }
+  const canonical = JSON.stringify(sorted);
   return canonical;
 }
 
@@ -191,8 +195,8 @@ export async function verifyMutationSignature(
   if (skew > maxSkewMs) {
     throw new Error(
       `Timestamp skew too large: ${skew}ms (max ${maxSkewMs}ms). ` +
-        `Request time: ${new Date(sig.timestamp).toISOString()}, ` +
-        `Server time: ${new Date(now).toISOString()}`
+      `Request time: ${new Date(sig.timestamp).toISOString()}, ` +
+      `Server time: ${new Date(now).toISOString()}`
     );
   }
 
@@ -210,11 +214,49 @@ export async function verifyMutationSignature(
   // Verify signature
   const encoder = new TextEncoder();
   const payloadBytes = encoder.encode(payload);
+
+  // Verify signature
   const signatureBytes = base64UrlToUint8Array(sig.signature);
 
+  // Helper to convert Uint8Array to hex (works in both Node and Convex)
+  const uint8ArrayToHex = (bytes: Uint8Array): string => {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+
+  // DEBUG: Log verification details (always log on server for debugging)
+  console.log('[VERIFY] Verifying with keyId:', sig.keyId);
+  console.log('[VERIFY] Args:', JSON.stringify(args, null, 2));
+  console.log('[VERIFY] Canonical args:', canonicalArgs);
+  console.log('[VERIFY] Payload to verify (full):', payload);
+  console.log('[VERIFY] Payload bytes length:', payloadBytes.length);
+  console.log('[VERIFY] Payload bytes (hex):', uint8ArrayToHex(payloadBytes));
+  console.log('[VERIFY] Timestamp:', sig.timestamp);
+  console.log('[VERIFY] Nonce:', sig.nonce);
+  console.log('[VERIFY] Signature (base64url):', sig.signature);
+  console.log('[VERIFY] Public key (hex):', uint8ArrayToHex(publicKey));
+  console.log('[VERIFY] Signature bytes (hex):', uint8ArrayToHex(signatureBytes));
+
   try {
-    return await verify(signatureBytes, payloadBytes, publicKey);
+    const result = await verify(signatureBytes, payloadBytes, publicKey);
+    if (process.env.DEBUG_SIGNATURES === 'true') {
+      console.log('[VERIFY] Verification result:', result);
+    }
+    return result;
   } catch (error) {
+    // Helper to convert Uint8Array to hex (works in both Node and Convex)
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+
+    if (process.env.DEBUG_SIGNATURES === 'true') {
+      console.error('[VERIFY] Verification error:', error);
+      console.error('[VERIFY] Payload bytes (hex):', uint8ArrayToHex(payloadBytes));
+      console.error('[VERIFY] Signature bytes (hex):', uint8ArrayToHex(signatureBytes));
+    }
     throw new Error(`Signature verification failed: ${error}`);
   }
 }
@@ -262,16 +304,75 @@ export async function signMutationArgsWithSigner(
   // Build payload
   const payload = buildSignaturePayload(canonicalArgs, ts, n, keyId);
 
+  // DEBUG: Log signing details
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    console.log('[SIGN] Signing with keyId:', keyId);
+    console.log('[SIGN] Args:', JSON.stringify(args, null, 2));
+    console.log('[SIGN] Canonical args:', canonicalArgs);
+    console.log('[SIGN] Payload to sign:', payload);
+    console.log('[SIGN] Timestamp:', ts);
+    console.log('[SIGN] Nonce:', n);
+    console.log('[SIGN] Signed fields:', signedFields);
+  }
+
   // Sign using Signer
   const encoder = new TextEncoder();
   const payloadBytes = encoder.encode(payload);
+
+  // DEBUG: Log payload bytes for comparison
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+    console.log('[SIGN] Payload bytes length:', payloadBytes.length);
+    console.log('[SIGN] Payload bytes (hex):', uint8ArrayToHex(payloadBytes));
+  }
+
   const signatureCESR = await signer.sign(payloadBytes);
 
-  // Extract signature from CESR format (remove "0B" prefix)
-  // CESR format: "0B" + base64url signature
-  const signature = signatureCESR.startsWith("0B")
-    ? signatureCESR.substring(2)
-    : signatureCESR;
+  // Extract signature from CESR format
+  // CESR signatures from @kv4/codex are proper qb64 format (not just "0B" + base64url)
+  // We need to properly decode the CESR signature to get raw bytes, then re-encode as base64url
+  // NOTE: This function is only called on the client side, not in Convex
+  let signature: string;
+
+  // Try to decode using @kv4/codex if available (client-side only)
+  // Use a function-based dynamic import to avoid static analysis by Convex bundler
+  try {
+    // Use Function constructor to create a truly dynamic import that bundlers can't analyze
+    // This prevents Convex bundler from trying to resolve @kv4/codex
+    const dynamicImport = new Function('specifier', 'return import(specifier)');
+    const codexModule = '@kv4/codex';
+    const codex = await dynamicImport(codexModule);
+    const decoded = codex.decodeSignature(signatureCESR);
+
+    if (process.env.DEBUG_SIGNATURES === 'true') {
+      console.log('[SIGN] Decoded CESR signature - raw bytes length:', decoded.raw.length);
+    }
+
+    // Re-encode as base64url for transport (server expects base64url, not CESR)
+    const { uint8ArrayToBase64Url } = await import("./crypto");
+    signature = uint8ArrayToBase64Url(decoded.raw);
+  } catch (error: any) {
+    // If decodeSignature fails (e.g., @kv4/codex not available in Convex bundler),
+    // fall back to simple "0B" removal for compatibility
+    if (process.env.DEBUG_SIGNATURES === 'true') {
+      console.warn('[SIGN] Failed to decode CESR signature with codex, using fallback:', error?.message);
+      console.warn('[SIGN] CESR signature:', signatureCESR);
+    }
+    // Fallback: simple "0B" removal (assumes simple format)
+    // This works because CESR Ed25519 signatures start with "0B" followed by base64url-encoded signature
+    signature = signatureCESR.startsWith("0B")
+      ? signatureCESR.substring(2)
+      : signatureCESR;
+  }
+
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    console.log('[SIGN] CESR signature:', signatureCESR);
+    console.log('[SIGN] Extracted signature (base64url):', signature);
+  }
 
   return {
     signature,

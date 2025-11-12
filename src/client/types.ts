@@ -52,6 +52,7 @@ export interface IdentityRegistry {
     aid: string;
     publicKey: Uint8Array;
     ksn: number;
+    publicKeyCESR?: string; // Optional: if provided, use this directly instead of re-encoding
   }): Promise<void>;
 
   /**

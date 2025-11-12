@@ -1,8 +1,18 @@
 {
-  "name": "convex-messagebus",
+  "name": "@kv4/merits",
   "module": "index.ts",
   "type": "module",
-  "private": true,
+  "version": "0.0.1",
+  "exports": {
+    ".": "./index.ts",
+    "./client": "./client/index.ts",
+    "./src/client": "./src/client.ts",
+    "./src/client/convex": "./src/client/convex.ts",
+    "./src/client/types": "./src/client/types.ts",
+    "./core/crypto": "./core/crypto.ts",
+    "./core/signatures": "./core/signatures.ts",
+    "./convex/_generated/api": "./convex/_generated/api.js"
+  },
   "scripts": {
     "cli": "bun run cli/index.ts",
     "test": "CONVEX_URL=https://accurate-penguin-901.convex.cloud bun test tests/integration.test.ts",

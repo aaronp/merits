@@ -140,7 +140,11 @@ export const registerKeyState = mutation({
       .withIndex("by_aid", (q) => q.eq("aid", args.aid))
       .first();
 
+    console.log('[REGISTER-KEY-STATE] AID:', args.aid);
+    console.log('[REGISTER-KEY-STATE] Keys being registered:', args.keys);
     if (existing) {
+      console.log('[REGISTER-KEY-STATE] Updating existing key state');
+      console.log('[REGISTER-KEY-STATE] Old keys:', existing.keys);
       await ctx.db.patch(existing._id, {
         ksn: args.ksn,
         keys: args.keys,
@@ -148,8 +152,10 @@ export const registerKeyState = mutation({
         lastEvtSaid: args.lastEvtSaid,
         updatedAt: now,
       });
+      console.log('[REGISTER-KEY-STATE] Updated keys:', args.keys);
       return existing._id;
     } else {
+      console.log('[REGISTER-KEY-STATE] Creating new key state');
       return await ctx.db.insert("keyStates", {
         aid: args.aid,
         ksn: args.ksn,
@@ -188,6 +194,18 @@ async function verifyIndexedSigs(
   const encoder = new TextEncoder();
   const data = encoder.encode(canonical);
 
+  const uint8ArrayToHex = (bytes: Uint8Array): string => {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+
+  // DEBUG: Log verification details
+  console.log('[VERIFY-INDEXED] Payload bytes (hex):', uint8ArrayToHex(data));
+  console.log('[VERIFY-INDEXED] Key state keys:', keyState.keys);
+  console.log('[VERIFY-INDEXED] Threshold:', keyState.threshold);
+  console.log('[VERIFY-INDEXED] Signatures to verify:', sigs);
+
   const threshold = parseInt(keyState.threshold, 16);
   let validSigs = 0;
 
@@ -196,6 +214,7 @@ async function verifyIndexedSigs(
     // Split on first hyphen only, as base64url may contain hyphens
     const hyphenIndex = sig.indexOf("-");
     if (hyphenIndex === -1) {
+      console.error('[VERIFY-INDEXED] Invalid signature format (no hyphen):', sig);
       continue; // Invalid format
     }
 
@@ -203,23 +222,35 @@ async function verifyIndexedSigs(
     const sigB64 = sig.substring(hyphenIndex + 1);
     const idx = parseInt(idxStr);
 
+    console.log('[VERIFY-INDEXED] Parsed signature - index:', idx, 'sig (base64url):', sigB64);
+
     if (idx >= keyState.keys.length) {
+      console.error('[VERIFY-INDEXED] Invalid index:', idx, 'keyState.keys.length:', keyState.keys.length);
       continue; // Invalid index
     }
 
     const sigBytes = base64UrlToUint8Array(sigB64);
     const keyBytes = decodeCESRKey(keyState.keys[idx]);
 
+    console.log('[VERIFY-INDEXED] Signature bytes (hex):', uint8ArrayToHex(sigBytes));
+    console.log('[VERIFY-INDEXED] Public key bytes (hex):', uint8ArrayToHex(keyBytes));
+    console.log('[VERIFY-INDEXED] Public key CESR:', keyState.keys[idx]);
+
     try {
       const valid = await verify(sigBytes, data, keyBytes);
+      console.log('[VERIFY-INDEXED] Verification result:', valid);
       if (valid) {
         validSigs++;
+      } else {
+        console.error('[VERIFY-INDEXED] Signature verification returned false');
       }
     } catch (error) {
+      console.error('[VERIFY-INDEXED] Verification error:', error);
       continue; // Invalid signature
     }
   }
 
+  console.log('[VERIFY-INDEXED] Valid signatures:', validSigs, 'Threshold:', threshold);
   return validSigs >= threshold;
 }
 
@@ -452,9 +483,33 @@ export async function verifyAuth(
     argsHash: challenge.argsHash,
   };
 
+  // DEBUG: Log payload being verified
+  console.log('[VERIFY-AUTH] Payload being verified:', JSON.stringify(payload, null, 2));
+  const sortedKeys = Object.keys(payload).sort();
+  const canonical = JSON.stringify(payload, sortedKeys);
+  console.log('[VERIFY-AUTH] Canonical payload (sorted keys):', canonical);
+  const encoder = new TextEncoder();
+  const data = encoder.encode(canonical);
+  const uint8ArrayToHex = (bytes: Uint8Array): string => {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+  console.log('[VERIFY-AUTH] Payload bytes (hex):', uint8ArrayToHex(data));
+
   // Verify signatures
+  console.log('[VERIFY-AUTH] About to call verifyIndexedSigs');
+  console.log('[VERIFY-AUTH] Payload:', JSON.stringify(payload, null, 2));
+  console.log('[VERIFY-AUTH] Auth sigs:', auth.sigs);
+  console.log('[VERIFY-AUTH] Key state:', JSON.stringify(keyState, null, 2));
+  
   const valid = await verifyIndexedSigs(payload, auth.sigs, keyState);
+  console.log('[VERIFY-AUTH] verifyIndexedSigs returned:', valid);
+  
   if (!valid) {
+    console.error('[VERIFY-AUTH] Signature verification FAILED');
+    console.error('[VERIFY-AUTH] Challenge:', JSON.stringify(challenge, null, 2));
+    console.error('[VERIFY-AUTH] Auth:', JSON.stringify(auth, null, 2));
     throw new SignatureError("Invalid signatures or threshold not met", {
       aid: challenge.aid,
       ksn: auth.ksn,
@@ -526,16 +581,73 @@ export async function verifySignedRequest(
   }
 
   const publicKeyBytes = decodeCESRKey(keyState.keys[0]);
+  const publicKeyCESR = keyState.keys[0];
+
+  // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
+  const uint8ArrayToHex = (bytes: Uint8Array): string => {
+    return Array.from(bytes)
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+
+  // DEBUG: Log verification attempt (always log on server for debugging)
+  console.log('[VERIFY-SERVER] Verifying signature for AID:', sig.keyId);
+  console.log('[VERIFY-SERVER] Args keys:', Object.keys(args).sort());
+  console.log('[VERIFY-SERVER] Args (full):', JSON.stringify(args, null, 2));
+  console.log('[VERIFY-SERVER] Sig object:', JSON.stringify(sig, null, 2));
+  console.log('[VERIFY-SERVER] Public key CESR:', publicKeyCESR);
+  console.log('[VERIFY-SERVER] Public key bytes (base64url):', uint8ArrayToBase64Url(publicKeyBytes));
+  console.log('[VERIFY-SERVER] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
 
   // Verify signature (throws on invalid signature or timestamp skew)
-  const valid = await verifyMutationSignature(args, publicKeyBytes, 5 * 60 * 1000);
+  let valid: boolean;
+  try {
+    valid = await verifyMutationSignature(args, publicKeyBytes, 5 * 60 * 1000);
+  } catch (error: any) {
+    // Log detailed error information
+    console.error('[VERIFY-SERVER] Signature verification threw error:', error);
+    // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+
+    console.error('[VERIFY-SERVER] Error message:', error?.message);
+    console.error('[VERIFY-SERVER] Args received:', JSON.stringify(args, null, 2));
+    console.error('[VERIFY-SERVER] Sig received:', JSON.stringify(sig, null, 2));
+    console.error('[VERIFY-SERVER] Public key CESR:', publicKeyCESR);
+    console.error('[VERIFY-SERVER] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
+    throw new SignatureError("Signature verification failed", {
+      aid: sig.keyId,
+      timestamp: sig.timestamp,
+      hint: `Signature verification error: ${error?.message || 'Unknown error'}`,
+    });
+  }
 
   if (!valid) {
+    // Log failure details (always log on server for debugging)
+    // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+
+    console.error('[VERIFY-SERVER] Signature verification FAILED (returned false)');
+    console.error('[VERIFY-SERVER] Args:', JSON.stringify(args, null, 2));
+    console.error('[VERIFY-SERVER] Sig:', JSON.stringify(sig, null, 2));
+    console.error('[VERIFY-SERVER] Public key CESR:', publicKeyCESR);
+    console.error('[VERIFY-SERVER] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
     throw new SignatureError("Signature verification failed", {
       aid: sig.keyId,
       timestamp: sig.timestamp,
       hint: "Signature does not match the provided arguments",
     });
+  }
+
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    console.log('[VERIFY-SERVER] Signature verification SUCCESS');
   }
 
   // Check nonce replay (prevent reuse of signatures)
@@ -664,11 +776,24 @@ export const registerUser = mutation({
       createdAt: now,
     });
 
-    // Best-effort: assign default role 'anon' if present
-    const anonRole = await ctx.db
+    // Assign default role 'anon' - create role if it doesn't exist
+    let anonRole = await ctx.db
       .query("roles")
       .withIndex("by_roleName", (q) => q.eq("roleName", "anon"))
       .first();
+    
+    if (!anonRole) {
+      // Create anon role if it doesn't exist (should be created by bootstrap, but handle gracefully)
+      console.log(`[REGISTER-USER] 'anon' role not found, creating it for user ${args.aid}`);
+      const roleId = await ctx.db.insert("roles", {
+        roleName: "anon",
+        adminAID: "SYSTEM",
+        actionSAID: "registerUser/auto-create",
+        timestamp: now,
+      });
+      anonRole = await ctx.db.get(roleId);
+    }
+    
     if (anonRole) {
       await ctx.db.insert("userRoles", {
         userAID: args.aid,
@@ -677,6 +802,9 @@ export const registerUser = mutation({
         actionSAID: "bootstrap/auto-assign",
         timestamp: now,
       });
+      console.log(`[REGISTER-USER] Assigned 'anon' role to user ${args.aid}`);
+    } else {
+      console.error(`[REGISTER-USER] ERROR: Failed to create or find 'anon' role for user ${args.aid}`);
     }
 
     // Best-effort: add user to onboarding group if present

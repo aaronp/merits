@@ -8,6 +8,18 @@
 import * as ed from "@noble/ed25519";
 import { sha256 as sha256Hash } from "@noble/hashes/sha2.js";
 
+// Import cesr-ts at module level if available (for decodeCESRKey)
+let cesrMatter: any = null;
+try {
+  // Try to import cesr-ts at module load time
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const cesr = require('cesr-ts/src/matter');
+  cesrMatter = cesr.Matter;
+} catch {
+  // cesr-ts not available at module load time, will use dynamic import
+  cesrMatter = null;
+}
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -78,14 +90,49 @@ export async function signPayload(
   keyIndex: number
 ): Promise<string[]> {
   // Canonicalize payload (sort keys deterministically)
-  const canonical = JSON.stringify(payload, Object.keys(payload).sort());
+  const sortedKeys = Object.keys(payload).sort();
+  const canonical = JSON.stringify(payload, sortedKeys);
   const data = new TextEncoder().encode(canonical);
+
+  // DEBUG: Log what we're signing
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    console.log('[SIGN-PAYLOAD] Payload:', JSON.stringify(payload, null, 2));
+    console.log('[SIGN-PAYLOAD] Sorted keys:', sortedKeys);
+    console.log('[SIGN-PAYLOAD] Canonical:', canonical);
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+    console.log('[SIGN-PAYLOAD] Payload bytes (hex):', uint8ArrayToHex(data));
+    console.log('[SIGN-PAYLOAD] Private key bytes (hex, first 32):', uint8ArrayToHex(privateKey.slice(0, 32)));
+    
+    // Verify key pair matches
+    try {
+      const { ed25519 } = await import('@noble/curves/ed25519.js');
+      const derivedPublicKey = ed25519.getPublicKey(privateKey);
+      const derivedPublicKeyHex = uint8ArrayToHex(derivedPublicKey);
+      console.log('[SIGN-PAYLOAD] Derived public key from private (hex):', derivedPublicKeyHex);
+    } catch (error) {
+      console.error('[SIGN-PAYLOAD] Failed to derive public key:', error);
+    }
+  }
 
   // Sign the data
   const signature = await sign(data, privateKey);
 
   // Create indexed signature
   const indexedSig = createIndexedSignature(keyIndex, signature);
+
+  if (process.env.DEBUG_SIGNATURES === 'true') {
+    const uint8ArrayToHex = (bytes: Uint8Array): string => {
+      return Array.from(bytes)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+    };
+    console.log('[SIGN-PAYLOAD] Signature (hex):', uint8ArrayToHex(signature));
+    console.log('[SIGN-PAYLOAD] Indexed signature:', indexedSig);
+  }
 
   return [indexedSig];
 }
@@ -143,12 +190,20 @@ export function encodeCESRKey(publicKey: Uint8Array): string {
 }
 
 /**
- * Decode CESR-encoded public key to raw bytes
+ * Decode CESR-encoded key to raw bytes
+ * 
+ * IMPORTANT: This uses simple base64url decoding (D prefix + base64url).
+ * This matches encodeCESRKey which creates simple D+base64url format.
+ * 
+ * For codex's proper CESR format, you need to use codex's decodeKey, but
+ * that's not available in Convex. So we use encodeCESRKey/decodeCESRKey
+ * which work in both client and Convex environments.
  */
 export function decodeCESRKey(cesrKey: string): Uint8Array {
   if (!cesrKey.startsWith("D")) {
     throw new Error("Invalid CESR key: must start with 'D'");
   }
+  // Simple base64url decode (matches encodeCESRKey)
   return base64UrlToUint8Array(cesrKey.slice(1));
 }
 
