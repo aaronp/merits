@@ -5,7 +5,7 @@
  * Supports both pull (receiveMessages) and push (subscribe) models.
  */
 
-import { AID, AuthProof, SignedRequest } from "../types";
+import type { AID, SignedRequest } from '../types';
 
 /**
  * Credentials for signing requests
@@ -191,10 +191,7 @@ export interface Transport {
    * Authentication required - recipient must prove control of their AID via signed request.
    * Server enforces that verified AID === req.for (can't receive for others).
    */
-  receiveMessages(req: {
-    for: AID;
-    sig: SignedRequest;
-  }): Promise<EncryptedMessage[]>;
+  receiveMessages(req: { for: AID; sig: SignedRequest }): Promise<EncryptedMessage[]>;
 
   /**
    * Acknowledge receipt of a message.

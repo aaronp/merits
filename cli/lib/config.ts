@@ -9,24 +9,24 @@
  * Schema validation with Ajv
  */
 
-import Ajv from "ajv";
-import addFormats from "ajv-formats";
-import * as fs from "fs";
-import * as path from "path";
-import * as os from "os";
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import Ajv from 'ajv';
+import addFormats from 'ajv-formats';
 
 /**
  * Default backend URL for development
  * Used when no backend is configured anywhere
  */
-export const DEFAULT_BACKEND_URL = "https://accurate-penguin-901.convex.cloud";
+export const DEFAULT_BACKEND_URL = 'https://accurate-penguin-901.convex.cloud';
 
 /**
  * Project-level config (stored in CWD after incept)
  */
 export interface ProjectConfig {
   backend: {
-    type: "convex" | "rest" | "local";
+    type: 'convex' | 'rest' | 'local';
     url: string;
   };
   credentials?: {
@@ -44,10 +44,10 @@ export interface MeritsConfig {
   version: number;
   dataDir?: string; // Override data directory (for testing)
   backend?: {
-    type: "convex" | "rest" | "local";
+    type: 'convex' | 'rest' | 'local';
     url: string;
   };
-  outputFormat?: "json" | "pretty" | "raw";
+  outputFormat?: 'json' | 'pretty' | 'raw';
   watchInterval?: number; // milliseconds
   verbose?: boolean;
   color?: boolean;
@@ -59,7 +59,7 @@ export interface MeritsConfig {
  */
 export interface ResolvedConfig extends Omit<Required<MeritsConfig>, 'backend'> {
   backend: {
-    type: "convex" | "rest" | "local";
+    type: 'convex' | 'rest' | 'local';
     url: string;
   };
 }
@@ -69,7 +69,7 @@ export interface ResolvedConfig extends Omit<Required<MeritsConfig>, 'backend'> 
  */
 export const DEFAULT_CONFIG: MeritsConfig = {
   version: 1,
-  outputFormat: "json", // Changed default to json per cli.md spec
+  outputFormat: 'json', // Changed default to json per cli.md spec
   watchInterval: 1000,
   verbose: false,
   color: true,
@@ -79,26 +79,26 @@ export const DEFAULT_CONFIG: MeritsConfig = {
  * JSON schema for validation
  */
 const CONFIG_SCHEMA = {
-  type: "object",
+  type: 'object',
   properties: {
-    version: { type: "number", enum: [1] },
-    dataDir: { type: "string", minLength: 1 },
+    version: { type: 'number', enum: [1] },
+    dataDir: { type: 'string', minLength: 1 },
     backend: {
-      type: "object",
+      type: 'object',
       properties: {
-        type: { type: "string", enum: ["convex", "rest", "local"] },
-        url: { type: "string", format: "uri" },
+        type: { type: 'string', enum: ['convex', 'rest', 'local'] },
+        url: { type: 'string', format: 'uri' },
       },
-      required: ["type", "url"],
+      required: ['type', 'url'],
       additionalProperties: false,
     },
-    outputFormat: { type: "string", enum: ["json", "pretty", "raw"] },
-    watchInterval: { type: "number", minimum: 100, maximum: 30000 },
-    verbose: { type: "boolean" },
-    color: { type: "boolean" },
-    defaultIdentity: { type: "string", minLength: 1 },
+    outputFormat: { type: 'string', enum: ['json', 'pretty', 'raw'] },
+    watchInterval: { type: 'number', minimum: 100, maximum: 30000 },
+    verbose: { type: 'boolean' },
+    color: { type: 'boolean' },
+    defaultIdentity: { type: 'string', minLength: 1 },
   },
-  required: ["version"],
+  required: ['version'],
   additionalProperties: false,
 };
 
@@ -108,10 +108,10 @@ const CONFIG_SCHEMA = {
 export class ConfigError extends Error {
   constructor(
     message: string,
-    public code: "INVALID_SCHEMA" | "FILE_ERROR" | "MISSING_REQUIRED"
+    public code: 'INVALID_SCHEMA' | 'FILE_ERROR' | 'MISSING_REQUIRED',
   ) {
     super(message);
-    this.name = "ConfigError";
+    this.name = 'ConfigError';
   }
 }
 
@@ -125,7 +125,7 @@ export function resolveDataDir(config: Partial<MeritsConfig>): string {
   if (config.dataDir) {
     return path.resolve(config.dataDir);
   }
-  return path.join(os.homedir(), ".merits");
+  return path.join(os.homedir(), '.merits');
 }
 
 /**
@@ -135,7 +135,7 @@ export function resolveDataDir(config: Partial<MeritsConfig>): string {
  * @returns Absolute path to config.json
  */
 export function resolveConfigPath(config: Partial<MeritsConfig>): string {
-  return path.join(resolveDataDir(config), "config.json");
+  return path.join(resolveDataDir(config), 'config.json');
 }
 
 /**
@@ -145,7 +145,7 @@ export function resolveConfigPath(config: Partial<MeritsConfig>): string {
  * @returns Absolute path to identities.json
  */
 export function resolveVaultPath(config: Partial<MeritsConfig>): string {
-  return path.join(resolveDataDir(config), "identities.json");
+  return path.join(resolveDataDir(config), 'identities.json');
 }
 
 /**
@@ -164,10 +164,7 @@ export function resolveVaultPath(config: Partial<MeritsConfig>): string {
  * });
  * ```
  */
-export function loadConfig(
-  configPath?: string,
-  overrides?: Partial<MeritsConfig>
-): ResolvedConfig {
+export function loadConfig(configPath?: string, overrides?: Partial<MeritsConfig>): ResolvedConfig {
   let usingDefaultBackend = false;
 
   // 1. Start with defaults
@@ -181,10 +178,7 @@ export function loadConfig(
       config = { ...config, ...fileConfig };
     } catch (err) {
       if (err instanceof ConfigError) throw err;
-      const error = new ConfigError(
-        `Failed to load config from ${filePath}: ${err}`,
-        "FILE_ERROR"
-      );
+      const error = new ConfigError(`Failed to load config from ${filePath}: ${err}`, 'FILE_ERROR');
       throw error;
     }
   }
@@ -207,7 +201,7 @@ export function loadConfig(
   // 6. Fall back to default backend if still not set
   if (!config.backend) {
     config.backend = {
-      type: "convex",
+      type: 'convex',
       url: DEFAULT_BACKEND_URL,
     };
     usingDefaultBackend = true;
@@ -218,13 +212,9 @@ export function loadConfig(
 
   // Show warning if using default backend
   if (usingDefaultBackend && !process.env.MERITS_VAULT_QUIET) {
-    console.warn(
-      `⚠️  Using default development backend: ${DEFAULT_BACKEND_URL}`
-    );
-    console.warn(
-      `   Set CONVEX_URL, use --convex-url, or run 'merits incept' to configure`
-    );
-    console.warn("");
+    console.warn(`⚠️  Using default development backend: ${DEFAULT_BACKEND_URL}`);
+    console.warn(`   Set CONVEX_URL, use --convex-url, or run 'merits incept' to configure`);
+    console.warn('');
   }
 
   return config as ResolvedConfig;
@@ -236,10 +226,7 @@ export function loadConfig(
  * @param config - Configuration to save
  * @param configPath - Path to config file (default: ~/.merits/config.json)
  */
-export function saveConfig(
-  config: MeritsConfig,
-  configPath?: string
-): void {
+export function saveConfig(config: MeritsConfig, configPath?: string): void {
   const filePath = resolveConfigPath(configPath);
   const dir = path.dirname(filePath);
 
@@ -262,17 +249,11 @@ export function saveConfig(
  * @param configPath - Path to config file (default: ~/.merits/config.json)
  * @param initialConfig - Initial configuration values
  */
-export function initConfig(
-  configPath?: string,
-  initialConfig?: Partial<MeritsConfig>
-): void {
+export function initConfig(configPath?: string, initialConfig?: Partial<MeritsConfig>): void {
   const filePath = resolveConfigPath(configPath);
 
   if (fs.existsSync(filePath)) {
-    throw new ConfigError(
-      `Config file already exists at ${filePath}`,
-      "FILE_ERROR"
-    );
+    throw new ConfigError(`Config file already exists at ${filePath}`, 'FILE_ERROR');
   }
 
   const config: MeritsConfig = {
@@ -288,20 +269,18 @@ export function initConfig(
 /**
  * Resolve config file path
  */
-function resolveConfigPath(configPath?: string): string {
+function _resolveConfigPath(configPath?: string): string {
   if (configPath) {
-    return configPath.startsWith("~")
-      ? path.join(os.homedir(), configPath.slice(1))
-      : path.resolve(configPath);
+    return configPath.startsWith('~') ? path.join(os.homedir(), configPath.slice(1)) : path.resolve(configPath);
   }
-  return path.join(os.homedir(), ".merits", "config.json");
+  return path.join(os.homedir(), '.merits', 'config.json');
 }
 
 /**
  * Load config from file
  */
 function loadConfigFile(filePath: string): Partial<MeritsConfig> {
-  const json = fs.readFileSync(filePath, "utf-8");
+  const json = fs.readFileSync(filePath, 'utf-8');
   return JSON.parse(json);
 }
 
@@ -321,7 +300,7 @@ function loadEnvConfig(): Partial<MeritsConfig> {
   // NEW: Explicit backend config
   if (process.env.MERITS_BACKEND_TYPE && process.env.MERITS_BACKEND_URL) {
     const type = process.env.MERITS_BACKEND_TYPE;
-    if (type === "convex" || type === "rest" || type === "local") {
+    if (type === 'convex' || type === 'rest' || type === 'local') {
       config.backend = {
         type,
         url: process.env.MERITS_BACKEND_URL,
@@ -331,21 +310,21 @@ function loadEnvConfig(): Partial<MeritsConfig> {
   // LEGACY: Map CONVEX_URL to backend config for backward compatibility
   else if (process.env.CONVEX_URL) {
     config.backend = {
-      type: "convex",
+      type: 'convex',
       url: process.env.CONVEX_URL,
     };
   }
 
   if (process.env.MERITS_OUTPUT_FORMAT) {
     const format = process.env.MERITS_OUTPUT_FORMAT;
-    if (format === "json" || format === "pretty" || format === "raw") {
+    if (format === 'json' || format === 'pretty' || format === 'raw') {
       config.outputFormat = format;
     }
   }
 
   if (process.env.MERITS_WATCH_INTERVAL) {
     const interval = parseInt(process.env.MERITS_WATCH_INTERVAL, 10);
-    if (!isNaN(interval)) {
+    if (!Number.isNaN(interval)) {
       config.watchInterval = interval;
     }
   }
@@ -354,11 +333,11 @@ function loadEnvConfig(): Partial<MeritsConfig> {
     config.defaultIdentity = process.env.MERITS_DEFAULT_IDENTITY;
   }
 
-  if (process.env.MERITS_VERBOSE === "true" || process.env.MERITS_VERBOSE === "1") {
+  if (process.env.MERITS_VERBOSE === 'true' || process.env.MERITS_VERBOSE === '1') {
     config.verbose = true;
   }
 
-  if (process.env.NO_COLOR === "1" || process.env.NO_COLOR === "true") {
+  if (process.env.NO_COLOR === '1' || process.env.NO_COLOR === 'true') {
     config.color = false;
   }
 
@@ -374,13 +353,8 @@ function validateConfig(config: MeritsConfig): void {
   const validate = ajv.compile(CONFIG_SCHEMA);
 
   if (!validate(config)) {
-    const errors = validate.errors
-      ?.map((err) => `${err.instancePath} ${err.message}`)
-      .join(", ");
-    const error = new ConfigError(
-      `Invalid configuration: ${errors}`,
-      "INVALID_SCHEMA"
-    );
+    const errors = validate.errors?.map((err) => `${err.instancePath} ${err.message}`).join(', ');
+    const error = new ConfigError(`Invalid configuration: ${errors}`, 'INVALID_SCHEMA');
     throw error;
   }
 }
@@ -402,15 +376,15 @@ function filterUndefined<T extends Record<string, any>>(obj: T): Partial<T> {
  * Load project-level config from .meritsrc in CWD
  */
 function loadProjectConfig(): ProjectConfig | null {
-  const projectConfigPath = path.join(process.cwd(), ".meritsrc");
+  const projectConfigPath = path.join(process.cwd(), '.meritsrc');
   if (!fs.existsSync(projectConfigPath)) {
     return null;
   }
 
   try {
-    const json = fs.readFileSync(projectConfigPath, "utf-8");
+    const json = fs.readFileSync(projectConfigPath, 'utf-8');
     return JSON.parse(json);
-  } catch (err) {
+  } catch (_err) {
     // Silently ignore errors - project config is optional
     return null;
   }
@@ -420,7 +394,7 @@ function loadProjectConfig(): ProjectConfig | null {
  * Save project-level config to .meritsrc in CWD
  */
 export function saveProjectConfig(config: ProjectConfig): void {
-  const projectConfigPath = path.join(process.cwd(), ".meritsrc");
+  const projectConfigPath = path.join(process.cwd(), '.meritsrc');
 
   // Write with secure permissions
   const json = JSON.stringify(config, null, 2);
@@ -430,7 +404,7 @@ export function saveProjectConfig(config: ProjectConfig): void {
 /**
  * Load credentials from project-level .meritsrc file
  */
-export function loadProjectCredentials(): ProjectConfig["credentials"] | null {
+export function loadProjectCredentials(): ProjectConfig['credentials'] | null {
   const projectConfig = loadProjectConfig();
   return projectConfig?.credentials || null;
 }

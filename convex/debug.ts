@@ -2,8 +2,8 @@
  * Debug endpoints for troubleshooting authentication
  */
 
-import { mutation, query } from './_generated/server';
 import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
 import { verifyAuth } from './auth';
 import { GROUP_TAGS } from './groupTags';
 
@@ -47,21 +47,21 @@ export const getOnboardingGroupDebug = query({
   handler: async (ctx) => {
     // Try by tag
     const byTag = await ctx.db
-      .query("groupChats")
-      .withIndex("by_tag", (q: any) => q.eq("tag", GROUP_TAGS.ONBOARDING))
+      .query('groupChats')
+      .withIndex('by_tag', (q: any) => q.eq('tag', GROUP_TAGS.ONBOARDING))
       .first();
 
     // Try by name
     const byName = await ctx.db
-      .query("groupChats")
-      .filter((q: any) => q.eq(q.field("name"), "onboarding"))
+      .query('groupChats')
+      .filter((q: any) => q.eq(q.field('name'), 'onboarding'))
       .first();
 
     // Get all groups
-    const allGroups = await ctx.db.query("groupChats").collect();
+    const allGroups = await ctx.db.query('groupChats').collect();
 
     // Get permissions
-    const permissions = await ctx.db.query("permissions").collect();
+    const permissions = await ctx.db.query('permissions').collect();
 
     return {
       byTag,
@@ -75,7 +75,7 @@ export const getOnboardingGroupDebug = query({
 
 export const fixPermission = mutation({
   args: {
-    permissionId: v.id("permissions"),
+    permissionId: v.id('permissions'),
     newData: v.array(v.string()),
   },
   handler: async (ctx, args) => {
@@ -89,18 +89,18 @@ export const fixPermission = mutation({
 export const checkRolePermissions = query({
   args: {},
   handler: async (ctx) => {
-    const roles = await ctx.db.query("roles").collect();
-    const permissions = await ctx.db.query("permissions").collect();
-    const rolePermissions = await ctx.db.query("rolePermissions").collect();
-    const userRoles = await ctx.db.query("userRoles").collect();
+    const roles = await ctx.db.query('roles').collect();
+    const permissions = await ctx.db.query('permissions').collect();
+    const rolePermissions = await ctx.db.query('rolePermissions').collect();
+    const userRoles = await ctx.db.query('userRoles').collect();
 
     return {
       roles,
       permissions,
       rolePermissions,
       userRoles,
-      anonRole: roles.find(r => r.roleName === 'anon'),
-      canMessageGroupsPermission: permissions.find(p => p.key === 'can.message.groups'),
+      anonRole: roles.find((r) => r.roleName === 'anon'),
+      canMessageGroupsPermission: permissions.find((p) => p.key === 'can.message.groups'),
     };
   },
 });
@@ -112,18 +112,18 @@ export const getUserRoles = query({
   handler: async (ctx, args) => {
     // Get user
     const user = await ctx.db
-      .query("users")
-      .withIndex("by_aid", (q: any) => q.eq("aid", args.aid))
+      .query('users')
+      .withIndex('by_aid', (q: any) => q.eq('aid', args.aid))
       .first();
 
     if (!user) {
-      return { error: "User not found", aid: args.aid };
+      return { error: 'User not found', aid: args.aid };
     }
 
     // Get user's role assignments
     const userRoles = await ctx.db
-      .query("userRoles")
-      .withIndex("by_user", (q: any) => q.eq("userAID", args.aid))
+      .query('userRoles')
+      .withIndex('by_user', (q: any) => q.eq('userAID', args.aid))
       .collect();
 
     // Get role details
@@ -131,11 +131,11 @@ export const getUserRoles = query({
       userRoles.map(async (ur) => {
         const role = await ctx.db.get(ur.roleId);
         return { ...ur, roleName: role?.roleName };
-      })
+      }),
     );
 
     // Get all roles for reference
-    const allRoles = await ctx.db.query("roles").collect();
+    const allRoles = await ctx.db.query('roles').collect();
 
     return {
       user,
@@ -152,15 +152,15 @@ export const forceCreateAnonRole = mutation({
 
     // Create anon role
     let anonRole = await ctx.db
-      .query("roles")
-      .withIndex("by_roleName", (q: any) => q.eq("roleName", "anon"))
+      .query('roles')
+      .withIndex('by_roleName', (q: any) => q.eq('roleName', 'anon'))
       .first();
 
     if (!anonRole) {
-      const rid = await ctx.db.insert("roles", {
-        roleName: "anon",
-        adminAID: "SYSTEM",
-        actionSAID: "debug/fix",
+      const rid = await ctx.db.insert('roles', {
+        roleName: 'anon',
+        adminAID: 'SYSTEM',
+        actionSAID: 'debug/fix',
         timestamp: now,
       });
       anonRole = await ctx.db.get(rid);
@@ -168,27 +168,27 @@ export const forceCreateAnonRole = mutation({
 
     // Get permission
     const permission = await ctx.db
-      .query("permissions")
-      .withIndex("by_key", (q: any) => q.eq("key", "can.message.groups"))
+      .query('permissions')
+      .withIndex('by_key', (q: any) => q.eq('key', 'can.message.groups'))
       .first();
 
     if (!permission) {
-      throw new Error("Permission not found");
+      throw new Error('Permission not found');
     }
 
     // Create role-permission mapping
     const existingRP = await ctx.db
-      .query("rolePermissions")
-      .withIndex("by_role", (q: any) => q.eq("roleId", anonRole._id))
-      .filter((q: any) => q.eq(q.field("permissionId"), permission._id))
+      .query('rolePermissions')
+      .withIndex('by_role', (q: any) => q.eq('roleId', anonRole._id))
+      .filter((q: any) => q.eq(q.field('permissionId'), permission._id))
       .first();
 
     if (!existingRP) {
-      await ctx.db.insert("rolePermissions", {
+      await ctx.db.insert('rolePermissions', {
         roleId: anonRole._id,
         permissionId: permission._id,
-        adminAID: "SYSTEM",
-        actionSAID: "debug/fix",
+        adminAID: 'SYSTEM',
+        actionSAID: 'debug/fix',
         timestamp: now,
       });
     }

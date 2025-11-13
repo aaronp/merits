@@ -5,7 +5,7 @@
  * Any backend (Convex, REST API, etc.) can implement this interface.
  */
 
-import { AID, AuthProof } from "../types";
+import type { AID, AuthProof } from '../types';
 
 /**
  * Purpose of authentication challenge
@@ -14,13 +14,13 @@ import { AID, AuthProof } from "../types";
  * preventing replay attacks across different contexts.
  */
 export type Purpose =
-  | "send"        // Send a message
-  | "receive"     // Receive messages
-  | "ack"         // Acknowledge message receipt
-  | "admin"       // Admin operations
-  | "sendGroup"   // Send group message
-  | "manageGroup" // Create/update group
-  | "openSession"; // Phase 4: Create session token for streaming
+  | 'send' // Send a message
+  | 'receive' // Receive messages
+  | 'ack' // Acknowledge message receipt
+  | 'admin' // Admin operations
+  | 'sendGroup' // Send group message
+  | 'manageGroup' // Create/update group
+  | 'openSession'; // Phase 4: Create session token for streaming
 
 /**
  * Request to issue an authentication challenge
@@ -60,13 +60,13 @@ export interface IssueChallengeResponse {
    * - A timestamp (replay prevention)
    */
   payloadToSign: {
-    ver: "msg-auth/1";    // Payload schema version
-    aud: string;          // Audience (server origin)
-    ts: number;           // Timestamp (ms since epoch)
-    nonce: string;        // Random nonce
-    aid: AID;             // Who is authenticating
-    purpose: Purpose;     // What they're authenticating for
-    argsHash: string;     // Hash of bound arguments
+    ver: 'msg-auth/1'; // Payload schema version
+    aud: string; // Audience (server origin)
+    ts: number; // Timestamp (ms since epoch)
+    nonce: string; // Random nonce
+    aid: AID; // Who is authenticating
+    purpose: Purpose; // What they're authenticating for
+    argsHash: string; // Hash of bound arguments
   };
 }
 

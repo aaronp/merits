@@ -17,8 +17,7 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import type { CLIContext } from "../lib/context";
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface CreateUserOptions extends GlobalOptions {
   id: string; // User AID
@@ -35,13 +34,13 @@ export const createUser = withGlobalOptions(async (opts: CreateUserOptions) => {
   const ctx = opts._ctx;
 
   if (!opts.id || !opts.publicKey) {
-    throw new Error("Both --id and --public-key are required");
+    throw new Error('Both --id and --public-key are required');
   }
 
   const args = { aid: opts.id, publicKey: opts.publicKey };
 
   // Convert base64url public key to Uint8Array
-  const publicKeyBytes = Buffer.from(opts.publicKey, "base64url");
+  const publicKeyBytes = Buffer.from(opts.publicKey, 'base64url');
 
   // Register key state first (required before issuing challenge)
   await ctx.client.identityRegistry.registerIdentity({
@@ -53,7 +52,7 @@ export const createUser = withGlobalOptions(async (opts: CreateUserOptions) => {
   // Issue challenge for user registration
   const challenge = await ctx.client.identityAuth.issueChallenge({
     aid: opts.id,
-    purpose: "registerUser" as any,
+    purpose: 'registerUser' as any,
     args,
     ttlMs: 120000, // 2 minutes to complete challenge
   });
@@ -61,31 +60,31 @@ export const createUser = withGlobalOptions(async (opts: CreateUserOptions) => {
   const output = {
     challengeId: challenge.challengeId,
     payload: challenge.payloadToSign,
-    purpose: "registerUser",
+    purpose: 'registerUser',
     args,
   };
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
 
   // Hint for next step (only in pretty mode)
-  if (format === "pretty" && !opts.noBanner) {
-    console.error("\nNext steps:");
-    console.error("  1. Sign the challenge:");
-    console.error("     merits sign --file challenge.json --keys alice-keys.json > challenge-response.json");
-    console.error("  2. Confirm the challenge:");
-    console.error("     merits confirm-challenge --file challenge-response.json > session-token.json");
+  if (format === 'pretty' && !opts.noBanner) {
+    console.error('\nNext steps:');
+    console.error('  1. Sign the challenge:');
+    console.error('     merits sign --file challenge.json --keys alice-keys.json > challenge-response.json');
+    console.error('  2. Confirm the challenge:');
+    console.error('     merits confirm-challenge --file challenge-response.json > session-token.json');
   }
 });
 
@@ -95,12 +94,12 @@ export const createUser = withGlobalOptions(async (opts: CreateUserOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -109,5 +108,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

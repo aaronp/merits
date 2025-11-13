@@ -14,8 +14,8 @@
  *   merits unread --credentials identity.json --format pretty
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
+import { requireCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface UnreadOptions extends GlobalOptions {
   from?: string; // Optional sender filter
@@ -34,13 +34,13 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
   const creds = requireCredentials(opts.credentials);
 
   if (opts.watch) {
-    console.error("Watch mode not yet implemented. Coming in Phase 4!");
+    console.error('Watch mode not yet implemented. Coming in Phase 4!');
     return;
   }
 
   // Fetch unified unread messages (direct + group) from backend
   // This query returns both message types, already sorted by timestamp (newest first)
-  const { api } = await import("../../convex/_generated/api");
+  const { api } = await import('../../convex/_generated/api');
   const result = await ctx.client.connection.query(api.messages.getUnread, {
     aid: creds.aid,
     includeGroupMessages: true,
@@ -56,7 +56,7 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
       typ: m.typ,
       createdAt: m.createdAt,
       isGroupMessage: m.isGroupMessage ?? false,
-      decryptedContent: "[Encrypted - decryption not yet implemented]",
+      decryptedContent: '[Encrypted - decryption not yet implemented]',
     };
 
     // Only include optional fields if they're defined
@@ -67,26 +67,26 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
   });
 
   // Filter by sender if requested
-  const filteredMessages = opts.from
-    ? messages.filter((m: any) => m.senderAid === opts.from)
-    : messages;
+  const filteredMessages = opts.from ? messages.filter((m: any) => m.senderAid === opts.from) : messages;
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(filteredMessages));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(filteredMessages, null, 2));
       // Add human-readable summary (to stderr, not stdout)
       if (!opts.noBanner && filteredMessages.length > 0) {
         const groupCount = filteredMessages.filter((m: any) => m.isGroupMessage).length;
         const directCount = filteredMessages.length - groupCount;
-        console.error(`\nRetrieved ${filteredMessages.length} unread messages (${directCount} direct, ${groupCount} group)`);
+        console.error(
+          `\nRetrieved ${filteredMessages.length} unread messages (${directCount} direct, ${groupCount} group)`,
+        );
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(filteredMessages));
       break;
   }
@@ -98,12 +98,12 @@ export const unread = withGlobalOptions(async (opts: UnreadOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -112,5 +112,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

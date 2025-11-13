@@ -14,8 +14,8 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
+import { requireCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface WhoamiOptions extends GlobalOptions {
   // No additional options - uses global --token option
@@ -42,14 +42,14 @@ export const whoami = withGlobalOptions(async (opts: WhoamiOptions) => {
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -61,12 +61,12 @@ export const whoami = withGlobalOptions(async (opts: WhoamiOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -75,5 +75,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

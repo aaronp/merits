@@ -8,7 +8,7 @@
  * not in the transport layer.
  */
 
-import { EncryptedMessage } from "../interfaces/Transport";
+import type { EncryptedMessage } from '../interfaces/Transport';
 
 /**
  * Context provided to router for decryption
@@ -27,10 +27,7 @@ export interface MessageHandlerContext {
  * @param msg - The encrypted message envelope (metadata)
  * @param plaintext - The decrypted application payload
  */
-export type MessageHandler = (
-  msg: EncryptedMessage,
-  plaintext: unknown
-) => Promise<void> | void;
+export type MessageHandler = (msg: EncryptedMessage, plaintext: unknown) => Promise<void> | void;
 
 /**
  * MessageRouter - Route messages to handlers by type
@@ -131,15 +128,13 @@ export interface MessageRouterOptions {
  * @param options - Configuration options
  * @returns MessageRouter instance
  */
-export function createMessageRouter(
-  options: MessageRouterOptions = {}
-): MessageRouter {
+export function createMessageRouter(options: MessageRouterOptions = {}): MessageRouter {
   const handlers = new Map<string, MessageHandler>();
 
   return {
     register(typ: string, handler: MessageHandler): void {
       if (!typ) {
-        throw new Error("Message type cannot be empty");
+        throw new Error('Message type cannot be empty');
       }
       handlers.set(typ, handler);
     },
@@ -148,22 +143,19 @@ export function createMessageRouter(
       return handlers.delete(typ);
     },
 
-    async dispatch(
-      ctx: MessageHandlerContext,
-      msg: EncryptedMessage
-    ): Promise<void> {
+    async dispatch(ctx: MessageHandlerContext, msg: EncryptedMessage): Promise<void> {
       // Decrypt the message
       const plaintext = await ctx.decrypt(msg);
 
       // Determine message type
-      const typ = msg.typ ?? "unknown";
+      const typ = msg.typ ?? 'unknown';
 
       // Look up handler
       const handler = handlers.get(typ);
 
       if (!handler) {
         // No handler registered for this type
-        if (typ === "unknown" && options.defaultHandler) {
+        if (typ === 'unknown' && options.defaultHandler) {
           // Use default handler for messages without typ
           try {
             await options.defaultHandler(msg, plaintext);
@@ -219,7 +211,7 @@ export function createMessageRouter(
  * );
  */
 export function createTypedHandler<TPlaintext>(
-  handler: (msg: EncryptedMessage, plaintext: TPlaintext) => Promise<void> | void
+  handler: (msg: EncryptedMessage, plaintext: TPlaintext) => Promise<void> | void,
 ): MessageHandler {
   return handler as MessageHandler;
 }

@@ -16,12 +16,12 @@
  * - Uses CLI commands: All operations go through CLI → Merits API → Backend
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
-import { runCliInProcess } from "../cli/helpers/exec";
-import { sha256 } from "../../core/crypto";
-import * as ed from "@noble/ed25519";
-import { bootstrapOnboardingCmd } from "../../cli/commands/rbac";
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import * as ed from '@noble/ed25519';
+import { bootstrapOnboardingCmd } from '../../cli/commands/rbac';
+import { sha256 } from '../../core/crypto';
+import { runCliInProcess } from '../cli/helpers/exec';
 
 /**
  * Admin credentials returned by ensureAdminInitialised
@@ -48,26 +48,26 @@ export interface AdminCredentials {
 /**
  * Project root directory (parent of tests/)
  */
-const PROJECT_ROOT = join(__dirname, "../..");
+const PROJECT_ROOT = join(__dirname, '../..');
 
 /**
  * Path to .admin-seed file
  */
-const ADMIN_SEED_PATH = join(PROJECT_ROOT, ".admin-seed");
+const ADMIN_SEED_PATH = join(PROJECT_ROOT, '.admin-seed');
 
 /**
  * Default admin seed for dev environments
  * This is used if .admin-seed doesn't exist and no seed is provided
  */
-const DEFAULT_ADMIN_SEED = "admin-dev-seed-default";
+const DEFAULT_ADMIN_SEED = 'admin-dev-seed-default';
 
 const convexUrl = () => {
   const convexUrl = process.env.CONVEX_URL;
   if (!convexUrl) {
-    throw new Error("CONVEX_URL is required for admin initialization. Update your .env file");
+    throw new Error('CONVEX_URL is required for admin initialization. Update your .env file');
   }
   return convexUrl;
-}
+};
 
 /**
  * Ensure admin user is initialized and bootstrapped
@@ -103,22 +103,19 @@ const convexUrl = () => {
  * ```
  */
 export async function ensureAdminInitialised(): Promise<AdminCredentials> {
-
-
   const bootstrapKey = process.env.BOOTSTRAP_KEY;
-
 
   // Check BOOTSTRAP_KEY environment variable
   if (!bootstrapKey) {
-    throw new Error("BOOTSTRAP_KEY is required for admin initialization. Update your .env file");
+    throw new Error('BOOTSTRAP_KEY is required for admin initialization. Update your .env file');
   }
 
   // Determine seed to use
   const seed = DEFAULT_ADMIN_SEED;
 
   // Step 1: Use CLI incept command to create admin user
-  const inceptResult = await runCliInProcess(["incept", "--seed", seed], {
-    env: { MERITS_VAULT_QUIET: "1", CONVEX_URL: convexUrl() },
+  const inceptResult = await runCliInProcess(['incept', '--seed', seed], {
+    env: { MERITS_VAULT_QUIET: '1', CONVEX_URL: convexUrl() },
     expectSuccess: false,
   });
 
@@ -134,13 +131,12 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
     const aid = inceptResult.json.aid;
     const privateKey = inceptResult.json.keys.privateKey;
     const publicKey = inceptResult.json.keys.publicKey;
-    const privateKeyBytes = Buffer.from(privateKey, "base64url");
-    const publicKeyBytes = Buffer.from(publicKey, "base64url");
+    const privateKeyBytes = Buffer.from(privateKey, 'base64url');
+    const publicKeyBytes = Buffer.from(publicKey, 'base64url');
     console.log(`✅ Admin user incepted: ${aid}, bootstraping system...`);
 
-
     // Step 2: Bootstrap system if needed
-    const result = await bootstrapOnboardingCmd(convexUrl(), aid)
+    const result = await bootstrapOnboardingCmd(convexUrl(), aid);
 
     console.log(`✅ System bootstrapped: ${JSON.stringify(result)}`);
     return {
@@ -150,17 +146,16 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
       publicKey,
       privateKeyBytes,
       publicKeyBytes,
-      seed
+      seed,
     };
-
   } else if (
-    inceptResult.stderr?.includes("already exists") ||
-    inceptResult.stderr?.includes("ALREADY_EXISTS") ||
-    inceptResult.stderr?.includes("AlreadyExistsError") ||
-    inceptResult.stdout?.includes("already exists") ||
-    inceptResult.stdout?.includes("ALREADY_EXISTS") ||
+    inceptResult.stderr?.includes('already exists') ||
+    inceptResult.stderr?.includes('ALREADY_EXISTS') ||
+    inceptResult.stderr?.includes('AlreadyExistsError') ||
+    inceptResult.stdout?.includes('already exists') ||
+    inceptResult.stdout?.includes('ALREADY_EXISTS') ||
     // Sometimes Convex returns generic "Server Error" for already-exists cases
-    (inceptResult.stderr?.includes("Server Error") && inceptResult.code !== 0)
+    (inceptResult.stderr?.includes('Server Error') && inceptResult.code !== 0)
   ) {
     // User already exists - generate keys from seed to get credentials
     console.log(`✅ Admin user already exists, deriving keys from seed`);
@@ -170,10 +165,10 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
     const privateKeyBytes = seedHash;
 
     // Import createAID from core/crypto
-    const { createAID } = await import("../../core/crypto");
+    const { createAID } = await import('../../core/crypto');
     const aid = createAID(publicKeyBytes);
-    const privateKey = Buffer.from(privateKeyBytes).toString("base64url");
-    const publicKey = Buffer.from(publicKeyBytes).toString("base64url");
+    const privateKey = Buffer.from(privateKeyBytes).toString('base64url');
+    const publicKey = Buffer.from(publicKeyBytes).toString('base64url');
     console.log(`Using existing admin AID: ${aid}`);
 
     // Step 2: Bootstrap system (idempotent - safe to call even if already bootstrapped)
@@ -187,13 +182,12 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
       publicKey,
       privateKeyBytes,
       publicKeyBytes,
-      seed
+      seed,
     };
   } else {
     // Real error
     throw new Error(`Failed to incept admin: ${inceptResult.stderr || inceptResult.stdout}`);
   }
-
 }
 
 /**
@@ -205,7 +199,7 @@ export async function ensureAdminInitialised(): Promise<AdminCredentials> {
 export function resetAdminSeed(): void {
   try {
     if (existsSync(ADMIN_SEED_PATH)) {
-      const fs = require("fs");
+      const fs = require('node:fs');
       fs.unlinkSync(ADMIN_SEED_PATH);
       console.log(`✅ Reset admin seed (.admin-seed file deleted)`);
     }
@@ -222,7 +216,7 @@ export function resetAdminSeed(): void {
 export function getCurrentAdminSeed(): string | null {
   try {
     if (existsSync(ADMIN_SEED_PATH)) {
-      return readFileSync(ADMIN_SEED_PATH, "utf-8").trim();
+      return readFileSync(ADMIN_SEED_PATH, 'utf-8').trim();
     }
   } catch (err) {
     console.warn(`⚠️  Could not read .admin-seed file:`, err);

@@ -1,5 +1,5 @@
-import type { CLIContext } from "../lib/context";
-import { requireCredentials } from "../lib/credentials";
+import type { CLIContext } from '../lib/context';
+import { requireCredentials } from '../lib/credentials';
 
 export async function rolesCreate(roleName: string, opts: any & { _ctx: CLIContext }) {
   const ctx = opts._ctx;
@@ -17,9 +17,13 @@ export async function permissionsCreate(key: string, opts: any & { _ctx: CLICont
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
-  let data: any = undefined;
+  let data: any;
   if (opts.data) {
-    try { data = JSON.parse(opts.data); } catch { throw new Error("--data must be valid JSON"); }
+    try {
+      data = JSON.parse(opts.data);
+    } catch {
+      throw new Error('--data must be valid JSON');
+    }
   }
 
   // Create admin API client (handles all signing internally)
@@ -56,8 +60,8 @@ export async function usersGrantRole(aid: string, roleName: string, opts: any & 
 
 export async function bootstrapOnboardingCmd(convexUrl: string, adminAid: string) {
   // Bootstrap doesn't require authentication - it's open during initial setup
-  const { ConvexClient } = await import("convex/browser");
-  const { api } = await import("../../convex/_generated/api");
+  const { ConvexClient } = await import('convex/browser');
+  const { api } = await import('../../convex/_generated/api');
   const convex = new ConvexClient(convexUrl);
 
   return convex.mutation(api.authorization_bootstrap.bootstrapOnboarding, { adminAid });

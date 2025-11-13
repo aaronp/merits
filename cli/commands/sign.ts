@@ -30,9 +30,9 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { readFileSync } from "fs";
-import { signPayload, base64UrlToUint8Array } from "../../core/crypto";
+import { readFileSync } from 'node:fs';
+import { base64UrlToUint8Array, signPayload } from '../../core/crypto';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface SignOptions extends GlobalOptions {
   file: string; // Path to challenge file
@@ -48,23 +48,23 @@ export const sign = withGlobalOptions(async (opts: SignOptions) => {
   const format = normalizeFormat(opts.format);
 
   if (!opts.file || !opts.keys) {
-    throw new Error("Both --file and --keys are required");
+    throw new Error('Both --file and --keys are required');
   }
 
   // Load challenge file
-  const challengeContent = readFileSync(opts.file, "utf-8");
+  const challengeContent = readFileSync(opts.file, 'utf-8');
   const challenge = JSON.parse(challengeContent);
 
   if (!challenge.payload || !challenge.challengeId) {
-    throw new Error("Invalid challenge file: missing payload or challengeId");
+    throw new Error('Invalid challenge file: missing payload or challengeId');
   }
 
   // Load keys file
-  const keysContent = readFileSync(opts.keys, "utf-8");
+  const keysContent = readFileSync(opts.keys, 'utf-8');
   const keys = JSON.parse(keysContent);
 
   if (!keys.privateKey) {
-    throw new Error("Invalid keys file: missing privateKey");
+    throw new Error('Invalid keys file: missing privateKey');
   }
 
   // Convert base64url private key to Uint8Array
@@ -84,22 +84,22 @@ export const sign = withGlobalOptions(async (opts: SignOptions) => {
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
 
   // Hint for next step (only in pretty mode)
-  if (format === "pretty" && !opts.noBanner) {
-    console.error("\nNext step:");
-    console.error("  merits confirm-challenge --file challenge-response.json > session-token.json");
+  if (format === 'pretty' && !opts.noBanner) {
+    console.error('\nNext step:');
+    console.error('  merits confirm-challenge --file challenge-response.json > session-token.json');
   }
 });
 
@@ -109,12 +109,12 @@ export const sign = withGlobalOptions(async (opts: SignOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -123,5 +123,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

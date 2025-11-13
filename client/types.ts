@@ -8,8 +8,8 @@
 /**
  * Core primitives
  */
-export type AID = string;   // KERI AID (e.g., "EAlice...")
-export type SAID = string;  // Self-Addressing Identifier
+export type AID = string; // KERI AID (e.g., "EAlice...")
+export type SAID = string; // Self-Addressing Identifier
 export type Bytes = Uint8Array;
 
 /**
@@ -17,8 +17,8 @@ export type Bytes = Uint8Array;
  * Required for non-repudiation
  */
 export interface Signature {
-  ksn: number;      // Key sequence number at signing time
-  sig: string;      // CESR signature over envelope SAID
+  ksn: number; // Key sequence number at signing time
+  sig: string; // CESR signature over envelope SAID
 }
 
 /**
@@ -253,8 +253,8 @@ export interface Transport {
 export interface KeyStateRegistration {
   aid: AID;
   ksn: number;
-  verfer: string;           // Current public key (CESR)
-  estEventSaid: SAID;       // Anchored establishment event
+  verfer: string; // Current public key (CESR)
+  estEventSaid: SAID; // Anchored establishment event
 }
 
 /**
@@ -267,11 +267,11 @@ export interface Challenge {
   argsHash: string;
   ksn: number;
   nonce: string;
-  exp: number;              // Expiration timestamp
-  used: boolean;            // Single-use flag
+  exp: number; // Expiration timestamp
+  used: boolean; // Single-use flag
 }
 
 export interface ChallengeResponse {
   challengeId: string;
-  signature: string;        // Signature over SAID(challengeId||mutation||argsHash||nonce)
+  signature: string; // Signature over SAID(challengeId||mutation||argsHash||nonce)
 }

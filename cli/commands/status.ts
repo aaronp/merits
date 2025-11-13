@@ -29,8 +29,8 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
+import { requireCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface StatusOptions extends GlobalOptions {
   // No additional options - uses global --credentials option
@@ -49,7 +49,7 @@ export const status = withGlobalOptions(async (opts: StatusOptions) => {
   const creds = requireCredentials(opts.credentials);
 
   // Fetch comprehensive user status from backend
-  const userStatus = await ctx?.client?.getUserStatus(creds.aid) ?? {
+  const userStatus = (await ctx?.client?.getUserStatus(creds.aid)) ?? {
     aid: creds.aid,
     roles: [],
     groups: [],
@@ -70,16 +70,16 @@ export const status = withGlobalOptions(async (opts: StatusOptions) => {
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       // Pretty print with human-readable additions
-      console.log("User Status");
-      console.log("===========\n");
+      console.log('User Status');
+      console.log('===========\n');
       console.log(`AID:        ${output.aid}`);
-      console.log(`Roles:      ${output.roles.join(", ")}`);
+      console.log(`Roles:      ${output.roles.join(', ')}`);
       console.log(`\nGroups:     ${output.groups.length} membership(s)`);
 
       if (output.groups.length > 0) {
@@ -90,10 +90,10 @@ export const status = withGlobalOptions(async (opts: StatusOptions) => {
         });
       }
 
-      console.log(`\nPublic Key: ${output.publicKey ? output.publicKey.substring(0, 20) + "..." : "Not found"}`);
+      console.log(`\nPublic Key: ${output.publicKey ? `${output.publicKey.substring(0, 20)}...` : 'Not found'}`);
       console.log(`KSN:        ${output.publicKeyKsn}`);
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -105,12 +105,12 @@ export const status = withGlobalOptions(async (opts: StatusOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -119,5 +119,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

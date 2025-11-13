@@ -5,19 +5,19 @@
  * This module is backend-agnostic and has zero dependencies on Convex.
  */
 
-import * as ed from "@noble/ed25519";
-import { sha256 as sha256Hash } from "@noble/hashes/sha2.js";
+import * as ed from '@noble/ed25519';
+import { sha256 as sha256Hash } from '@noble/hashes/sha2.js';
 
 // Import cesr-ts at module level if available (for decodeCESRKey)
-let cesrMatter: any = null;
+let _cesrMatter: any = null;
 try {
   // Try to import cesr-ts at module load time
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const cesr = require('cesr-ts/src/matter');
-  cesrMatter = cesr.Matter;
+  _cesrMatter = cesr.Matter;
 } catch {
   // cesr-ts not available at module load time, will use dynamic import
-  cesrMatter = null;
+  _cesrMatter = null;
 }
 
 // ============================================================================
@@ -54,21 +54,14 @@ export async function generateKeyPair(): Promise<KeyPair> {
 /**
  * Sign a message with Ed25519 private key
  */
-export async function sign(
-  message: Uint8Array,
-  privateKey: Uint8Array
-): Promise<Uint8Array> {
+export async function sign(message: Uint8Array, privateKey: Uint8Array): Promise<Uint8Array> {
   return await ed.signAsync(message, privateKey);
 }
 
 /**
  * Verify an Ed25519 signature
  */
-export async function verify(
-  signature: Uint8Array,
-  message: Uint8Array,
-  publicKey: Uint8Array
-): Promise<boolean> {
+export async function verify(signature: Uint8Array, message: Uint8Array, publicKey: Uint8Array): Promise<boolean> {
   try {
     return await ed.verifyAsync(signature, message, publicKey);
   } catch {
@@ -87,7 +80,7 @@ export async function verify(
 export async function signPayload(
   payload: Record<string, any>,
   privateKey: Uint8Array,
-  keyIndex: number
+  keyIndex: number,
 ): Promise<string[]> {
   // Canonicalize payload (sort keys deterministically)
   const sortedKeys = Object.keys(payload).sort();
@@ -101,12 +94,12 @@ export async function signPayload(
     console.log('[SIGN-PAYLOAD] Canonical:', canonical);
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
     console.log('[SIGN-PAYLOAD] Payload bytes (hex):', uint8ArrayToHex(data));
     console.log('[SIGN-PAYLOAD] Private key bytes (hex, first 32):', uint8ArrayToHex(privateKey.slice(0, 32)));
-    
+
     // Verify key pair matches
     try {
       const { ed25519 } = await import('@noble/curves/ed25519.js');
@@ -127,7 +120,7 @@ export async function signPayload(
   if (process.env.DEBUG_SIGNATURES === 'true') {
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
     console.log('[SIGN-PAYLOAD] Signature (hex):', uint8ArrayToHex(signature));
@@ -157,7 +150,7 @@ export async function signPayload(
 export async function signPayloadWithSigner(
   payload: Record<string, any>,
   signer: any, // Signer interface (avoid circular dependency)
-  keyIndex: number
+  keyIndex: number,
 ): Promise<string[]> {
   // Canonicalize payload (sort keys deterministically)
   const canonical = JSON.stringify(payload, Object.keys(payload).sort());
@@ -167,9 +160,7 @@ export async function signPayloadWithSigner(
   const signatureCESR = await signer.sign(data);
 
   // Extract raw signature from CESR (remove "0B" prefix)
-  const signatureB64 = signatureCESR.startsWith("0B")
-    ? signatureCESR.substring(2)
-    : signatureCESR;
+  const signatureB64 = signatureCESR.startsWith('0B') ? signatureCESR.substring(2) : signatureCESR;
 
   // Create indexed signature
   const indexedSig = `${keyIndex}-${signatureB64}`;
@@ -191,16 +182,16 @@ export function encodeCESRKey(publicKey: Uint8Array): string {
 
 /**
  * Decode CESR-encoded key to raw bytes
- * 
+ *
  * IMPORTANT: This uses simple base64url decoding (D prefix + base64url).
  * This matches encodeCESRKey which creates simple D+base64url format.
- * 
+ *
  * For codex's proper CESR format, you need to use codex's decodeKey, but
  * that's not available in Convex. So we use encodeCESRKey/decodeCESRKey
  * which work in both client and Convex environments.
  */
 export function decodeCESRKey(cesrKey: string): Uint8Array {
-  if (!cesrKey.startsWith("D")) {
+  if (!cesrKey.startsWith('D')) {
     throw new Error("Invalid CESR key: must start with 'D'");
   }
   // Simple base64url decode (matches encodeCESRKey)
@@ -221,10 +212,7 @@ export function createAID(publicKey: Uint8Array): string {
 /**
  * Create indexed signature (format: "idx-signature_base64url")
  */
-export function createIndexedSignature(
-  idx: number,
-  signature: Uint8Array
-): string {
+export function createIndexedSignature(idx: number, signature: Uint8Array): string {
   return `${idx}-${uint8ArrayToBase64Url(signature)}`;
 }
 
@@ -235,7 +223,7 @@ export function parseIndexedSignature(indexedSig: string): {
   index: number;
   signature: Uint8Array;
 } {
-  const [idxStr, sigB64] = indexedSig.split("-");
+  const [idxStr, sigB64] = indexedSig.split('-');
   return {
     index: parseInt(idxStr, 10),
     signature: base64UrlToUint8Array(sigB64),
@@ -269,8 +257,8 @@ export function computeArgsHash(args: Record<string, any>): string {
 export function sha256Hex(data: Uint8Array): string {
   const hash = sha256(data);
   return Array.from(hash)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 /**
@@ -286,9 +274,7 @@ export function canonicalizeToBytes(payload: any): Uint8Array {
  * Get public key from private key
  * (wrapper around @noble/ed25519)
  */
-export async function getPublicKeyFromPrivate(
-  privateKey: Uint8Array
-): Promise<Uint8Array> {
+export async function getPublicKeyFromPrivate(privateKey: Uint8Array): Promise<Uint8Array> {
   return await ed.getPublicKeyAsync(privateKey);
 }
 
@@ -300,20 +286,20 @@ export async function getPublicKeyFromPrivate(
  * Encode Uint8Array to base64url (RFC 4648)
  */
 export function uint8ArrayToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   const base64 = btoa(binary);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 /**
  * Decode base64url to Uint8Array
  */
 export function base64UrlToUint8Array(base64url: string): Uint8Array {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = base64 + padding;
   const binaryString = atob(b64);
   const bytes = new Uint8Array(binaryString.length);
@@ -322,5 +308,3 @@ export function base64UrlToUint8Array(base64url: string): Uint8Array {
   }
   return bytes;
 }
-
-

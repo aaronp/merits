@@ -5,26 +5,22 @@
  * Export all types and implementations.
  */
 
+export { ConvexTransport, registerKeyState } from './convex-transport';
 export type {
   // Core types
   AID,
-  SAID,
   Bytes,
-
+  Challenge,
+  ChallengeResponse,
+  Channel,
+  KeyStateRegistration,
   // Message types
   Message,
+  SAID,
   Signature,
-
+  // Authentication
+  Signer,
   // Transport interface
   Transport,
   TransportConfig,
-  Channel,
-
-  // Authentication
-  Signer,
-  KeyStateRegistration,
-  Challenge,
-  ChallengeResponse,
 } from './types';
-
-export { ConvexTransport, registerKeyState } from './convex-transport';

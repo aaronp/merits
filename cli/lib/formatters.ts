@@ -7,12 +7,12 @@
  * RFC8785 canonicalized JSON for deterministic test snapshots
  */
 
-import chalk from "chalk";
+import chalk from 'chalk';
 
 /**
  * Output format types (updated to match cli.md spec)
  */
-export type OutputFormat = "json" | "pretty" | "raw";
+export type OutputFormat = 'json' | 'pretty' | 'raw';
 
 /**
  * Encrypted message structure (from Transport interface)
@@ -56,14 +56,14 @@ export interface FormatOptions {
 export async function formatMessages(
   messages: EncryptedMessage[],
   format: OutputFormat,
-  options: FormatOptions = {}
+  options: FormatOptions = {},
 ): Promise<string> {
   switch (format) {
-    case "json":
+    case 'json':
       return formatJSON(messages, options);
-    case "pretty":
+    case 'pretty':
       return formatPretty(messages, options);
-    case "raw":
+    case 'raw':
       return formatRaw(messages, options);
     default:
       throw new Error(`Unknown format: ${format}. Must be one of: json, pretty, raw`);
@@ -73,10 +73,7 @@ export async function formatMessages(
 /**
  * Format as JSON (canonicalized for deterministic snapshots)
  */
-function formatJSON(
-  messages: EncryptedMessage[],
-  options: FormatOptions
-): string {
+function formatJSON(messages: EncryptedMessage[], options: FormatOptions): string {
   // Determine data to include
   const data = options.verbose
     ? messages
@@ -95,10 +92,7 @@ function formatJSON(
 /**
  * Format as pretty (indented JSON)
  */
-function formatPretty(
-  messages: EncryptedMessage[],
-  options: FormatOptions
-): string {
+function formatPretty(messages: EncryptedMessage[], options: FormatOptions): string {
   const data = options.verbose
     ? messages
     : messages.map((msg) => ({
@@ -115,10 +109,7 @@ function formatPretty(
 /**
  * Format as raw (minimal JSON, no indentation)
  */
-function formatRaw(
-  messages: EncryptedMessage[],
-  options: FormatOptions
-): string {
+function formatRaw(messages: EncryptedMessage[], options: FormatOptions): string {
   const data = options.verbose
     ? messages
     : messages.map((msg) => ({
@@ -138,12 +129,12 @@ function formatRaw(
  * - No whitespace (except for pretty format)
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -152,24 +143,21 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }
 
 /**
  * Format as human-readable text
  */
-async function formatText(
-  messages: EncryptedMessage[],
-  options: FormatOptions
-): Promise<string> {
+async function _formatText(messages: EncryptedMessage[], options: FormatOptions): Promise<string> {
   const color = options.color ?? true;
   const lines: string[] = [];
 
   for (const msg of messages) {
-    const fromLabel = color ? chalk.blue("From:") : "From:";
-    const toLabel = color ? chalk.blue("To:") : "To:";
-    const typeLabel = color ? chalk.blue("Type:") : "Type:";
-    const timeLabel = color ? chalk.blue("Time:") : "Time:";
+    const fromLabel = color ? chalk.blue('From:') : 'From:';
+    const toLabel = color ? chalk.blue('To:') : 'To:';
+    const typeLabel = color ? chalk.blue('Type:') : 'Type:';
+    const timeLabel = color ? chalk.blue('Time:') : 'Time:';
 
     lines.push(`${fromLabel} ${msg.from}`);
     lines.push(`${toLabel} ${msg.to}`);
@@ -177,32 +165,32 @@ async function formatText(
     lines.push(`${timeLabel} ${formatTimestamp(msg.createdAt)}`);
 
     // Show ciphertext (decryption handled by backend)
-    const ctLabel = color ? chalk.yellow("Ciphertext:") : "Ciphertext:";
+    const ctLabel = color ? chalk.yellow('Ciphertext:') : 'Ciphertext:';
     lines.push(`${ctLabel} ${truncate(msg.ct, 64)}`);
 
     if (options.verbose) {
-      const idLabel = color ? chalk.dim("ID:") : "ID:";
-      const sigLabel = color ? chalk.dim("Signature:") : "Signature:";
-      const ksnLabel = color ? chalk.dim("KSN:") : "KSN:";
+      const idLabel = color ? chalk.dim('ID:') : 'ID:';
+      const sigLabel = color ? chalk.dim('Signature:') : 'Signature:';
+      const ksnLabel = color ? chalk.dim('KSN:') : 'KSN:';
 
       lines.push(`${idLabel} ${msg.id}`);
-      lines.push(`${sigLabel} ${msg.sig.join(", ")}`);
+      lines.push(`${sigLabel} ${msg.sig.join(', ')}`);
       lines.push(`${ksnLabel} ${msg.ksn}`);
 
       if (msg.ek) {
-        const ekLabel = color ? chalk.dim("Ephemeral Key:") : "Ephemeral Key:";
+        const ekLabel = color ? chalk.dim('Ephemeral Key:') : 'Ephemeral Key:';
         lines.push(`${ekLabel} ${msg.ek}`);
       }
       if (msg.alg) {
-        const algLabel = color ? chalk.dim("Algorithm:") : "Algorithm:";
+        const algLabel = color ? chalk.dim('Algorithm:') : 'Algorithm:';
         lines.push(`${algLabel} ${msg.alg}`);
       }
     }
 
-    lines.push(""); // Blank line between messages
+    lines.push(''); // Blank line between messages
   }
 
-  return lines.join("\n");
+  return lines.join('\n');
 }
 
 // Removed formatCompact - replaced by "raw" format
@@ -218,34 +206,30 @@ export async function formatIdentity(
     metadata?: Record<string, any>;
   },
   format: OutputFormat,
-  options: FormatOptions = {}
+  options: FormatOptions = {},
 ): Promise<string> {
   const color = options.color ?? true;
 
   switch (format) {
-    case "json":
+    case 'json':
       return JSON.stringify({ name, ...identity }, null, 2);
 
-    case "pretty": {
-      const nameLabel = color ? chalk.blue("Name:") : "Name:";
-      const aidLabel = color ? chalk.blue("AID:") : "AID:";
-      const ksnLabel = color ? chalk.blue("KSN:") : "KSN:";
+    case 'pretty': {
+      const nameLabel = color ? chalk.blue('Name:') : 'Name:';
+      const aidLabel = color ? chalk.blue('AID:') : 'AID:';
+      const ksnLabel = color ? chalk.blue('KSN:') : 'KSN:';
 
-      const lines = [
-        `${nameLabel} ${name}`,
-        `${aidLabel} ${identity.aid}`,
-        `${ksnLabel} ${identity.ksn}`,
-      ];
+      const lines = [`${nameLabel} ${name}`, `${aidLabel} ${identity.aid}`, `${ksnLabel} ${identity.ksn}`];
 
       if (identity.metadata && options.verbose) {
-        const metaLabel = color ? chalk.blue("Metadata:") : "Metadata:";
+        const metaLabel = color ? chalk.blue('Metadata:') : 'Metadata:';
         lines.push(`${metaLabel} ${JSON.stringify(identity.metadata, null, 2)}`);
       }
 
-      return lines.join("\n");
+      return lines.join('\n');
     }
 
-    case "raw":
+    case 'raw':
       return JSON.stringify({ name, ...identity });
 
     default:
@@ -264,19 +248,19 @@ export async function formatGroup(
     createdAt: number;
   },
   format: OutputFormat,
-  options: FormatOptions = {}
+  options: FormatOptions = {},
 ): Promise<string> {
   const color = options.color ?? true;
 
   switch (format) {
-    case "json":
+    case 'json':
       return JSON.stringify(group, null, 2);
 
-    case "pretty": {
-      const idLabel = color ? chalk.blue("ID:") : "ID:";
-      const nameLabel = color ? chalk.blue("Name:") : "Name:";
-      const membersLabel = color ? chalk.blue("Members:") : "Members:";
-      const createdLabel = color ? chalk.blue("Created:") : "Created:";
+    case 'pretty': {
+      const idLabel = color ? chalk.blue('ID:') : 'ID:';
+      const nameLabel = color ? chalk.blue('Name:') : 'Name:';
+      const membersLabel = color ? chalk.blue('Members:') : 'Members:';
+      const createdLabel = color ? chalk.blue('Created:') : 'Created:';
 
       const lines = [
         `${idLabel} ${group.id}`,
@@ -286,17 +270,17 @@ export async function formatGroup(
       ];
 
       if (options.verbose) {
-        lines.push("");
-        lines.push("Member AIDs:");
+        lines.push('');
+        lines.push('Member AIDs:');
         for (const aid of group.members) {
           lines.push(`  - ${aid}`);
         }
       }
 
-      return lines.join("\n");
+      return lines.join('\n');
     }
 
-    case "raw":
+    case 'raw':
       return JSON.stringify(group);
 
     default:
@@ -311,7 +295,7 @@ export async function formatGroup(
  */
 function truncate(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
-  return str.slice(0, maxLength - 3) + "...";
+  return `${str.slice(0, maxLength - 3)}...`;
 }
 
 /**
@@ -319,5 +303,5 @@ function truncate(str: string, maxLength: number): string {
  */
 function formatTimestamp(ms: number): string {
   const date = new Date(ms);
-  return date.toISOString().replace("T", " ").slice(0, 19);
+  return date.toISOString().replace('T', ' ').slice(0, 19);
 }

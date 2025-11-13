@@ -16,7 +16,7 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface SignInOptions extends GlobalOptions {
   id: string; // User AID
@@ -32,7 +32,7 @@ export const signIn = withGlobalOptions(async (opts: SignInOptions) => {
   const ctx = opts._ctx;
 
   if (!opts.id) {
-    throw new Error("--id is required");
+    throw new Error('--id is required');
   }
 
   // TODO: Fetch the user's public key from backend
@@ -44,7 +44,7 @@ export const signIn = withGlobalOptions(async (opts: SignInOptions) => {
   // Issue challenge for sign-in
   const challenge = await ctx.client.identityAuth.issueChallenge({
     aid: opts.id,
-    purpose: "signIn" as any,
+    purpose: 'signIn' as any,
     args,
     ttlMs: 120000, // 2 minutes to complete challenge
   });
@@ -52,31 +52,31 @@ export const signIn = withGlobalOptions(async (opts: SignInOptions) => {
   const output = {
     challengeId: challenge.challengeId,
     payload: challenge.payloadToSign,
-    purpose: "signIn",
+    purpose: 'signIn',
     args,
   };
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
 
   // Hint for next step (only in pretty mode)
-  if (format === "pretty" && !opts.noBanner) {
-    console.error("\nNext steps:");
-    console.error("  1. Sign the challenge:");
+  if (format === 'pretty' && !opts.noBanner) {
+    console.error('\nNext steps:');
+    console.error('  1. Sign the challenge:');
     console.error(`     merits sign --file challenge.json --keys ${opts.id}-keys.json > challenge-response.json`);
-    console.error("  2. Confirm the challenge:");
-    console.error("     merits confirm-challenge --file challenge-response.json > session-token.json");
+    console.error('  2. Confirm the challenge:');
+    console.error('     merits confirm-challenge --file challenge-response.json > session-token.json');
   }
 });
 
@@ -86,12 +86,12 @@ export const signIn = withGlobalOptions(async (opts: SignInOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -100,5 +100,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

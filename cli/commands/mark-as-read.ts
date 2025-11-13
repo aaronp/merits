@@ -15,9 +15,9 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
-import { readFileSync } from "fs";
+import { readFileSync } from 'node:fs';
+import { requireCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat } from '../lib/options';
 
 export interface MarkAsReadOptions extends GlobalOptions {
   ids?: string; // Comma-separated message IDs
@@ -30,10 +30,7 @@ export interface MarkAsReadOptions extends GlobalOptions {
  * @param positionalIds Positional message IDs (from [ids...] in command definition)
  * @param opts Command options
  */
-export async function markAsRead(
-  positionalIds: string[],
-  opts: MarkAsReadOptions
-): Promise<void> {
+export async function markAsRead(positionalIds: string[], opts: MarkAsReadOptions): Promise<void> {
   const format = normalizeFormat(opts.format);
   const ctx = opts._ctx;
 
@@ -48,10 +45,13 @@ export async function markAsRead(
     messageIds = positionalIds;
   } else if (opts.ids) {
     // Parse comma-separated IDs
-    messageIds = opts.ids.split(",").map((id) => id.trim()).filter(Boolean);
+    messageIds = opts.ids
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
   } else if (opts.idsData) {
     // Load IDs from JSON file
-    const fileContent = readFileSync(opts.idsData, "utf-8");
+    const fileContent = readFileSync(opts.idsData, 'utf-8');
     const parsed = JSON.parse(fileContent);
 
     // Support both array format and object with ids field
@@ -60,21 +60,19 @@ export async function markAsRead(
     } else if (parsed.ids && Array.isArray(parsed.ids)) {
       messageIds = parsed.ids;
     } else {
-      throw new Error(
-        "Invalid ids-data file format. Expected JSON array or object with 'ids' field."
-      );
+      throw new Error("Invalid ids-data file format. Expected JSON array or object with 'ids' field.");
     }
   } else {
-    throw new Error("Either positional IDs, --ids, or --ids-data is required");
+    throw new Error('Either positional IDs, --ids, or --ids-data is required');
   }
 
   if (messageIds.length === 0) {
-    throw new Error("No message IDs provided");
+    throw new Error('No message IDs provided');
   }
 
   // Mark messages as read via transport API
-  const { signMutationArgs } = await import("../../core/signatures");
-  const { base64UrlToUint8Array } = await import("../../core/crypto");
+  const { signMutationArgs } = await import('../../core/signatures');
+  const { base64UrlToUint8Array } = await import('../../core/crypto');
 
   const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
 
@@ -107,19 +105,19 @@ export async function markAsRead(
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(result));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(result, null, 2));
       // Add human-readable summary (to stderr, not stdout)
       if (!opts.noBanner) {
         console.error(`\n✓ Marked ${messageIds.length} messages as read`);
-        console.error("  Messages have been deleted from the server");
+        console.error('  Messages have been deleted from the server');
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(result));
       break;
   }
@@ -131,12 +129,12 @@ export async function markAsRead(
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -145,5 +143,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

@@ -8,28 +8,24 @@
  * @module
  */
 
-import type * as _dev_utils from "../_dev_utils.js";
-import type * as accessControl from "../accessControl.js";
-import type * as allowList from "../allowList.js";
-import type * as auth from "../auth.js";
-import type * as authorization_bootstrap from "../authorization_bootstrap.js";
-import type * as debug from "../debug.js";
-import type * as denyList from "../denyList.js";
-import type * as errors from "../errors.js";
-import type * as groupTags from "../groupTags.js";
-import type * as groups from "../groups.js";
-import type * as messages from "../messages.js";
-import type * as permissions from "../permissions.js";
-import type * as permissions_admin from "../permissions_admin.js";
-import type * as signatureTest from "../signatureTest.js";
-import type * as testHelpers from "../testHelpers.js";
-import type * as userStatus from "../userStatus.js";
+import type * as _dev_utils from '../_dev_utils.js';
+import type * as accessControl from '../accessControl.js';
+import type * as allowList from '../allowList.js';
+import type * as auth from '../auth.js';
+import type * as authorization_bootstrap from '../authorization_bootstrap.js';
+import type * as debug from '../debug.js';
+import type * as denyList from '../denyList.js';
+import type * as errors from '../errors.js';
+import type * as groupTags from '../groupTags.js';
+import type * as groups from '../groups.js';
+import type * as messages from '../messages.js';
+import type * as permissions from '../permissions.js';
+import type * as permissions_admin from '../permissions_admin.js';
+import type * as signatureTest from '../signatureTest.js';
+import type * as testHelpers from '../testHelpers.js';
+import type * as userStatus from '../userStatus.js';
 
-import type {
-  ApiFromModules,
-  FilterApi,
-  FunctionReference,
-} from "convex/server";
+import type { ApiFromModules, FilterApi, FunctionReference } from 'convex/server';
 
 /**
  * A utility for referencing Convex functions in your app's API.
@@ -59,13 +55,7 @@ declare const fullApi: ApiFromModules<{
 }>;
 declare const fullApiWithMounts: typeof fullApi;
 
-export declare const api: FilterApi<
-  typeof fullApiWithMounts,
-  FunctionReference<any, "public">
->;
-export declare const internal: FilterApi<
-  typeof fullApiWithMounts,
-  FunctionReference<any, "internal">
->;
+export declare const api: FilterApi<typeof fullApiWithMounts, FunctionReference<any, 'public'>>;
+export declare const internal: FilterApi<typeof fullApiWithMounts, FunctionReference<any, 'internal'>>;
 
 export declare const components: {};

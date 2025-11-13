@@ -27,11 +27,9 @@
  * - Stores credentials to .merits/identity.json (or --credentials path) with 0600 permissions
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { saveCredentials, type Credentials } from "../lib/credentials";
-import { readFileSync } from "fs";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import { readFileSync } from 'node:fs';
+import { type Credentials, saveCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface ConfirmChallengeOptions extends GlobalOptions {
   file: string; // Path to signed challenge response file
@@ -47,17 +45,15 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
   const ctx = opts._ctx;
 
   if (!opts.file) {
-    throw new Error("--file is required");
+    throw new Error('--file is required');
   }
 
   // Load signed challenge response
-  const responseContent = readFileSync(opts.file, "utf-8");
+  const responseContent = readFileSync(opts.file, 'utf-8');
   const response = JSON.parse(responseContent);
 
   if (!response.challengeId || !response.signature || !response.purpose || !response.args) {
-    throw new Error(
-      "Invalid challenge response file: missing challengeId, signature, purpose, or args"
-    );
+    throw new Error('Invalid challenge response file: missing challengeId, signature, purpose, or args');
   }
 
   const { challengeId, signature, purpose, args } = response;
@@ -65,7 +61,7 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
   // Determine the action based on purpose
   let credentials: Credentials;
 
-  if (purpose === "registerUser") {
+  if (purpose === 'registerUser') {
     // Register new user
     const result = await ctx.client.registerUser({
       aid: args.aid,
@@ -82,14 +78,14 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
       publicKey: args.publicKey,
       ksn: 0,
     };
-  } else if (purpose === "signIn") {
+  } else if (purpose === 'signIn') {
     // Sign in existing user
     // TODO: Implement sign-in flow when backend supports it
-    throw new Error("Sign-in purpose not yet implemented");
-  } else if (purpose === "rotateKey") {
+    throw new Error('Sign-in purpose not yet implemented');
+  } else if (purpose === 'rotateKey') {
     // Rotate user key
     // TODO: Implement key rotation when backend supports it
-    throw new Error("Key rotation purpose not yet implemented");
+    throw new Error('Key rotation purpose not yet implemented');
   } else {
     throw new Error(`Unknown challenge purpose: ${purpose}`);
   }
@@ -99,21 +95,21 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
 
   // Output credentials in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(credentials));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(credentials, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(credentials));
       break;
   }
 
   // Success message (only in pretty mode)
-  if (format === "pretty" && !opts.noBanner) {
-    const credentialsPath = opts.credentials || ".merits/identity.json";
+  if (format === 'pretty' && !opts.noBanner) {
+    const credentialsPath = opts.credentials || '.merits/identity.json';
     console.error(`\n✓ Credentials saved to ${credentialsPath}`);
     console.error(`\nYou can now use authenticated commands:`);
     console.error(`  merits whoami --credentials ${credentialsPath}`);
@@ -127,12 +123,12 @@ export const confirmChallenge = withGlobalOptions(async (opts: ConfirmChallengeO
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -141,5 +137,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

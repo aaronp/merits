@@ -15,10 +15,9 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { generateKeyPair, createAID } from "../../core/crypto";
-import { sha256 } from "../../core/crypto";
-import * as ed from "@noble/ed25519";
+import * as ed from '@noble/ed25519';
+import { createAID, generateKeyPair, sha256 } from '../../core/crypto';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface GenKeyOptions extends GlobalOptions {
   seed?: string; // Deterministic seed for testing
@@ -32,7 +31,7 @@ export interface GenKeyOptions extends GlobalOptions {
 export const genKey = withGlobalOptions(async (opts: GenKeyOptions) => {
   const format = normalizeFormat(opts.format);
 
-  let keys;
+  let keys: any;
 
   if (opts.seed) {
     // Deterministic key generation for testing
@@ -54,20 +53,20 @@ export const genKey = withGlobalOptions(async (opts: GenKeyOptions) => {
   const aid = createAID(keys.publicKey);
   const output = {
     aid,
-    privateKey: Buffer.from(keys.privateKey).toString("base64url"),
-    publicKey: Buffer.from(keys.publicKey).toString("base64url"),
+    privateKey: Buffer.from(keys.privateKey).toString('base64url'),
+    publicKey: Buffer.from(keys.publicKey).toString('base64url'),
   };
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -79,12 +78,12 @@ export const genKey = withGlobalOptions(async (opts: GenKeyOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -93,5 +92,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

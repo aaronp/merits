@@ -2,10 +2,10 @@
  * ConvexGroupChatApi: Adapter for the new linear message history group chat system
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
-import type { AuthProof } from "../../core/types";
+import type { ConvexClient } from 'convex/browser';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
+import type { AuthProof } from '../../core/types';
 
 export interface GroupChatRequest {
   name: string;
@@ -17,27 +17,27 @@ export interface GroupChatRequest {
 }
 
 export interface SendMessageRequest {
-  groupChatId: Id<"groupChats">;
+  groupChatId: Id<'groupChats'>;
   encryptedMessage: string;
   messageType: string;
   auth: AuthProof;
 }
 
 export interface GetMessagesRequest {
-  groupChatId: Id<"groupChats">;
+  groupChatId: Id<'groupChats'>;
   afterSeqNo?: number;
   limit?: number;
   callerAid: string;
 }
 
 export interface UpdateSyncRequest {
-  groupChatId: Id<"groupChats">;
+  groupChatId: Id<'groupChats'>;
   latestSeqNo: number;
   auth: AuthProof;
 }
 
 export interface GroupMessage {
-  id: Id<"groupMessages">;
+  id: Id<'groupMessages'>;
   encryptedMessage: string;
   messageType: string;
   senderAid: string;
@@ -46,7 +46,7 @@ export interface GroupMessage {
 }
 
 export interface GroupChat {
-  id: Id<"groupChats">;
+  id: Id<'groupChats'>;
   ownerAid: string;
   membershipSaid: string;
   name: string;
@@ -63,7 +63,7 @@ export interface GroupChat {
 }
 
 export interface GroupChatSummary {
-  id: Id<"groupChats">;
+  id: Id<'groupChats'>;
   name: string;
   ownerAid: string;
   membershipSaid: string;
@@ -77,7 +77,7 @@ export interface GroupChatSummary {
 export class ConvexGroupChatApi {
   constructor(private client: ConvexClient) {}
 
-  async createGroupChat(req: GroupChatRequest): Promise<{ groupChatId: Id<"groupChats"> }> {
+  async createGroupChat(req: GroupChatRequest): Promise<{ groupChatId: Id<'groupChats'> }> {
     const result = await this.client.mutation(api.groups.createGroupChat, {
       name: req.name,
       ownerAid: req.ownerAid,
@@ -94,7 +94,7 @@ export class ConvexGroupChatApi {
     return { groupChatId: result.groupChatId };
   }
 
-  async sendMessage(req: SendMessageRequest): Promise<{ messageId: Id<"groupMessages">; seqNo: number }> {
+  async sendMessage(req: SendMessageRequest): Promise<{ messageId: Id<'groupMessages'>; seqNo: number }> {
     const result = await this.client.mutation(api.groups.sendGroupMessage, {
       groupChatId: req.groupChatId,
       encryptedMessage: req.encryptedMessage,
@@ -132,7 +132,7 @@ export class ConvexGroupChatApi {
     });
   }
 
-  async getGroupChat(groupChatId: Id<"groupChats">, callerAid: string): Promise<GroupChat> {
+  async getGroupChat(groupChatId: Id<'groupChats'>, callerAid: string): Promise<GroupChat> {
     const groupChat = await this.client.query(api.groups.getGroupChat, {
       groupChatId,
       callerAid,
@@ -149,11 +149,7 @@ export class ConvexGroupChatApi {
     return groups as GroupChatSummary[];
   }
 
-  async addMembers(
-    groupChatId: Id<"groupChats">,
-    members: string[],
-    auth: AuthProof
-  ): Promise<void> {
+  async addMembers(groupChatId: Id<'groupChats'>, members: string[], auth: AuthProof): Promise<void> {
     await this.client.mutation(api.groups.addGroupMembers, {
       groupChatId,
       members,
@@ -165,11 +161,7 @@ export class ConvexGroupChatApi {
     });
   }
 
-  async removeMembers(
-    groupChatId: Id<"groupChats">,
-    members: string[],
-    auth: AuthProof
-  ): Promise<void> {
+  async removeMembers(groupChatId: Id<'groupChats'>, members: string[], auth: AuthProof): Promise<void> {
     await this.client.mutation(api.groups.removeGroupMembers, {
       groupChatId,
       members,
@@ -181,11 +173,7 @@ export class ConvexGroupChatApi {
     });
   }
 
-  async updateMembershipSaid(
-    groupChatId: Id<"groupChats">,
-    membershipSaid: string,
-    auth: AuthProof
-  ): Promise<void> {
+  async updateMembershipSaid(groupChatId: Id<'groupChats'>, membershipSaid: string, auth: AuthProof): Promise<void> {
     await this.client.mutation(api.groups.updateMembershipSaid, {
       groupChatId,
       membershipSaid,

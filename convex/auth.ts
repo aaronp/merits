@@ -1,25 +1,18 @@
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import { v } from 'convex/values';
 import {
-  verify,
-  decodeCESRKey,
   base64UrlToUint8Array,
-  uint8ArrayToBase64Url,
-  sha256,
-  sha256Hex,
   computeArgsHash as coreComputeArgsHash,
-} from "../core/crypto";
-import { verifyMutationSignature } from "../core/signatures";
-import type { SignedRequest } from "../core/types";
-import {
-  NotFoundError,
-  ChallengeError,
-  SignatureError,
-  AlreadyExistsError,
-  ValidationError,
-} from "./errors";
+  decodeCESRKey,
+  sha256Hex,
+  uint8ArrayToBase64Url,
+  verify,
+} from '../core/crypto';
+import { verifyMutationSignature } from '../core/signatures';
+import type { SignedRequest } from '../core/types';
+import type { Id } from './_generated/dataModel';
+import type { MutationCtx, QueryCtx } from './_generated/server';
+import { mutation, query } from './_generated/server';
+import { AlreadyExistsError, ChallengeError, NotFoundError, SignatureError, ValidationError } from './errors';
 
 /**
  * KERI Key State
@@ -63,16 +56,16 @@ export function computeEnvelopeHash(
   alg: string | undefined,
   ek: string | undefined,
   createdAt: number,
-  expiresAt: number
+  expiresAt: number,
 ): string {
   // Canonical envelope with version (deterministic order)
   const envelope = {
-    ver: "envelope/1",
+    ver: 'envelope/1',
     recpAid,
     senderAid,
     ctHash,
-    alg: alg ?? "",
-    ek: ek ?? "",
+    alg: alg ?? '',
+    ek: ek ?? '',
     createdAt,
     expiresAt,
   };
@@ -89,17 +82,14 @@ export function computeEnvelopeHash(
  * In production, this should resolve via OOBI/resolver.
  * For now, we cache key states with 60s TTL.
  */
-export async function ensureKeyState(
-  ctx: MutationCtx | QueryCtx,
-  aid: string
-): Promise<KeyState> {
+export async function ensureKeyState(ctx: MutationCtx | QueryCtx, aid: string): Promise<KeyState> {
   const now = Date.now();
   const TTL = 60_000; // 60 seconds
 
   // Check cache
   const cached = await ctx.db
-    .query("keyStates")
-    .withIndex("by_aid", (q) => q.eq("aid", aid))
+    .query('keyStates')
+    .withIndex('by_aid', (q) => q.eq('aid', aid))
     .first();
 
   if (cached && cached.updatedAt > now - TTL) {
@@ -115,8 +105,8 @@ export async function ensureKeyState(
 
   // TODO: In production, resolve via OOBI/resolver
   // For now, throw error requiring explicit key state registration
-  throw new NotFoundError("Key state", aid, {
-    hint: "Register the key state first using create-user or registerKeyState",
+  throw new NotFoundError('Key state', aid, {
+    hint: 'Register the key state first using create-user or registerKeyState',
     aid,
   });
 }
@@ -136,8 +126,8 @@ export const registerKeyState = mutation({
     const now = Date.now();
 
     const existing = await ctx.db
-      .query("keyStates")
-      .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+      .query('keyStates')
+      .withIndex('by_aid', (q) => q.eq('aid', args.aid))
       .first();
 
     console.log('[REGISTER-KEY-STATE] AID:', args.aid);
@@ -156,7 +146,7 @@ export const registerKeyState = mutation({
       return existing._id;
     } else {
       console.log('[REGISTER-KEY-STATE] Creating new key state');
-      return await ctx.db.insert("keyStates", {
+      return await ctx.db.insert('keyStates', {
         aid: args.aid,
         ksn: args.ksn,
         keys: args.keys,
@@ -185,18 +175,14 @@ export const registerKeyState = mutation({
  * @param keyState - Current key state with keys and threshold
  * @returns true if signatures meet threshold, false otherwise
  */
-async function verifyIndexedSigs(
-  payload: Record<string, any>,
-  sigs: string[],
-  keyState: KeyState
-): Promise<boolean> {
+async function verifyIndexedSigs(payload: Record<string, any>, sigs: string[], keyState: KeyState): Promise<boolean> {
   const canonical = JSON.stringify(payload, Object.keys(payload).sort());
   const encoder = new TextEncoder();
   const data = encoder.encode(canonical);
 
   const uint8ArrayToHex = (bytes: Uint8Array): string => {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   };
 
@@ -212,7 +198,7 @@ async function verifyIndexedSigs(
   for (const sig of sigs) {
     // Parse indexed signature: "idx-signature"
     // Split on first hyphen only, as base64url may contain hyphens
-    const hyphenIndex = sig.indexOf("-");
+    const hyphenIndex = sig.indexOf('-');
     if (hyphenIndex === -1) {
       console.error('[VERIFY-INDEXED] Invalid signature format (no hyphen):', sig);
       continue; // Invalid format
@@ -220,7 +206,7 @@ async function verifyIndexedSigs(
 
     const idxStr = sig.substring(0, hyphenIndex);
     const sigB64 = sig.substring(hyphenIndex + 1);
-    const idx = parseInt(idxStr);
+    const idx = parseInt(idxStr, 10);
 
     console.log('[VERIFY-INDEXED] Parsed signature - index:', idx, 'sig (base64url):', sigB64);
 
@@ -246,7 +232,6 @@ async function verifyIndexedSigs(
       }
     } catch (error) {
       console.error('[VERIFY-INDEXED] Verification error:', error);
-      continue; // Invalid signature
     }
   }
 
@@ -274,7 +259,7 @@ export const issueChallenge = mutation({
 
     const nonce = crypto.randomUUID();
 
-    const challengeId = await ctx.db.insert("challenges", {
+    const challengeId = await ctx.db.insert('challenges', {
       aid: args.aid,
       purpose: args.purpose,
       argsHash: args.argsHash,
@@ -286,8 +271,8 @@ export const issueChallenge = mutation({
 
     // Canonical payload for KERI signing (with version and audience)
     const payload = {
-      ver: "msg-auth/1", // Payload schema version
-      aud: "https://merits-convex.app", // Audience - your server origin
+      ver: 'msg-auth/1', // Payload schema version
+      aud: 'https://merits-convex.app', // Audience - your server origin
       ts: now,
       nonce,
       aid: args.aid,
@@ -304,7 +289,7 @@ export const issueChallenge = mutation({
  */
 export const proveChallenge = mutation({
   args: {
-    challengeId: v.id("challenges"),
+    challengeId: v.id('challenges'),
     sigs: v.array(v.string()),
     ksn: v.number(),
   },
@@ -314,24 +299,24 @@ export const proveChallenge = mutation({
     // Fetch challenge
     const challenge = await ctx.db.get(args.challengeId);
     if (!challenge) {
-      throw new NotFoundError("Challenge", args.challengeId, {
-        hint: "The challenge may have expired or been used already",
+      throw new NotFoundError('Challenge', args.challengeId, {
+        hint: 'The challenge may have expired or been used already',
       });
     }
 
     if (challenge.used) {
-      throw new ChallengeError("Challenge already used", {
+      throw new ChallengeError('Challenge already used', {
         challengeId: args.challengeId,
-        hint: "Request a new challenge to authenticate",
+        hint: 'Request a new challenge to authenticate',
       });
     }
 
     if (challenge.expiresAt < now) {
-      throw new ChallengeError("Challenge expired", {
+      throw new ChallengeError('Challenge expired', {
         challengeId: args.challengeId,
         expiresAt: challenge.expiresAt,
         now,
-        hint: "Request a new challenge to authenticate",
+        hint: 'Request a new challenge to authenticate',
       });
     }
 
@@ -340,10 +325,10 @@ export const proveChallenge = mutation({
 
     // Verify KSN is not ahead of current state (prevent future key use)
     if (args.ksn > keyState.ksn) {
-      throw new ValidationError("ksn", "KSN ahead of current state", {
+      throw new ValidationError('ksn', 'KSN ahead of current state', {
         providedKsn: args.ksn,
         currentKsn: keyState.ksn,
-        hint: "Use the current key sequence number",
+        hint: 'Use the current key sequence number',
       });
     }
 
@@ -353,14 +338,14 @@ export const proveChallenge = mutation({
       aid: challenge.aid,
       purpose: challenge.purpose,
       argsHash: challenge.argsHash,
-      aud: "merits-convex",
+      aud: 'merits-convex',
       ts: challenge.createdAt,
     };
 
     // Verify signatures
     const valid = await verifyIndexedSigs(payload, args.sigs, keyState);
     if (!valid) {
-      throw new SignatureError("Invalid signatures or threshold not met", {
+      throw new SignatureError('Invalid signatures or threshold not met', {
         aid: challenge.aid,
         ksn: args.ksn,
         threshold: keyState.threshold,
@@ -394,38 +379,38 @@ export const proveChallenge = mutation({
  */
 export async function verifyAuth(
   ctx: MutationCtx,
-  auth: { challengeId: Id<"challenges">; sigs: string[]; ksn: number },
+  auth: { challengeId: Id<'challenges'>; sigs: string[]; ksn: number },
   expectedPurpose: string,
-  args: Record<string, any>
+  args: Record<string, any>,
 ): Promise<{
   aid: string;
   ksn: number;
   evtSaid: string;
-  challengeId: Id<"challenges">;
+  challengeId: Id<'challenges'>;
 }> {
   const now = Date.now();
 
   // Fetch challenge
   const challenge = await ctx.db.get(auth.challengeId);
   if (!challenge) {
-    throw new NotFoundError("Challenge", auth.challengeId, {
-      hint: "The challenge may have expired or been used already",
+    throw new NotFoundError('Challenge', auth.challengeId, {
+      hint: 'The challenge may have expired or been used already',
     });
   }
 
   if (challenge.used) {
-    throw new ChallengeError("Challenge already used", {
+    throw new ChallengeError('Challenge already used', {
       challengeId: auth.challengeId,
-      hint: "Request a new challenge to authenticate",
+      hint: 'Request a new challenge to authenticate',
     });
   }
 
   if (challenge.expiresAt < now) {
-    throw new ChallengeError("Challenge expired", {
+    throw new ChallengeError('Challenge expired', {
       challengeId: auth.challengeId,
       expiresAt: challenge.expiresAt,
       now,
-      hint: "Request a new challenge to authenticate",
+      hint: 'Request a new challenge to authenticate',
     });
   }
 
@@ -433,17 +418,17 @@ export async function verifyAuth(
   const MAX_SKEW = 2 * 60 * 1000;
   const skew = Math.abs(now - challenge.createdAt);
   if (skew > MAX_SKEW) {
-    throw new ChallengeError("Challenge timestamp skew too large", {
+    throw new ChallengeError('Challenge timestamp skew too large', {
       challengeCreatedAt: challenge.createdAt,
       now,
       skew,
       maxSkew: MAX_SKEW,
-      hint: "Check system clock synchronization",
+      hint: 'Check system clock synchronization',
     });
   }
 
   if (challenge.purpose !== expectedPurpose) {
-    throw new ValidationError("purpose", "Purpose mismatch", {
+    throw new ValidationError('purpose', 'Purpose mismatch', {
       expected: expectedPurpose,
       actual: challenge.purpose,
       hint: `This challenge was created for '${challenge.purpose}', not '${expectedPurpose}'`,
@@ -453,10 +438,10 @@ export async function verifyAuth(
   // Verify argsHash matches (ALWAYS recompute server-side)
   const argsHash = await computeArgsHash(args);
   if (challenge.argsHash !== argsHash) {
-    throw new ValidationError("argsHash", "Arguments hash mismatch", {
+    throw new ValidationError('argsHash', 'Arguments hash mismatch', {
       expected: challenge.argsHash,
       actual: argsHash,
-      hint: "The signed challenge does not match the provided arguments",
+      hint: 'The signed challenge does not match the provided arguments',
     });
   }
 
@@ -465,17 +450,17 @@ export async function verifyAuth(
 
   // Verify KSN (only allow current KSN for strict verification)
   if (auth.ksn !== keyState.ksn) {
-    throw new ValidationError("ksn", "KSN mismatch", {
+    throw new ValidationError('ksn', 'KSN mismatch', {
       expected: keyState.ksn,
       actual: auth.ksn,
-      hint: "Use the current key sequence number",
+      hint: 'Use the current key sequence number',
     });
   }
 
   // Reconstruct canonical payload (MUST match what client signed)
   const payload = {
-    ver: "msg-auth/1",
-    aud: "https://merits-convex.app",
+    ver: 'msg-auth/1',
+    aud: 'https://merits-convex.app',
     ts: challenge.createdAt,
     nonce: challenge.nonce,
     aid: challenge.aid,
@@ -492,7 +477,7 @@ export async function verifyAuth(
   const data = encoder.encode(canonical);
   const uint8ArrayToHex = (bytes: Uint8Array): string => {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   };
   console.log('[VERIFY-AUTH] Payload bytes (hex):', uint8ArrayToHex(data));
@@ -502,15 +487,15 @@ export async function verifyAuth(
   console.log('[VERIFY-AUTH] Payload:', JSON.stringify(payload, null, 2));
   console.log('[VERIFY-AUTH] Auth sigs:', auth.sigs);
   console.log('[VERIFY-AUTH] Key state:', JSON.stringify(keyState, null, 2));
-  
+
   const valid = await verifyIndexedSigs(payload, auth.sigs, keyState);
   console.log('[VERIFY-AUTH] verifyIndexedSigs returned:', valid);
-  
+
   if (!valid) {
     console.error('[VERIFY-AUTH] Signature verification FAILED');
     console.error('[VERIFY-AUTH] Challenge:', JSON.stringify(challenge, null, 2));
     console.error('[VERIFY-AUTH] Auth:', JSON.stringify(auth, null, 2));
-    throw new SignatureError("Invalid signatures or threshold not met", {
+    throw new SignatureError('Invalid signatures or threshold not met', {
       aid: challenge.aid,
       ksn: auth.ksn,
       threshold: keyState.threshold,
@@ -556,7 +541,7 @@ export async function verifyAuth(
  */
 export async function verifySignedRequest(
   ctx: MutationCtx,
-  args: Record<string, any>
+  args: Record<string, any>,
 ): Promise<{
   aid: string;
   ksn: number;
@@ -565,7 +550,7 @@ export async function verifySignedRequest(
   const sig = args.sig as SignedRequest | undefined;
 
   if (!sig) {
-    throw new ValidationError("sig", "No signature in request", {
+    throw new ValidationError('sig', 'No signature in request', {
       hint: "All authenticated mutations require a 'sig' field with SignedRequest data",
     });
   }
@@ -575,8 +560,8 @@ export async function verifySignedRequest(
 
   // Get public key (first key in key state)
   if (!keyState.keys[0]) {
-    throw new NotFoundError("Public key", sig.keyId, {
-      hint: "No keys registered for this AID",
+    throw new NotFoundError('Public key', sig.keyId, {
+      hint: 'No keys registered for this AID',
     });
   }
 
@@ -586,7 +571,7 @@ export async function verifySignedRequest(
   // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
   const uint8ArrayToHex = (bytes: Uint8Array): string => {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   };
 
@@ -609,7 +594,7 @@ export async function verifySignedRequest(
     // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
 
@@ -618,7 +603,7 @@ export async function verifySignedRequest(
     console.error('[VERIFY-SERVER] Sig received:', JSON.stringify(sig, null, 2));
     console.error('[VERIFY-SERVER] Public key CESR:', publicKeyCESR);
     console.error('[VERIFY-SERVER] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
-    throw new SignatureError("Signature verification failed", {
+    throw new SignatureError('Signature verification failed', {
       aid: sig.keyId,
       timestamp: sig.timestamp,
       hint: `Signature verification error: ${error?.message || 'Unknown error'}`,
@@ -630,7 +615,7 @@ export async function verifySignedRequest(
     // Helper to convert Uint8Array to hex (Convex-compatible, no Buffer)
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
 
@@ -639,10 +624,10 @@ export async function verifySignedRequest(
     console.error('[VERIFY-SERVER] Sig:', JSON.stringify(sig, null, 2));
     console.error('[VERIFY-SERVER] Public key CESR:', publicKeyCESR);
     console.error('[VERIFY-SERVER] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
-    throw new SignatureError("Signature verification failed", {
+    throw new SignatureError('Signature verification failed', {
       aid: sig.keyId,
       timestamp: sig.timestamp,
-      hint: "Signature does not match the provided arguments",
+      hint: 'Signature does not match the provided arguments',
     });
   }
 
@@ -656,23 +641,21 @@ export async function verifySignedRequest(
 
   // Look for existing nonce in the last 10 minutes
   const existingNonce = await ctx.db
-    .query("usedNonces")
-    .withIndex("by_keyId_nonce", (q) =>
-      q.eq("keyId", sig.keyId).eq("nonce", sig.nonce)
-    )
+    .query('usedNonces')
+    .withIndex('by_keyId_nonce', (q) => q.eq('keyId', sig.keyId).eq('nonce', sig.nonce))
     .first();
 
   if (existingNonce) {
-    throw new ValidationError("nonce", "Nonce already used (replay detected)", {
+    throw new ValidationError('nonce', 'Nonce already used (replay detected)', {
       nonce: sig.nonce,
       keyId: sig.keyId,
       previousUse: existingNonce.usedAt,
-      hint: "Each request must have a unique nonce. This appears to be a replayed request.",
+      hint: 'Each request must have a unique nonce. This appears to be a replayed request.',
     });
   }
 
   // Store nonce to prevent replay
-  await ctx.db.insert("usedNonces", {
+  await ctx.db.insert('usedNonces', {
     keyId: sig.keyId,
     nonce: sig.nonce,
     usedAt: now,
@@ -696,8 +679,8 @@ export const getKeyState = query({
   },
   handler: async (ctx, { aid }) => {
     return await ctx.db
-      .query("keyStates")
-      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .query('keyStates')
+      .withIndex('by_aid', (q) => q.eq('aid', aid))
       .first();
   },
 });
@@ -709,7 +692,7 @@ export const computeHash = query({
   args: {
     args: v.any(),
   },
-  handler: async (ctx, { args }) => {
+  handler: async (_ctx, { args }) => {
     return await computeArgsHash(args);
   },
 });
@@ -723,9 +706,9 @@ export const cleanupExpiredChallenges = mutation({
     const now = Date.now();
 
     const expiredChallenges = await ctx.db
-      .query("challenges")
-      .withIndex("by_expiration")
-      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .query('challenges')
+      .withIndex('by_expiration')
+      .filter((q) => q.lt(q.field('expiresAt'), now))
       .collect();
 
     for (const ch of expiredChallenges) {
@@ -744,7 +727,7 @@ export const registerUser = mutation({
     aid: v.string(),
     publicKey: v.string(),
     auth: v.object({
-      challengeId: v.id("challenges"),
+      challengeId: v.id('challenges'),
       sigs: v.array(v.string()),
       ksn: v.number(),
     }),
@@ -753,24 +736,24 @@ export const registerUser = mutation({
     const now = Date.now();
 
     // Verify authentication with purpose "registerUser"
-    await verifyAuth(ctx as any, args.auth, "registerUser", {
+    await verifyAuth(ctx as any, args.auth, 'registerUser', {
       aid: args.aid,
       publicKey: args.publicKey,
     });
 
     // Ensure user doesn't already exist
     const existing = await ctx.db
-      .query("users")
-      .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+      .query('users')
+      .withIndex('by_aid', (q) => q.eq('aid', args.aid))
       .first();
     if (existing) {
-      throw new AlreadyExistsError("User", args.aid, {
-        hint: "Use sign-in to authenticate with an existing user",
+      throw new AlreadyExistsError('User', args.aid, {
+        hint: 'Use sign-in to authenticate with an existing user',
       });
     }
 
     // Insert user
-    await ctx.db.insert("users", {
+    await ctx.db.insert('users', {
       aid: args.aid,
       publicKey: args.publicKey,
       createdAt: now,
@@ -778,28 +761,28 @@ export const registerUser = mutation({
 
     // Assign default role 'anon' - create role if it doesn't exist
     let anonRole = await ctx.db
-      .query("roles")
-      .withIndex("by_roleName", (q) => q.eq("roleName", "anon"))
+      .query('roles')
+      .withIndex('by_roleName', (q) => q.eq('roleName', 'anon'))
       .first();
-    
+
     if (!anonRole) {
       // Create anon role if it doesn't exist (should be created by bootstrap, but handle gracefully)
       console.log(`[REGISTER-USER] 'anon' role not found, creating it for user ${args.aid}`);
-      const roleId = await ctx.db.insert("roles", {
-        roleName: "anon",
-        adminAID: "SYSTEM",
-        actionSAID: "registerUser/auto-create",
+      const roleId = await ctx.db.insert('roles', {
+        roleName: 'anon',
+        adminAID: 'SYSTEM',
+        actionSAID: 'registerUser/auto-create',
         timestamp: now,
       });
       anonRole = await ctx.db.get(roleId);
     }
-    
+
     if (anonRole) {
-      await ctx.db.insert("userRoles", {
+      await ctx.db.insert('userRoles', {
         userAID: args.aid,
         roleId: anonRole._id,
-        adminAID: "SYSTEM",
-        actionSAID: "bootstrap/auto-assign",
+        adminAID: 'SYSTEM',
+        actionSAID: 'bootstrap/auto-assign',
         timestamp: now,
       });
       console.log(`[REGISTER-USER] Assigned 'anon' role to user ${args.aid}`);
@@ -809,33 +792,29 @@ export const registerUser = mutation({
 
     // Best-effort: add user to onboarding group if present
     const onboardingGroup = await ctx.db
-      .query("groupChats")
-      .withIndex("by_tag", (q) => q.eq("tag", "onboarding"))
+      .query('groupChats')
+      .withIndex('by_tag', (q) => q.eq('tag', 'onboarding'))
       .first();
     if (onboardingGroup) {
       // Check if user is already a member (shouldn't happen, but be defensive)
       const existingMembership = await ctx.db
-        .query("groupMembers")
-        .withIndex("by_group_aid", (q) =>
-          q.eq("groupChatId", onboardingGroup._id).eq("aid", args.aid)
-        )
+        .query('groupMembers')
+        .withIndex('by_group_aid', (q) => q.eq('groupChatId', onboardingGroup._id).eq('aid', args.aid))
         .first();
       if (!existingMembership) {
         // Get current max seqNo so new members only see NEW messages
         const allMessages = await ctx.db
-          .query("groupMessages")
-          .withIndex("by_group_seq", (q) => q.eq("groupChatId", onboardingGroup._id))
+          .query('groupMessages')
+          .withIndex('by_group_seq', (q) => q.eq('groupChatId', onboardingGroup._id))
           .collect();
-        const currentSeqNo = allMessages.length > 0
-          ? Math.max(...allMessages.map(m => m.seqNo))
-          : -1;
+        const currentSeqNo = allMessages.length > 0 ? Math.max(...allMessages.map((m) => m.seqNo)) : -1;
 
-        await ctx.db.insert("groupMembers", {
+        await ctx.db.insert('groupMembers', {
           groupChatId: onboardingGroup._id,
           aid: args.aid,
           latestSeqNo: currentSeqNo, // Start from current seqNo, so they only see NEW messages
           joinedAt: now,
-          role: "member",
+          role: 'member',
         });
       }
     }
@@ -853,12 +832,12 @@ export const registerUser = mutation({
  */
 export const getAidForChallenge = query({
   args: {
-    challengeId: v.id("challenges"),
+    challengeId: v.id('challenges'),
   },
   handler: async (ctx, { challengeId }) => {
     const challenge = await ctx.db.get(challengeId);
     if (!challenge) {
-      throw new Error("Challenge not found");
+      throw new Error('Challenge not found');
     }
     return { aid: challenge.aid };
   },
@@ -911,20 +890,20 @@ export const getPublicKey = query({
   },
   handler: async (ctx, { aid }) => {
     const user = await ctx.db
-      .query("users")
-      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .query('users')
+      .withIndex('by_aid', (q) => q.eq('aid', aid))
       .first();
 
     if (!user) {
-      throw new NotFoundError("User", aid, {
-        hint: "The user must be registered before you can fetch their public key",
+      throw new NotFoundError('User', aid, {
+        hint: 'The user must be registered before you can fetch their public key',
       });
     }
 
     // Also fetch key state for additional context
     const keyState = await ctx.db
-      .query("keyStates")
-      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .query('keyStates')
+      .withIndex('by_aid', (q) => q.eq('aid', aid))
       .first();
 
     return {

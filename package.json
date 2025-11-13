@@ -20,7 +20,10 @@
     "test:unit": "bun test tests/crypto.test.ts tests/signature-debug.test.ts tests/timestamp-fix.test.ts tests/end-to-end-simple.test.ts",
     "test:cli": "bun test tests/cli/unit/",
     "typecheck": "tsc --noEmit",
-    "dev": "bunx convex dev"
+    "dev": "bunx convex dev",
+    "lint": "biome check .",
+    "lint:fix": "biome check --write .",
+    "format": "biome format --write ."
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",

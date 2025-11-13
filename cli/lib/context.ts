@@ -5,8 +5,8 @@
  * Provides access to config and client.
  */
 
-import type { MeritsClient } from "../../src/client/types";
-import type { ResolvedConfig } from "./config";
+import type { MeritsClient } from '../../src/client/types';
+import type { ResolvedConfig } from './config';
 
 /**
  * CLI context passed to all commands
@@ -26,9 +26,7 @@ export function getContext(opts: any): CLIContext {
   const ctx = opts._ctx as CLIContext | undefined;
 
   if (!ctx) {
-    throw new Error(
-      "CLI context not initialized. This is a bug in the CLI framework."
-    );
+    throw new Error('CLI context not initialized. This is a bug in the CLI framework.');
   }
 
   return ctx;

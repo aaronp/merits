@@ -4,16 +4,15 @@
  * Wraps Convex mutations/queries to provide the IdentityAuth contract.
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { ConvexClient } from 'convex/browser';
+import { api } from '../../convex/_generated/api';
 import type {
   IdentityAuth,
   IssueChallengeRequest,
   IssueChallengeResponse,
   VerifyAuthRequest,
   VerifyAuthResult,
-} from "../../core/interfaces/IdentityAuth";
+} from '../../core/interfaces/IdentityAuth';
 
 /**
  * Client-side adapter for IdentityAuth using Convex
@@ -41,21 +40,16 @@ export class ConvexIdentityAuth implements IdentityAuth {
     };
   }
 
-  async verifyAuth(req: VerifyAuthRequest): Promise<VerifyAuthResult> {
+  async verifyAuth(_req: VerifyAuthRequest): Promise<VerifyAuthResult> {
     // verifyAuth is server-side only - called within Convex mutations
     // This method should not be called from client code
-    throw new Error(
-      "verifyAuth is server-side only. It's called internally by Convex mutations."
-    );
+    throw new Error("verifyAuth is server-side only. It's called internally by Convex mutations.");
   }
 }
 
 /**
  * Helper to compute args hash (client-side utility)
  */
-export async function computeArgsHash(
-  client: ConvexClient,
-  args: Record<string, unknown>
-): Promise<string> {
+export async function computeArgsHash(client: ConvexClient, args: Record<string, unknown>): Promise<string> {
   return await client.query(api.auth.computeHash, { args });
 }

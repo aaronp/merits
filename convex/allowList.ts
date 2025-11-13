@@ -18,9 +18,9 @@
  * @see accessControl.ts for canMessage() helper
  */
 
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { verifySignedRequest } from "./auth";
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { verifySignedRequest } from './auth';
 
 /**
  * Add an AID to the user's allow-list
@@ -62,10 +62,8 @@ export const add = mutation({
 
     // Check if already in list
     const existing = await ctx.db
-      .query("allowList")
-      .withIndex("by_owner_allowed", (q) =>
-        q.eq("ownerAid", ownerAid).eq("allowedAid", args.allowedAid)
-      )
+      .query('allowList')
+      .withIndex('by_owner_allowed', (q) => q.eq('ownerAid', ownerAid).eq('allowedAid', args.allowedAid))
       .first();
 
     if (existing) {
@@ -73,7 +71,7 @@ export const add = mutation({
     }
 
     // Add to allow-list
-    const id = await ctx.db.insert("allowList", {
+    const id = await ctx.db.insert('allowList', {
       ownerAid,
       allowedAid: args.allowedAid,
       addedAt: Date.now(),
@@ -123,14 +121,12 @@ export const remove = mutation({
 
     // Find entry
     const entry = await ctx.db
-      .query("allowList")
-      .withIndex("by_owner_allowed", (q) =>
-        q.eq("ownerAid", ownerAid).eq("allowedAid", args.allowedAid)
-      )
+      .query('allowList')
+      .withIndex('by_owner_allowed', (q) => q.eq('ownerAid', ownerAid).eq('allowedAid', args.allowedAid))
       .first();
 
     if (!entry) {
-      throw new Error("AID not in allow-list");
+      throw new Error('AID not in allow-list');
     }
 
     // Remove from allow-list
@@ -165,8 +161,8 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     const entries = await ctx.db
-      .query("allowList")
-      .withIndex("by_owner", (q) => q.eq("ownerAid", args.ownerAid))
+      .query('allowList')
+      .withIndex('by_owner', (q) => q.eq('ownerAid', args.ownerAid))
       .collect();
 
     return {
@@ -215,8 +211,8 @@ export const clear = mutation({
 
     // Get all entries
     const entries = await ctx.db
-      .query("allowList")
-      .withIndex("by_owner", (q) => q.eq("ownerAid", ownerAid))
+      .query('allowList')
+      .withIndex('by_owner', (q) => q.eq('ownerAid', ownerAid))
       .collect();
 
     // Delete all entries

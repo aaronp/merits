@@ -14,7 +14,7 @@
  * Valid group tags
  */
 export const GROUP_TAGS = {
-  ONBOARDING: "onboarding",
+  ONBOARDING: 'onboarding',
 } as const;
 
-export type GroupTag = typeof GROUP_TAGS[keyof typeof GROUP_TAGS];
+export type GroupTag = (typeof GROUP_TAGS)[keyof typeof GROUP_TAGS];

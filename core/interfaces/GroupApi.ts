@@ -5,8 +5,7 @@
  * This provides better performance and consistency than client-side fanout.
  */
 
-import type { AID, AuthProof } from "../types";
-import type { EncryptedMessage } from "./Transport";
+import type { AID, AuthProof } from '../types';
 
 /**
  * Group identifier (could be AID, UUID, or backend-specific ID)
@@ -16,7 +15,7 @@ export type GroupId = string;
 /**
  * Member role in a group
  */
-export type MemberRole = "owner" | "admin" | "member";
+export type MemberRole = 'owner' | 'admin' | 'member';
 
 /**
  * Group member information

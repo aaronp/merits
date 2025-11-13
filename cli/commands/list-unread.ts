@@ -11,8 +11,8 @@
  *   { "bob": 4, "joe": 2, "<group-id>": 1 }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
+import { requireCredentials } from '../lib/credentials';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface ListUnreadOptions extends GlobalOptions {
   from?: string; // Comma-separated list of sender AIDs to filter by
@@ -25,14 +25,17 @@ export interface ListUnreadOptions extends GlobalOptions {
  */
 export const listUnread = withGlobalOptions(async (opts: ListUnreadOptions) => {
   const format = normalizeFormat(opts.format);
-  const ctx = opts._ctx;
+  const _ctx = opts._ctx;
 
   // Load and validate credentials
-  const creds = requireCredentials(opts.credentials);
+  const _creds = requireCredentials(opts.credentials);
 
   // Parse sender filter if provided
   const senderFilter = opts.from
-    ? opts.from.split(",").map((s) => s.trim()).filter(Boolean)
+    ? opts.from
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
     : undefined;
 
   // Query backend for unread message counts
@@ -56,11 +59,11 @@ export const listUnread = withGlobalOptions(async (opts: ListUnreadOptions) => {
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(filteredCounts));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(filteredCounts, null, 2));
       // Add human-readable summary (to stderr, not stdout)
       if (!opts.noBanner) {
@@ -68,7 +71,7 @@ export const listUnread = withGlobalOptions(async (opts: ListUnreadOptions) => {
         console.error(`\nTotal unread messages: ${total}`);
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(filteredCounts));
       break;
   }
@@ -80,12 +83,12 @@ export const listUnread = withGlobalOptions(async (opts: ListUnreadOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -94,5 +97,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

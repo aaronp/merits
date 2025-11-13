@@ -10,16 +10,7 @@
  */
 
 import { ConvexClient } from 'convex/browser';
-import type {
-  Transport,
-  TransportConfig,
-  Message,
-  Channel,
-  AID,
-  SAID,
-  Signature,
-  Signer,
-} from './types';
+import type { AID, Channel, Message, SAID, Signature, Signer, Transport, TransportConfig } from './types';
 
 /**
  * ConvexTransport - KERI message transport over Convex
@@ -59,7 +50,7 @@ export class ConvexTransport implements Transport {
     // 3. Sign envelope SAID
     const encoder = new TextEncoder();
     const signature = await this.config.signer.sign(encoder.encode(messageId));
-    const sigs: Signature[] = [{ ksn: this.config.ksn, sig: signature }];
+    const _sigs: Signature[] = [{ ksn: this.config.ksn, sig: signature }];
 
     // 4. Challenge-response (TODO: implement with actual Convex mutations)
     // const argsHash = await this.computeArgsHash({ messageId, to: msg.to });
@@ -84,10 +75,10 @@ export class ConvexTransport implements Transport {
    * Uses WebSocket subscription with cursor management
    */
   channel(aid: AID): Channel {
-    let cursor = Date.now();
+    const _cursor = Date.now();
 
     return {
-      subscribe: (onMessage) => {
+      subscribe: (_onMessage) => {
         // TODO: Implement with Convex subscription
         // const unwatch = this.client.onUpdate(
         //   api.messages.subscribeToAid,
@@ -159,23 +150,6 @@ export class ConvexTransport implements Transport {
     const data = encoder.encode(canonical);
     return await this.computeHash(data);
   }
-
-  /**
-   * Issue challenge for authentication (TODO)
-   */
-  private async issueChallenge(
-    mutationName: string,
-    argsHash: string
-  ): Promise<{ challengeId: string; payload: any }> {
-    throw new Error('Challenge-response not yet implemented');
-  }
-
-  /**
-   * Compute args hash for challenge binding (TODO)
-   */
-  private async computeArgsHash(args: any): Promise<string> {
-    return await this.computeSAID(args);
-  }
 }
 
 /**
@@ -190,7 +164,7 @@ export async function registerKeyState(
     verfer: string;
     estEventSaid: SAID;
     signer: Signer;
-  }
+  },
 ): Promise<void> {
   const client = new ConvexClient(convexUrl);
 
@@ -211,7 +185,7 @@ export async function registerKeyState(
     console.log('registerKeyState:', {
       aid: registration.aid,
       ksn: registration.ksn,
-      verfer: registration.verfer.slice(0, 10) + '...',
+      verfer: `${registration.verfer.slice(0, 10)}...`,
     });
   } finally {
     client.close();

@@ -16,15 +16,9 @@
  * - Server verifies signature before executing mutation
  */
 
-import {
-  sign,
-  verify,
-  sha256Hex,
-  uint8ArrayToBase64Url,
-  base64UrlToUint8Array,
-} from "./crypto";
-import type { SignedRequest } from "./types";
-import type { Signer } from "../client/types";
+import type { Signer } from '../client/types';
+import { base64UrlToUint8Array, sha256Hex, sign, uint8ArrayToBase64Url, verify } from './crypto';
+import type { SignedRequest } from './types';
 
 /**
  * Canonicalize mutation arguments for signing
@@ -36,10 +30,7 @@ import type { Signer } from "../client/types";
  * @param excludeFields - Fields to exclude from signing (e.g., 'sig' itself)
  * @returns Canonical JSON string
  */
-export function canonicalizeMutationArgs(
-  args: Record<string, any>,
-  excludeFields: string[] = []
-): string {
+export function canonicalizeMutationArgs(args: Record<string, any>, excludeFields: string[] = []): string {
   // Recursively sort object keys for deterministic canonicalization
   const canonicalizeValue = (value: any): any => {
     if (value === null || value === undefined) {
@@ -97,12 +88,7 @@ export function canonicalizeMutationArgs(
  * @param keyId - AID of signer
  * @returns Payload string to sign
  */
-export function buildSignaturePayload(
-  canonicalArgs: string,
-  timestamp: number,
-  nonce: string,
-  keyId: string
-): string {
+export function buildSignaturePayload(canonicalArgs: string, timestamp: number, nonce: string, keyId: string): string {
   return `timestamp: ${timestamp}\nnonce: ${nonce}\nkeyId: ${keyId}\nargs: ${canonicalArgs}`;
 }
 
@@ -140,17 +126,19 @@ export async function signMutationArgs(
   privateKey: Uint8Array,
   keyId: string,
   nonce?: string,
-  timestamp?: number
+  timestamp?: number,
 ): Promise<SignedRequest> {
   // Generate metadata
   const ts = timestamp ?? Date.now();
   const n = nonce ?? crypto.randomUUID();
 
   // Get list of fields being signed (all except 'sig')
-  const signedFields = Object.keys(args).filter((k) => k !== "sig").sort();
+  const signedFields = Object.keys(args)
+    .filter((k) => k !== 'sig')
+    .sort();
 
   // Canonicalize arguments (exclude 'sig' field)
-  const canonicalArgs = canonicalizeMutationArgs(args, ["sig"]);
+  const canonicalArgs = canonicalizeMutationArgs(args, ['sig']);
 
   // Build payload
   const payload = buildSignaturePayload(canonicalArgs, ts, n, keyId);
@@ -201,12 +189,12 @@ export async function signMutationArgs(
 export async function verifyMutationSignature(
   args: Record<string, any>,
   publicKey: Uint8Array,
-  maxSkewMs: number = 5 * 60 * 1000
+  maxSkewMs: number = 5 * 60 * 1000,
 ): Promise<boolean> {
   const sig = args.sig as SignedRequest | undefined;
 
   if (!sig) {
-    throw new Error("No signature found in request");
+    throw new Error('No signature found in request');
   }
 
   // Check timestamp skew
@@ -215,21 +203,16 @@ export async function verifyMutationSignature(
   if (skew > maxSkewMs) {
     throw new Error(
       `Timestamp skew too large: ${skew}ms (max ${maxSkewMs}ms). ` +
-      `Request time: ${new Date(sig.timestamp).toISOString()}, ` +
-      `Server time: ${new Date(now).toISOString()}`
+        `Request time: ${new Date(sig.timestamp).toISOString()}, ` +
+        `Server time: ${new Date(now).toISOString()}`,
     );
   }
 
   // Rebuild canonical args (exclude 'sig' field)
-  const canonicalArgs = canonicalizeMutationArgs(args, ["sig"]);
+  const canonicalArgs = canonicalizeMutationArgs(args, ['sig']);
 
   // Rebuild payload
-  const payload = buildSignaturePayload(
-    canonicalArgs,
-    sig.timestamp,
-    sig.nonce,
-    sig.keyId
-  );
+  const payload = buildSignaturePayload(canonicalArgs, sig.timestamp, sig.nonce, sig.keyId);
 
   // Verify signature
   const encoder = new TextEncoder();
@@ -241,7 +224,7 @@ export async function verifyMutationSignature(
   // Helper to convert Uint8Array to hex (works in both Node and Convex)
   const uint8ArrayToHex = (bytes: Uint8Array): string => {
     return Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, '0'))
+      .map((b) => b.toString(16).padStart(2, '0'))
       .join('');
   };
 
@@ -268,7 +251,7 @@ export async function verifyMutationSignature(
     // Helper to convert Uint8Array to hex (works in both Node and Convex)
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
 
@@ -309,17 +292,19 @@ export async function signMutationArgsWithSigner(
   signer: Signer,
   keyId: string,
   nonce?: string,
-  timestamp?: number
+  timestamp?: number,
 ): Promise<SignedRequest> {
   // Generate metadata
   const ts = timestamp ?? Date.now();
   const n = nonce ?? crypto.randomUUID();
 
   // Get list of fields being signed (all except 'sig')
-  const signedFields = Object.keys(args).filter((k) => k !== "sig").sort();
+  const signedFields = Object.keys(args)
+    .filter((k) => k !== 'sig')
+    .sort();
 
   // Canonicalize arguments (exclude 'sig' field)
-  const canonicalArgs = canonicalizeMutationArgs(args, ["sig"]);
+  const canonicalArgs = canonicalizeMutationArgs(args, ['sig']);
 
   // Build payload
   const payload = buildSignaturePayload(canonicalArgs, ts, n, keyId);
@@ -343,7 +328,7 @@ export async function signMutationArgsWithSigner(
   if (process.env.DEBUG_SIGNATURES === 'true') {
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
     console.log('[SIGN] Payload bytes length:', payloadBytes.length);
@@ -373,7 +358,7 @@ export async function signMutationArgsWithSigner(
     }
 
     // Re-encode as base64url for transport (server expects base64url, not CESR)
-    const { uint8ArrayToBase64Url } = await import("./crypto");
+    const { uint8ArrayToBase64Url } = await import('./crypto');
     signature = uint8ArrayToBase64Url(decoded.raw);
   } catch (error: any) {
     // If decodeSignature fails (e.g., @kv4/codex not available in Convex bundler),
@@ -384,9 +369,7 @@ export async function signMutationArgsWithSigner(
     }
     // Fallback: simple "0B" removal (assumes simple format)
     // This works because CESR Ed25519 signatures start with "0B" followed by base64url-encoded signature
-    signature = signatureCESR.startsWith("0B")
-      ? signatureCESR.substring(2)
-      : signatureCESR;
+    signature = signatureCESR.startsWith('0B') ? signatureCESR.substring(2) : signatureCESR;
   }
 
   if (process.env.DEBUG_SIGNATURES === 'true') {
@@ -413,9 +396,7 @@ export async function signMutationArgsWithSigner(
  */
 export function computeSignatureHash(sig: SignedRequest): string {
   const encoder = new TextEncoder();
-  const data = encoder.encode(
-    `${sig.signature}:${sig.timestamp}:${sig.nonce}:${sig.keyId}`
-  );
+  const data = encoder.encode(`${sig.signature}:${sig.timestamp}:${sig.nonce}:${sig.keyId}`);
   const hash = sha256Hex(data);
   return hash.substring(0, 16); // First 16 hex chars for compact logging
 }

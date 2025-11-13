@@ -8,23 +8,23 @@
  * - WebSocket subscriptions
  */
 
+import type { Message, Signer } from './index';
 import { ConvexTransport, registerKeyState } from './index';
-import type { Signer, Message } from './index';
 
 // ========== Mock Signer (replace with actual KERI implementation) ==========
 
 class MockSigner implements Signer {
   constructor(
-    private privateKey: Uint8Array,
-    private publicKey: string
+    _privateKey: Uint8Array,
+    private publicKey: string,
   ) {}
 
-  async sign(data: Uint8Array): Promise<string> {
+  async sign(_data: Uint8Array): Promise<string> {
     // TODO: Replace with actual CESR signing
     // For now, just mock it
     const signature = new Uint8Array(64);
     crypto.getRandomValues(signature);
-    return 'EA' + Buffer.from(signature).toString('base64');
+    return `EA${Buffer.from(signature).toString('base64')}`;
   }
 
   verifier(): string {
@@ -41,15 +41,12 @@ async function example() {
   const aliceAid = 'EAlice...';
   const aliceSigner = new MockSigner(
     new Uint8Array(32), // private key
-    'DAliceVerifier...' // public key (CESR)
+    'DAliceVerifier...', // public key (CESR)
   );
 
   // Bob's credentials
   const bobAid = 'EBob...';
-  const bobSigner = new MockSigner(
-    new Uint8Array(32),
-    'DBobVerifier...'
-  );
+  const bobSigner = new MockSigner(new Uint8Array(32), 'DBobVerifier...');
 
   // Step 1: Register key states (one-time setup)
   console.log('Registering key states...');
@@ -121,7 +118,7 @@ async function example() {
     console.log('Bob acknowledging messages...');
     await bobTransport.ack(
       bobAid,
-      unread.map((m) => m.id)
+      unread.map((m) => m.id),
     );
     console.log('Acknowledged:', unread.length, 'messages');
   }

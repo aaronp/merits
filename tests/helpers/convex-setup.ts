@@ -2,9 +2,9 @@
  * Shared Convex setup utilities for integration tests
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { generateKeyPair, createAID, encodeCESRKey } from "./crypto-utils";
+import { ConvexClient } from 'convex/browser';
+import { api } from '../../convex/_generated/api';
+import { createAID, encodeCESRKey, generateKeyPair } from './crypto-utils';
 
 export interface TestUser {
   aid: string;
@@ -33,7 +33,7 @@ export async function setupConvexTest(): Promise<ConvexTestContext> {
   const convexUrl = process.env.CONVEX_URL;
 
   if (!convexUrl) {
-    throw new Error("CONVEX_URL environment variable is not set");
+    throw new Error('CONVEX_URL environment variable is not set');
   }
 
   const convex = new ConvexClient(convexUrl);
@@ -50,16 +50,16 @@ export async function setupConvexTest(): Promise<ConvexTestContext> {
     aid: aliceAid,
     ksn: 0,
     keys: [encodeCESRKey(aliceKeys.publicKey)],
-    threshold: "1",
-    lastEvtSaid: "EAAA",
+    threshold: '1',
+    lastEvtSaid: 'EAAA',
   });
 
   await convex.mutation(api.auth.registerKeyState, {
     aid: bobAid,
     ksn: 0,
     keys: [encodeCESRKey(bobKeys.publicKey)],
-    threshold: "1",
-    lastEvtSaid: "EBBB",
+    threshold: '1',
+    lastEvtSaid: 'EBBB',
   });
 
   // Grant all permissions to test users (bypasses RBAC for integration tests)

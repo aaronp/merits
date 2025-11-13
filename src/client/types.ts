@@ -4,11 +4,11 @@
  * Backend-agnostic interfaces for all Merits operations
  */
 
-import type { IdentityAuth } from "../../core/interfaces/IdentityAuth";
-import type { Transport } from "../../core/interfaces/Transport";
-import type { GroupApi } from "../../core/interfaces/GroupApi";
-import type { MessageRouter } from "../../core/runtime/router";
-import type { AuthProof } from "../../core/types";
+import type { GroupApi } from '../../core/interfaces/GroupApi';
+import type { IdentityAuth } from '../../core/interfaces/IdentityAuth';
+import type { Transport } from '../../core/interfaces/Transport';
+import type { MessageRouter } from '../../core/runtime/router';
+import type { AuthProof } from '../../core/types';
 
 /**
  * Signer interface - Abstracts signing operations
@@ -144,11 +144,7 @@ export interface MeritsClient {
   router: MessageRouter;
 
   /** Helper: Create authenticated proof for operations */
-  createAuth(
-    credentials: AuthCredentials,
-    purpose: string,
-    args: Record<string, any>
-  ): Promise<AuthProof>;
+  createAuth(credentials: AuthCredentials, purpose: string, args: Record<string, any>): Promise<AuthProof>;
 
   /** Helper: Compute args hash (deterministic) */
   computeArgsHash(args: Record<string, any>): string;
@@ -190,11 +186,7 @@ export interface MeritsClient {
    * @param options - Optional message type and TTL
    * @returns Message ID
    */
-  sendMessage(
-    recipient: string,
-    plaintext: string,
-    options?: { typ?: string; ttl?: number }
-  ): Promise<string>;
+  sendMessage(recipient: string, plaintext: string, options?: { typ?: string; ttl?: number }): Promise<string>;
 
   /**
    * Send a pre-encrypted (raw) message to a recipient
@@ -210,7 +202,7 @@ export interface MeritsClient {
   sendRawMessage(
     recipient: string,
     ciphertext: string,
-    options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
+    options?: { typ?: string; alg?: string; ek?: string; ttl?: number },
   ): Promise<string>;
 
   /**
@@ -229,7 +221,7 @@ export interface MeritsClient {
   sendGroupMessage(
     groupId: string,
     plaintext: string,
-    options?: { typ?: string }
+    options?: { typ?: string },
   ): Promise<{ messageId: string; seqNo: number; sentAt: number }>;
 
   /**

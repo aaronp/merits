@@ -5,11 +5,11 @@
  * The CLI uses this factory to get a client based on configuration.
  */
 
-import type { MeritsClient as MeritsClientInterface, Signer } from "./types";
-import { ConvexMeritsClient } from "./convex";
-import type { ResolvedConfig } from "../../cli/lib/config";
-import type { Credentials } from "../../cli/lib/credentials";
-import { Ed25519Signer } from "../../core/Ed25519Signer";
+import type { ResolvedConfig } from '../../cli/lib/config';
+import type { Credentials } from '../../cli/lib/credentials';
+import { Ed25519Signer } from '../../core/Ed25519Signer';
+import { ConvexMeritsClient } from './convex';
+import type { MeritsClient as MeritsClientInterface, Signer } from './types';
 
 /**
  * Create MeritsClient with signer
@@ -40,39 +40,36 @@ export function getOrCreate(
   aid: string,
   signer: Signer,
   privateKeyBytes: Uint8Array,
-  config?: Partial<ResolvedConfig>
+  config?: Partial<ResolvedConfig>,
 ): MeritsClientInterface {
   // Use provided config or defaults
-  const backendType = config?.backend?.type ?? "convex";
+  const backendType = config?.backend?.type ?? 'convex';
   const backendUrl = config?.backend?.url ?? process.env.CONVEX_URL;
 
   if (!backendUrl) {
-    throw new Error(
-      "Backend URL is required. Set CONVEX_URL environment variable or pass config with backend.url"
-    );
+    throw new Error('Backend URL is required. Set CONVEX_URL environment variable or pass config with backend.url');
   }
 
   const ksn = 0; // Default to initial key
 
   switch (backendType) {
-    case "convex":
+    case 'convex':
       return new ConvexMeritsClient(backendUrl, aid, signer, privateKeyBytes, ksn);
 
-    case "rest":
+    case 'rest':
       throw new Error(
-        "REST backend not yet implemented. " +
-        "Please use Convex backend or contribute a REST implementation!"
+        'REST backend not yet implemented. ' + 'Please use Convex backend or contribute a REST implementation!',
       );
 
-    case "local":
+    case 'local':
       throw new Error(
-        "Local backend not yet implemented. " +
-        "Please use Convex backend or contribute a local implementation!"
+        'Local backend not yet implemented. ' + 'Please use Convex backend or contribute a local implementation!',
       );
 
-    default:
+    default: {
       const exhaustiveCheck: never = backendType;
       throw new Error(`Unknown backend type: ${exhaustiveCheck}`);
+    }
   }
 }
 
@@ -92,13 +89,10 @@ export function getOrCreate(
  * const client = MeritsClient.fromCredentials(creds, config);
  * ```
  */
-export function fromCredentials(
-  credentials: Credentials,
-  config?: Partial<ResolvedConfig>
-): MeritsClientInterface {
+export function fromCredentials(credentials: Credentials, config?: Partial<ResolvedConfig>): MeritsClientInterface {
   // Decode private and public keys from base64url
-  const privateKeyBytes = Buffer.from(credentials.privateKey, "base64url");
-  const publicKeyBytes = Buffer.from(credentials.publicKey, "base64url");
+  const privateKeyBytes = Buffer.from(credentials.privateKey, 'base64url');
+  const publicKeyBytes = Buffer.from(credentials.publicKey, 'base64url');
 
   // Create signer
   const signer = new Ed25519Signer(privateKeyBytes, publicKeyBytes);
@@ -114,4 +108,4 @@ export const MeritsClient = {
 };
 
 // Re-export types for convenience
-export type { IdentityRegistry, Signer } from "./types";
+export type { IdentityRegistry, Signer } from './types';

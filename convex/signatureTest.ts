@@ -1,19 +1,19 @@
 /**
  * Signature Test Mutation
- * 
+ *
  * Isolated test endpoint to verify signature creation and verification.
  * This helps debug signature issues by providing a minimal test case.
  */
 
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
-import { verifyMutationSignature } from "../core/signatures";
-import { decodeCESRKey } from "../core/crypto";
-import { ensureKeyState } from "./auth";
+import { v } from 'convex/values';
+import { decodeCESRKey } from '../core/crypto';
+import { verifyMutationSignature } from '../core/signatures';
+import { mutation } from './_generated/server';
+import { ensureKeyState } from './auth';
 
 /**
  * Test signature verification with detailed logging
- * 
+ *
  * This mutation accepts a simple payload and signature, then verifies it.
  * Returns detailed information about the verification process.
  */
@@ -40,7 +40,7 @@ export const testSignatureVerification = mutation({
 
     // Get key state for the signer
     const keyState = await ensureKeyState(ctx, args.sig.keyId);
-    
+
     if (!keyState.keys[0]) {
       throw new Error(`No public key found for AID: ${args.sig.keyId}`);
     }
@@ -50,14 +50,14 @@ export const testSignatureVerification = mutation({
 
     // Decode public key
     const publicKeyBytes = decodeCESRKey(publicKeyCESR);
-    
+
     // Helper to convert Uint8Array to hex
     const uint8ArrayToHex = (bytes: Uint8Array): string => {
       return Array.from(bytes)
-        .map(b => b.toString(16).padStart(2, '0'))
+        .map((b) => b.toString(16).padStart(2, '0'))
         .join('');
     };
-    
+
     console.log('[TEST-SIG] Public key bytes (hex):', uint8ArrayToHex(publicKeyBytes));
 
     // Build the full args object (matching what verifyMutationSignature expects)
@@ -69,13 +69,13 @@ export const testSignatureVerification = mutation({
 
     // Log what we're about to verify
     console.log('[TEST-SIG] About to verify with fullArgs:', JSON.stringify(fullArgs, null, 2));
-    
+
     // Verify signature
     try {
       const isValid = await verifyMutationSignature(
         fullArgs,
         publicKeyBytes,
-        5 * 60 * 1000 // 5 minute window
+        5 * 60 * 1000, // 5 minute window
       );
 
       console.log('[TEST-SIG] Verification result:', isValid);
@@ -104,4 +104,3 @@ export const testSignatureVerification = mutation({
     }
   },
 });
-

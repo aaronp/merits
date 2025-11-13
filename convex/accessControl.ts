@@ -15,7 +15,7 @@
  * @see denyList.ts for deny-list management
  */
 
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from './_generated/server';
 
 /**
  * Check if a sender is allowed to message a recipient
@@ -49,24 +49,22 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 export async function canMessage(
   ctx: MutationCtx | QueryCtx,
   senderAid: string,
-  recipientAid: string
+  recipientAid: string,
 ): Promise<{ allowed: boolean; reason?: string }> {
   // 1. Check deny-list first (highest priority)
   const denied = await ctx.db
-    .query("denyList")
-    .withIndex("by_owner_denied", (q) =>
-      q.eq("ownerAid", recipientAid).eq("deniedAid", senderAid)
-    )
+    .query('denyList')
+    .withIndex('by_owner_denied', (q) => q.eq('ownerAid', recipientAid).eq('deniedAid', senderAid))
     .first();
 
   if (denied) {
-    return { allowed: false, reason: "Sender is on deny-list" };
+    return { allowed: false, reason: 'Sender is on deny-list' };
   }
 
   // 2. Check if allow-list is active (has any entries)
   const allowListEntry = await ctx.db
-    .query("allowList")
-    .withIndex("by_owner", (q) => q.eq("ownerAid", recipientAid))
+    .query('allowList')
+    .withIndex('by_owner', (q) => q.eq('ownerAid', recipientAid))
     .first(); // Just check if any exist
 
   if (!allowListEntry) {
@@ -76,17 +74,15 @@ export async function canMessage(
 
   // 3. Allow-list active, check if sender is on it
   const allowed = await ctx.db
-    .query("allowList")
-    .withIndex("by_owner_allowed", (q) =>
-      q.eq("ownerAid", recipientAid).eq("allowedAid", senderAid)
-    )
+    .query('allowList')
+    .withIndex('by_owner_allowed', (q) => q.eq('ownerAid', recipientAid).eq('allowedAid', senderAid))
     .first();
 
   if (allowed) {
     return { allowed: true };
   }
 
-  return { allowed: false, reason: "Sender not on allow-list" };
+  return { allowed: false, reason: 'Sender not on allow-list' };
 }
 
 /**
@@ -114,22 +110,22 @@ export async function canMessage(
 export async function canMessageBatch(
   ctx: MutationCtx | QueryCtx,
   senderAids: string[],
-  recipientAid: string
+  recipientAid: string,
 ): Promise<Map<string, { allowed: boolean; reason?: string }>> {
   const results = new Map<string, { allowed: boolean; reason?: string }>();
 
   // Get all deny-list entries for recipient
   const denyEntries = await ctx.db
-    .query("denyList")
-    .withIndex("by_owner", (q) => q.eq("ownerAid", recipientAid))
+    .query('denyList')
+    .withIndex('by_owner', (q) => q.eq('ownerAid', recipientAid))
     .collect();
 
   const deniedAids = new Set(denyEntries.map((e) => e.deniedAid));
 
   // Get all allow-list entries for recipient
   const allowEntries = await ctx.db
-    .query("allowList")
-    .withIndex("by_owner", (q) => q.eq("ownerAid", recipientAid))
+    .query('allowList')
+    .withIndex('by_owner', (q) => q.eq('ownerAid', recipientAid))
     .collect();
 
   const allowedAids = new Set(allowEntries.map((e) => e.allowedAid));
@@ -139,7 +135,7 @@ export async function canMessageBatch(
   for (const senderAid of senderAids) {
     // Check deny-list first
     if (deniedAids.has(senderAid)) {
-      results.set(senderAid, { allowed: false, reason: "Sender is on deny-list" });
+      results.set(senderAid, { allowed: false, reason: 'Sender is on deny-list' });
       continue;
     }
 
@@ -153,7 +149,7 @@ export async function canMessageBatch(
     if (allowedAids.has(senderAid)) {
       results.set(senderAid, { allowed: true });
     } else {
-      results.set(senderAid, { allowed: false, reason: "Sender not on allow-list" });
+      results.set(senderAid, { allowed: false, reason: 'Sender not on allow-list' });
     }
   }
 

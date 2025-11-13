@@ -24,7 +24,7 @@
  * @see convex/auth.ts getPublicKey() for backend implementation
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface KeyForOptions extends GlobalOptions {
   // No additional options - uses global format option
@@ -41,11 +41,11 @@ export const keyFor = withGlobalOptions(async (aid: string, opts: KeyForOptions)
   const ctx = opts._ctx;
 
   if (!aid) {
-    throw new Error("AID is required. Usage: merits key-for <aid>");
+    throw new Error('AID is required. Usage: merits key-for <aid>');
   }
 
   // Validate AID format (basic check)
-  if (!aid.startsWith("D") && !aid.startsWith("E")) {
+  if (!aid.startsWith('D') && !aid.startsWith('E')) {
     console.error(`⚠️  Warning: AID should start with 'D' or 'E' (CESR format)`);
     console.error(`   Provided: ${aid}`);
   }
@@ -63,11 +63,11 @@ export const keyFor = withGlobalOptions(async (aid: string, opts: KeyForOptions)
     };
 
     switch (format) {
-      case "json":
+      case 'json':
         // RFC8785 canonicalized JSON for deterministic output
         console.log(canonicalizeJSON(output));
         break;
-      case "pretty":
+      case 'pretty':
         console.log(JSON.stringify(output, null, 2));
         if (!opts.noBanner) {
           console.error(`\n📋 Public Key Information`);
@@ -78,12 +78,12 @@ export const keyFor = withGlobalOptions(async (aid: string, opts: KeyForOptions)
           console.error(`   ${result.publicKey}`);
         }
         break;
-      case "raw":
+      case 'raw':
         console.log(JSON.stringify(output));
         break;
     }
   } catch (err: any) {
-    if (err.message?.includes("User not found")) {
+    if (err.message?.includes('User not found')) {
       console.error(`❌ Error: No user found for AID: ${aid}`);
       console.error(`   This AID is not registered in the system.`);
       console.error(`   Use 'merits create-user' to register a new user.`);
@@ -99,12 +99,12 @@ export const keyFor = withGlobalOptions(async (aid: string, opts: KeyForOptions)
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -113,5 +113,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

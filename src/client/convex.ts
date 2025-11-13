@@ -4,18 +4,18 @@
  * Adapts the Convex backend to the backend-agnostic MeritsClient interface
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { ConvexIdentityAuth } from "../adapters/ConvexIdentityAuth";
-import { ConvexTransport } from "../adapters/ConvexTransport";
-import { ConvexGroupApi } from "../adapters/ConvexGroupApi";
-import { AdminApi } from "./admin";
-import { GroupApi } from "./group-api";
-import { createMessageRouter } from "../../core/runtime/router";
-import { computeArgsHash, signPayload, sha256Hex, signPayloadWithSigner } from "../../core/crypto";
-import type { MeritsClient, IdentityRegistry, AuthCredentials, Signer } from "./types";
-import type { AuthProof, SignedRequest } from "../../core/types";
-import type { Credentials } from "../../cli/lib/credentials";
+import { ConvexClient } from 'convex/browser';
+import type { Credentials } from '../../cli/lib/credentials';
+import { api } from '../../convex/_generated/api';
+import { computeArgsHash, sha256Hex, signPayload, signPayloadWithSigner } from '../../core/crypto';
+import { createMessageRouter } from '../../core/runtime/router';
+import type { AuthProof, SignedRequest } from '../../core/types';
+import { ConvexGroupApi } from '../adapters/ConvexGroupApi';
+import { ConvexIdentityAuth } from '../adapters/ConvexIdentityAuth';
+import { ConvexTransport } from '../adapters/ConvexTransport';
+import { AdminApi } from './admin';
+import { GroupApi } from './group-api';
+import type { AuthCredentials, IdentityRegistry, MeritsClient, Signer } from './types';
 
 /**
  * Convex-specific implementation of IdentityRegistry
@@ -50,8 +50,8 @@ class ConvexIdentityRegistry implements IdentityRegistry {
       aid: req.aid,
       ksn: req.ksn,
       keys: [publicKeyCESR], // Use the actual public key, not the AID
-      threshold: "1",
-      lastEvtSaid: "", // Empty for initial registration
+      threshold: '1',
+      lastEvtSaid: '', // Empty for initial registration
     });
   }
 
@@ -72,7 +72,7 @@ class ConvexIdentityRegistry implements IdentityRegistry {
       oldKsn: req.oldKsn,
       newKsn: req.newKsn,
       newKeys: [publicKeyCESR],
-      threshold: "1",
+      threshold: '1',
       rotationProofSigs: req.rotationProofSigs,
     });
   }
@@ -88,7 +88,7 @@ class ConvexIdentityRegistry implements IdentityRegistry {
     // Extract the public key from the key state
     // Keys are stored in CESR format (e.g., "D<base64url>")
     const publicKeyCESR = keyState.keys[0];
-    if (!publicKeyCESR || !publicKeyCESR.startsWith("D")) {
+    if (!publicKeyCESR || !publicKeyCESR.startsWith('D')) {
       throw new Error(`Invalid public key format for ${aid}`);
     }
 
@@ -102,19 +102,19 @@ class ConvexIdentityRegistry implements IdentityRegistry {
   }
 
   private uint8ArrayToBase64Url(bytes: Uint8Array): string {
-    let binary = "";
+    let binary = '';
     for (let i = 0; i < bytes.length; i++) {
       binary += String.fromCharCode(bytes[i]);
     }
     const base64 = btoa(binary);
-    return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+    return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
   }
 
   private base64UrlToUint8Array(base64url: string): Uint8Array {
     // Convert base64url back to standard base64
-    const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
+    const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
     // Add padding if needed
-    const padded = base64 + "=".repeat((4 - (base64.length % 4)) % 4);
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
     const binary = atob(padded);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) {
@@ -139,13 +139,7 @@ export class ConvexMeritsClient implements MeritsClient {
   public identityRegistry: IdentityRegistry;
   public router: ReturnType<typeof createMessageRouter>;
 
-  constructor(
-    convexUrl: string,
-    aid: string,
-    signer: Signer,
-    privateKeyBytes: Uint8Array,
-    ksn: number = 0
-  ) {
+  constructor(convexUrl: string, aid: string, signer: Signer, privateKeyBytes: Uint8Array, ksn: number = 0) {
     this.convex = new ConvexClient(convexUrl);
     this.aid = aid;
     this.signer = signer;
@@ -197,22 +191,14 @@ export class ConvexMeritsClient implements MeritsClient {
     return new GroupApi(this.convex, credentials);
   }
 
-  async createAuth(
-    credentials: AuthCredentials,
-    purpose: string,
-    args: Record<string, any>
-  ): Promise<AuthProof> {
-    const argsHash = computeArgsHash(args);
+  async createAuth(credentials: AuthCredentials, purpose: string, args: Record<string, any>): Promise<AuthProof> {
+    const _argsHash = computeArgsHash(args);
     const challenge = await this.identityAuth.issueChallenge({
       aid: credentials.aid,
       purpose: purpose as any,
       args,
     });
-    const sigs = await signPayload(
-      challenge.payloadToSign,
-      credentials.privateKey,
-      0
-    );
+    const sigs = await signPayload(challenge.payloadToSign, credentials.privateKey, 0);
 
     return {
       challengeId: challenge.challengeId,
@@ -231,21 +217,14 @@ export class ConvexMeritsClient implements MeritsClient {
    * @param args - Arguments to authenticate
    * @returns Authentication proof
    */
-  async createAuthWithSigner(
-    purpose: string,
-    args: Record<string, any>
-  ): Promise<AuthProof> {
-    const argsHash = computeArgsHash(args);
+  async createAuthWithSigner(purpose: string, args: Record<string, any>): Promise<AuthProof> {
+    const _argsHash = computeArgsHash(args);
     const challenge = await this.identityAuth.issueChallenge({
       aid: this.aid,
       purpose: purpose as any,
       args,
     });
-    const sigs = await signPayloadWithSigner(
-      challenge.payloadToSign,
-      this.signer,
-      0
-    );
+    const sigs = await signPayloadWithSigner(challenge.payloadToSign, this.signer, 0);
 
     return {
       challengeId: challenge.challengeId,
@@ -268,7 +247,7 @@ export class ConvexMeritsClient implements MeritsClient {
    * @returns SignedRequest with signature and metadata
    */
   async createSignedRequest(args: Record<string, any>): Promise<SignedRequest> {
-    const { signMutationArgsWithSigner } = await import("../../core/signatures");
+    const { signMutationArgsWithSigner } = await import('../../core/signatures');
     return await signMutationArgsWithSigner(args, this.signer, this.aid);
   }
 
@@ -284,7 +263,7 @@ export class ConvexMeritsClient implements MeritsClient {
     challengeId: string;
     sigs: string[];
     ksn: number;
-  }): Promise<import("./types").SessionToken> {
+  }): Promise<import('./types').SessionToken> {
     // Call backend registerUser mutation
     await this.convex.mutation(api.auth.registerUser, {
       aid: req.aid,
@@ -306,7 +285,7 @@ export class ConvexMeritsClient implements MeritsClient {
     };
   }
 
-  async getUserStatus(aid: string): Promise<import("./types").UserStatus> {
+  async getUserStatus(aid: string): Promise<import('./types').UserStatus> {
     // Query user status from backend
     const status = await this.convex.query(api.userStatus.getUserStatus, { aid });
     return status;
@@ -332,13 +311,9 @@ export class ConvexMeritsClient implements MeritsClient {
    * );
    * ```
    */
-  async sendMessage(
-    recipient: string,
-    plaintext: string,
-    options?: { typ?: string; ttl?: number }
-  ): Promise<string> {
+  async sendMessage(recipient: string, plaintext: string, options?: { typ?: string; ttl?: number }): Promise<string> {
     // Import libsodium
-    const libsodiumModule = await import("libsodium-wrappers-sumo");
+    const libsodiumModule = await import('libsodium-wrappers-sumo');
     const libsodium = libsodiumModule.default;
     await libsodium.ready;
 
@@ -347,7 +322,7 @@ export class ConvexMeritsClient implements MeritsClient {
 
     // Convert Ed25519 → X25519 for encryption
     const recipientX25519Key = libsodium.crypto_sign_ed25519_pk_to_curve25519(
-      Uint8Array.from(recipientKeyState.publicKey)
+      Uint8Array.from(recipientKeyState.publicKey),
     );
 
     // Encrypt with sealed box
@@ -355,12 +330,12 @@ export class ConvexMeritsClient implements MeritsClient {
     const cipherBytes = libsodium.crypto_box_seal(messageBytes, recipientX25519Key);
 
     // Encode as base64url
-    const ct = Buffer.from(cipherBytes).toString("base64url");
+    const ct = Buffer.from(cipherBytes).toString('base64url');
 
     // Send the encrypted message
     return this.sendRawMessage(recipient, ct, {
       ...options,
-      alg: "x25519-xsalsa20poly1305",
+      alg: 'x25519-xsalsa20poly1305',
     });
   }
 
@@ -387,7 +362,7 @@ export class ConvexMeritsClient implements MeritsClient {
   async sendRawMessage(
     recipient: string,
     ciphertext: string,
-    options?: { typ?: string; alg?: string; ek?: string; ttl?: number }
+    options?: { typ?: string; alg?: string; ek?: string; ttl?: number },
   ): Promise<string> {
     // Build the exact args that will be sent to the mutation (matching ConvexTransport.sendMessage exactly)
     // ConvexTransport passes all fields directly, including undefined ones (which JSON.stringify will omit)
@@ -395,9 +370,9 @@ export class ConvexMeritsClient implements MeritsClient {
     const mutationArgs: Record<string, any> = {
       recpAid: recipient,
       ct: ciphertext,
-      typ: options?.typ,  // May be undefined, but ConvexTransport passes it directly
-      ek: options?.ek,    // May be undefined, but ConvexTransport passes it directly
-      alg: options?.alg ?? "",  // Default empty string if not provided
+      typ: options?.typ, // May be undefined, but ConvexTransport passes it directly
+      ek: options?.ek, // May be undefined, but ConvexTransport passes it directly
+      alg: options?.alg ?? '', // Default empty string if not provided
       ttl,
     };
 
@@ -462,16 +437,21 @@ export class ConvexMeritsClient implements MeritsClient {
   async sendGroupMessage(
     groupId: string,
     plaintext: string,
-    options?: { typ?: string }
+    _options?: { typ?: string },
   ): Promise<{ messageId: string; seqNo: number; sentAt: number }> {
-    const { encryptForGroup } = await import("../../cli/lib/crypto-group");
-    const { signMutationArgsWithSigner } = await import("../../core/signatures");
+    console.log(
+      `[ConvexMeritsClient] sendGroupMessage called for group ${groupId}, plaintext length: ${plaintext.length}`,
+    );
+    const { encryptForGroup } = await import('../../cli/lib/crypto-group');
+    const { signMutationArgsWithSigner } = await import('../../core/signatures');
 
     // Step 1: Fetch group members with their public keys
+    console.log(`[ConvexMeritsClient] Fetching members for group ${groupId}...`);
     const membersResponse = await this.convex.query(api.groups.getMembers, {
       groupChatId: groupId as any,
       callerAid: this.aid,
     });
+    console.log(`[ConvexMeritsClient] Found ${membersResponse?.members?.length || 0} member(s)`);
 
     if (!membersResponse || !membersResponse.members || membersResponse.members.length === 0) {
       throw new Error(`No members found for group ${groupId}. You may not be a member of this group.`);
@@ -485,25 +465,24 @@ export class ConvexMeritsClient implements MeritsClient {
       }
       members[member.aid] = member.publicKey;
     }
+    console.log(`[ConvexMeritsClient] Converted ${Object.keys(members).length} member(s) to encryption format`);
 
     // Step 3: Encrypt message for all group members using group encryption
-    const groupMessage = await encryptForGroup(
-      plaintext,
-      members,
-      this.privateKeyBytes,
-      groupId,
-      this.aid
-    );
+    console.log(`[ConvexMeritsClient] Encrypting message for ${Object.keys(members).length} member(s)...`);
+    const groupMessage = await encryptForGroup(plaintext, members, this.privateKeyBytes, groupId, this.aid);
 
     // Step 4: Prepare arguments for signing and sending
     // Note: groupChatId must be a string for signing, but will be cast to ID type for Convex
+    console.log(`[ConvexMeritsClient] Preparing signed request...`);
     const sendArgs = {
       groupChatId: groupId,
       groupMessage,
     };
 
     // Step 5: Sign the request using stored signer (signs the exact args we'll send)
+    console.log(`[ConvexMeritsClient] Signing request...`);
     const sig = await signMutationArgsWithSigner(sendArgs, this.signer, this.aid);
+    console.log(`[ConvexMeritsClient] Request signed, sending to Convex...`);
 
     // Step 6: Send encrypted GroupMessage to backend with signed request
     // Cast groupChatId to ID type for Convex validation, but keep structure identical to what was signed
@@ -512,6 +491,7 @@ export class ConvexMeritsClient implements MeritsClient {
       groupMessage,
       sig,
     });
+    console.log(`[ConvexMeritsClient] Message sent successfully: messageId=${result.messageId}, seqNo=${result.seqNo}`);
 
     return {
       messageId: result.messageId,

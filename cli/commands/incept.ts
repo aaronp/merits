@@ -30,13 +30,12 @@
  *   }
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { generateKeyPair, createAID, signPayload, sha256, signPayloadWithSigner } from "../../core/crypto";
-import * as ed from "@noble/ed25519";
-import type { CLIContext } from "../lib/context";
-import { saveProjectConfig } from "../lib/config";
-import { getOrCreate as createMeritsClient } from "../../src/client/index";
-import { Ed25519Signer } from "../../core/Ed25519Signer";
+import * as ed from '@noble/ed25519';
+import { createAID, generateKeyPair, sha256, signPayloadWithSigner } from '../../core/crypto';
+import { Ed25519Signer } from '../../core/Ed25519Signer';
+import { getOrCreate as createMeritsClient } from '../../src/client/index';
+import { saveProjectConfig } from '../lib/config';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface InceptOptions extends GlobalOptions {
   seed?: string; // Deterministic seed for testing
@@ -52,7 +51,7 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const ctx = opts._ctx;
 
   // Step 1: Generate key pair
-  let keys;
+  let keys: any;
   if (opts.seed) {
     // Deterministic key generation for testing
     const seedBytes = new TextEncoder().encode(opts.seed);
@@ -69,8 +68,8 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   }
 
   const aid = createAID(keys.publicKey);
-  const publicKeyB64 = Buffer.from(keys.publicKey).toString("base64url");
-  const privateKeyB64 = Buffer.from(keys.privateKey).toString("base64url");
+  const publicKeyB64 = Buffer.from(keys.publicKey).toString('base64url');
+  const privateKeyB64 = Buffer.from(keys.privateKey).toString('base64url');
 
   // Step 2: Create a temporary client with the new signer for registration
   // (incept doesn't have credentials yet, so ctx.client will be null)
@@ -78,7 +77,7 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const tempClient = createMeritsClient(aid, signer, keys.privateKey, ctx.config);
 
   // Step 3: Register identity and get challenge
-  const publicKeyBytes = Buffer.from(publicKeyB64, "base64url");
+  const publicKeyBytes = Buffer.from(publicKeyB64, 'base64url');
 
   // Register key state first
   await tempClient.identityRegistry.registerIdentity({
@@ -91,7 +90,7 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const args = { aid, publicKey: publicKeyB64 };
   const challenge = await tempClient.identityAuth.issueChallenge({
     aid,
-    purpose: "registerUser" as any,
+    purpose: 'registerUser' as any,
     args,
     ttlMs: 120000, // 2 minutes
   });
@@ -100,7 +99,7 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
   const sigs = await signPayloadWithSigner(challenge.payloadToSign, signer, 0);
 
   // Step 5: Register user and obtain session token
-  let sessionResult;
+  let sessionResult: any;
   try {
     sessionResult = await tempClient.registerUser({
       aid,
@@ -111,9 +110,9 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
     });
   } catch (err: any) {
     // If user already exists, provide helpful error message
-    if (err.message && (err.message.includes("already exists") || err.message.includes("AlreadyExistsError"))) {
+    if (err.message && (err.message.includes('already exists') || err.message.includes('AlreadyExistsError'))) {
       throw new Error(
-        `User ${aid} already exists. Use 'merits sign-in' command to create a new session token instead.`
+        `User ${aid} already exists. Use 'merits sign-in' command to create a new session token instead.`,
       );
     } else {
       throw err;
@@ -157,26 +156,26 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
 
   // Hint for next step (only in pretty mode)
-  if (format === "pretty" && !opts.noBanner) {
-    console.error("\n✅ User inception complete!");
-    console.error("   Configuration saved to .merits file");
-    console.error("   Session token obtained and ready to use.");
-    console.error("\nNext steps:");
+  if (format === 'pretty' && !opts.noBanner) {
+    console.error('\n✅ User inception complete!');
+    console.error('   Configuration saved to .merits file');
+    console.error('   Session token obtained and ready to use.');
+    console.error('\nNext steps:');
     console.error("  Run commands without credentials flag (e.g., 'merits status')");
-    console.error("  Backend URL and credentials are now configured for this directory");
+    console.error('  Backend URL and credentials are now configured for this directory');
   }
 });
 
@@ -186,12 +185,12 @@ export const incept = withGlobalOptions(async (opts: InceptOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -200,5 +199,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

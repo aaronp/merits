@@ -20,11 +20,11 @@
  * @see convex/accessControl.ts for filtering logic
  */
 
-import type { CLIContext } from "../lib/context";
-import { normalizeFormat } from "../lib/options";
-import { requireCredentials } from "../lib/credentials";
-import { signMutationArgs } from "../../core/signatures";
-import { base64UrlToUint8Array } from "../../core/crypto";
+import { base64UrlToUint8Array } from '../../core/crypto';
+import { signMutationArgs } from '../../core/signatures';
+import type { CLIContext } from '../lib/context';
+import { requireCredentials } from '../lib/credentials';
+import { normalizeFormat } from '../lib/options';
 
 interface AccessOptions {
   from?: string;
@@ -69,17 +69,17 @@ export async function accessAllow(aid: string, opts: AccessOptions): Promise<voi
 
   // Output result
   const output = {
-    action: "allowed",
+    action: 'allowed',
     aid,
     alreadyExists: result.alreadyExists ?? false,
     note: opts.note,
   };
 
   switch (format) {
-    case "json":
+    case 'json':
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       if (!opts.noBanner) {
         if (result.alreadyExists) {
@@ -91,7 +91,7 @@ export async function accessAllow(aid: string, opts: AccessOptions): Promise<voi
         }
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -129,17 +129,17 @@ export async function accessDeny(aid: string, opts: AccessOptions): Promise<void
 
   // Output result
   const output = {
-    action: "blocked",
+    action: 'blocked',
     aid,
     alreadyExists: result.alreadyExists ?? false,
     note: opts.note,
   };
 
   switch (format) {
-    case "json":
+    case 'json':
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       if (!opts.noBanner) {
         if (result.alreadyExists) {
@@ -150,7 +150,7 @@ export async function accessDeny(aid: string, opts: AccessOptions): Promise<void
         }
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -168,23 +168,23 @@ export async function accessRemove(aid: string, opts: AccessOptions): Promise<vo
 
   // Validate flags
   if (!opts.allow && !opts.deny) {
-    throw new Error("Must specify --allow or --deny");
+    throw new Error('Must specify --allow or --deny');
   }
   if (opts.allow && opts.deny) {
-    throw new Error("Cannot specify both --allow and --deny");
+    throw new Error('Cannot specify both --allow and --deny');
   }
 
   // Load credentials
   const creds = requireCredentials(opts.credentials);
 
   const isAllow = opts.allow;
-  const listType = isAllow ? "allow-list" : "deny-list";
+  const listType = isAllow ? 'allow-list' : 'deny-list';
 
   // Build and sign mutation args
   const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
 
   // Call backend API (backend handles authorization via signature)
-  let result;
+  let result: any;
   if (isAllow) {
     const args = { allowedAid: aid };
     const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
@@ -197,23 +197,23 @@ export async function accessRemove(aid: string, opts: AccessOptions): Promise<vo
 
   // Output result
   const output = {
-    action: "removed",
+    action: 'removed',
     aid,
     list: listType,
     removed: result.removed,
   };
 
   switch (format) {
-    case "json":
+    case 'json':
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       if (!opts.noBanner) {
         console.error(`\n✅ Removed from ${listType}`);
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -230,10 +230,10 @@ export async function accessList(opts: AccessOptions): Promise<void> {
 
   // Validate flags
   if (!opts.allow && !opts.deny) {
-    throw new Error("Must specify --allow or --deny");
+    throw new Error('Must specify --allow or --deny');
   }
   if (opts.allow && opts.deny) {
-    throw new Error("Cannot specify both --allow and --deny");
+    throw new Error('Cannot specify both --allow and --deny');
   }
 
   // Load credentials
@@ -249,22 +249,22 @@ export async function accessList(opts: AccessOptions): Promise<void> {
   // Output result
   const output = isAllow
     ? {
-        list: "allow",
+        list: 'allow',
         entries: result.allowList,
         isActive: result.isActive,
         count: result.allowList.length,
       }
     : {
-        list: "deny",
+        list: 'deny',
         entries: result.denyList,
         count: result.denyList.length,
       };
 
   switch (format) {
-    case "json":
+    case 'json':
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       if (!opts.noBanner) {
         if (isAllow) {
@@ -279,7 +279,7 @@ export async function accessList(opts: AccessOptions): Promise<void> {
         }
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -296,23 +296,23 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
 
   // Validate flags
   if (!opts.allow && !opts.deny) {
-    throw new Error("Must specify --allow or --deny");
+    throw new Error('Must specify --allow or --deny');
   }
   if (opts.allow && opts.deny) {
-    throw new Error("Cannot specify both --allow and --deny");
+    throw new Error('Cannot specify both --allow and --deny');
   }
 
   // Load credentials
   const creds = requireCredentials(opts.credentials);
 
   const isAllow = opts.allow;
-  const listType = isAllow ? "allow-list" : "deny-list";
+  const listType = isAllow ? 'allow-list' : 'deny-list';
 
   // Build and sign mutation args
   const privateKeyBytes = base64UrlToUint8Array(creds.privateKey);
 
   // Call backend API (backend handles authorization via signature)
-  let result;
+  let result: any;
   if (isAllow) {
     const args = {};
     const sig = await signMutationArgs(args, privateKeyBytes, creds.aid);
@@ -325,16 +325,16 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
 
   // Output result
   const output = {
-    action: "cleared",
+    action: 'cleared',
     list: listType,
     removed: result.removed,
   };
 
   switch (format) {
-    case "json":
+    case 'json':
       console.log(canonicalizeJSON(output));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(output, null, 2));
       if (!opts.noBanner) {
         console.error(`\n✅ ${listType} cleared`);
@@ -344,7 +344,7 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
         }
       }
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(output));
       break;
   }
@@ -354,12 +354,12 @@ export async function accessClear(opts: AccessOptions): Promise<void> {
  * Canonicalize JSON according to RFC8785
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   const sortedKeys = Object.keys(obj).sort();
@@ -367,5 +367,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

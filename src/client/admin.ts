@@ -5,16 +5,16 @@
  * to deal with cryptographic primitives.
  */
 
-import type { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { signMutationArgs } from "../../core/signatures";
-import { base64UrlToUint8Array } from "../../core/crypto";
-import type { Credentials } from "../../cli/lib/credentials";
+import type { ConvexClient } from 'convex/browser';
+import type { Credentials } from '../../cli/lib/credentials';
+import { api } from '../../convex/_generated/api';
+import { base64UrlToUint8Array } from '../../core/crypto';
+import { signMutationArgs } from '../../core/signatures';
 
 export class AdminApi {
   constructor(
     private convex: ConvexClient,
-    private credentials: Credentials
+    private credentials: Credentials,
   ) {}
 
   /**
@@ -33,11 +33,7 @@ export class AdminApi {
   /**
    * Create a new permission
    */
-  async createPermission(
-    key: string,
-    actionSAID: string,
-    data?: any
-  ): Promise<{ permissionId: string }> {
+  async createPermission(key: string, actionSAID: string, data?: any): Promise<{ permissionId: string }> {
     const args = { key, actionSAID, data };
     const sig = await this.signArgs(args);
 
@@ -50,11 +46,7 @@ export class AdminApi {
   /**
    * Add a permission to a role
    */
-  async addPermissionToRole(
-    roleName: string,
-    key: string,
-    actionSAID: string
-  ): Promise<{ success: boolean }> {
+  async addPermissionToRole(roleName: string, key: string, actionSAID: string): Promise<{ success: boolean }> {
     const args = { roleName, key, actionSAID };
     const sig = await this.signArgs(args);
 
@@ -67,11 +59,7 @@ export class AdminApi {
   /**
    * Grant a role to a user
    */
-  async grantRoleToUser(
-    userAID: string,
-    roleName: string,
-    actionSAID: string
-  ): Promise<{ success: boolean }> {
+  async grantRoleToUser(userAID: string, roleName: string, actionSAID: string): Promise<{ success: boolean }> {
     const args = { userAID, roleName, actionSAID };
     const sig = await this.signArgs(args);
 

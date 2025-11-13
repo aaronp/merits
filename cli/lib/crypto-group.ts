@@ -18,11 +18,10 @@
  * - NIST SP 800-38D: AES-GCM
  */
 
-import * as ed from "@noble/ed25519";
-import { hkdf } from "@noble/hashes/hkdf.js";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { ed25519, x25519 } from "@noble/curves/ed25519.js";
-import { CRYPTO_DEFAULTS, KEY_FORMATS } from "./crypto-constants";
+import { ed25519, x25519 } from '@noble/curves/ed25519.js';
+import { hkdf } from '@noble/hashes/hkdf.js';
+import { sha256 } from '@noble/hashes/sha2.js';
+import { KEY_FORMATS } from './crypto-constants';
 
 /**
  * Encrypted group message structure
@@ -36,10 +35,13 @@ export interface GroupMessage {
 
   // Encrypted group key for each recipient
   // Map: recipient AID → encrypted group key
-  encryptedKeys: Record<string, {
-    encryptedKey: string; // base64url
-    nonce: string; // base64url
-  }>;
+  encryptedKeys: Record<
+    string,
+    {
+      encryptedKey: string; // base64url
+      nonce: string; // base64url
+    }
+  >;
 
   // Metadata
   senderAid: string;
@@ -62,7 +64,9 @@ export interface GroupMessage {
  */
 export function ed25519PrivateKeyToX25519(ed25519PrivateKey: Uint8Array): Uint8Array {
   if (ed25519PrivateKey.length !== KEY_FORMATS.ED25519_PRIVATE_KEY_BYTES) {
-    throw new Error(`Invalid Ed25519 private key length: expected ${KEY_FORMATS.ED25519_PRIVATE_KEY_BYTES}, got ${ed25519PrivateKey.length}`);
+    throw new Error(
+      `Invalid Ed25519 private key length: expected ${KEY_FORMATS.ED25519_PRIVATE_KEY_BYTES}, got ${ed25519PrivateKey.length}`,
+    );
   }
 
   // Use @noble/curves for proper Ed25519→X25519 conversion
@@ -78,7 +82,9 @@ export function ed25519PrivateKeyToX25519(ed25519PrivateKey: Uint8Array): Uint8A
  */
 export function ed25519PublicKeyToX25519(ed25519PublicKey: Uint8Array): Uint8Array {
   if (ed25519PublicKey.length !== KEY_FORMATS.ED25519_PUBLIC_KEY_BYTES) {
-    throw new Error(`Invalid Ed25519 public key length: expected ${KEY_FORMATS.ED25519_PUBLIC_KEY_BYTES}, got ${ed25519PublicKey.length}`);
+    throw new Error(
+      `Invalid Ed25519 public key length: expected ${KEY_FORMATS.ED25519_PUBLIC_KEY_BYTES}, got ${ed25519PublicKey.length}`,
+    );
   }
 
   // Use @noble/curves for proper Ed25519→X25519 public key conversion
@@ -98,13 +104,17 @@ export function ed25519PublicKeyToX25519(ed25519PublicKey: Uint8Array): Uint8Arr
  */
 export async function deriveSharedSecret(
   ourX25519PrivateKey: Uint8Array,
-  theirX25519PublicKey: Uint8Array
+  theirX25519PublicKey: Uint8Array,
 ): Promise<Uint8Array> {
   if (ourX25519PrivateKey.length !== KEY_FORMATS.X25519_PRIVATE_KEY_BYTES) {
-    throw new Error(`Invalid X25519 private key length: expected ${KEY_FORMATS.X25519_PRIVATE_KEY_BYTES}, got ${ourX25519PrivateKey.length}`);
+    throw new Error(
+      `Invalid X25519 private key length: expected ${KEY_FORMATS.X25519_PRIVATE_KEY_BYTES}, got ${ourX25519PrivateKey.length}`,
+    );
   }
   if (theirX25519PublicKey.length !== KEY_FORMATS.X25519_PUBLIC_KEY_BYTES) {
-    throw new Error(`Invalid X25519 public key length: expected ${KEY_FORMATS.X25519_PUBLIC_KEY_BYTES}, got ${theirX25519PublicKey.length}`);
+    throw new Error(
+      `Invalid X25519 public key length: expected ${KEY_FORMATS.X25519_PUBLIC_KEY_BYTES}, got ${theirX25519PublicKey.length}`,
+    );
   }
 
   // Use @noble/curves X25519 for proper ECDH
@@ -125,13 +135,11 @@ export async function deriveSharedSecret(
  */
 export function deriveGroupKey(sharedSecrets: Uint8Array[]): Uint8Array {
   if (sharedSecrets.length === 0) {
-    throw new Error("Cannot derive group key from empty shared secrets array");
+    throw new Error('Cannot derive group key from empty shared secrets array');
   }
 
   // Concatenate all shared secrets
-  const combined = new Uint8Array(
-    sharedSecrets.reduce((acc, secret) => acc + secret.length, 0)
-  );
+  const combined = new Uint8Array(sharedSecrets.reduce((acc, secret) => acc + secret.length, 0));
 
   let offset = 0;
   for (const secret of sharedSecrets) {
@@ -140,8 +148,8 @@ export function deriveGroupKey(sharedSecrets: Uint8Array[]): Uint8Array {
   }
 
   // Derive group key using HKDF-SHA256
-  const salt = new TextEncoder().encode("merits-group-key-v1");
-  const info = new TextEncoder().encode("aes-256-gcm");
+  const salt = new TextEncoder().encode('merits-group-key-v1');
+  const info = new TextEncoder().encode('aes-256-gcm');
 
   const groupKey = hkdf(sha256, combined, salt, info, KEY_FORMATS.AES_KEY_BYTES);
 
@@ -159,7 +167,7 @@ export function deriveGroupKey(sharedSecrets: Uint8Array[]): Uint8Array {
 export async function encryptAESGCM(
   plaintext: Uint8Array,
   key: Uint8Array,
-  aad?: Uint8Array
+  aad?: Uint8Array,
 ): Promise<{ ciphertext: Uint8Array; nonce: Uint8Array }> {
   if (key.length !== KEY_FORMATS.AES_KEY_BYTES) {
     throw new Error(`Invalid AES key length: expected ${KEY_FORMATS.AES_KEY_BYTES}, got ${key.length}`);
@@ -169,24 +177,18 @@ export async function encryptAESGCM(
   const nonce = crypto.getRandomValues(new Uint8Array(KEY_FORMATS.AES_NONCE_BYTES));
 
   // Import key for Web Crypto API
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    key,
-    { name: "AES-GCM" },
-    false,
-    ["encrypt"]
-  );
+  const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-GCM' }, false, ['encrypt']);
 
   // Encrypt with AES-GCM
   const ciphertext = await crypto.subtle.encrypt(
     {
-      name: "AES-GCM",
+      name: 'AES-GCM',
       iv: nonce,
       additionalData: aad,
       tagLength: KEY_FORMATS.AES_TAG_BYTES * 8, // bits
     },
     cryptoKey,
-    plaintext
+    plaintext,
   );
 
   return {
@@ -208,7 +210,7 @@ export async function decryptAESGCM(
   ciphertext: Uint8Array,
   key: Uint8Array,
   nonce: Uint8Array,
-  aad?: Uint8Array
+  aad?: Uint8Array,
 ): Promise<Uint8Array> {
   if (key.length !== KEY_FORMATS.AES_KEY_BYTES) {
     throw new Error(`Invalid AES key length: expected ${KEY_FORMATS.AES_KEY_BYTES}, got ${key.length}`);
@@ -218,24 +220,18 @@ export async function decryptAESGCM(
   }
 
   // Import key for Web Crypto API
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    key,
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"]
-  );
+  const cryptoKey = await crypto.subtle.importKey('raw', key, { name: 'AES-GCM' }, false, ['decrypt']);
 
   // Decrypt with AES-GCM
   const plaintext = await crypto.subtle.decrypt(
     {
-      name: "AES-GCM",
+      name: 'AES-GCM',
       iv: nonce,
       additionalData: aad,
       tagLength: KEY_FORMATS.AES_TAG_BYTES * 8, // bits
     },
     cryptoKey,
-    ciphertext
+    ciphertext,
   );
 
   return new Uint8Array(plaintext);
@@ -266,7 +262,7 @@ export async function encryptForGroup(
   memberPublicKeys: Record<string, string>, // AID → base64url public key
   ourEd25519PrivateKey: Uint8Array,
   groupId: string,
-  senderAid: string
+  senderAid: string,
 ): Promise<GroupMessage> {
   // Generate ephemeral group key (AES-256)
   const groupKey = crypto.getRandomValues(new Uint8Array(KEY_FORMATS.AES_KEY_BYTES));
@@ -274,11 +270,7 @@ export async function encryptForGroup(
   // Encrypt message with group key
   const messageBytes = new TextEncoder().encode(message);
   const aad = new TextEncoder().encode(`${groupId}:${senderAid}`);
-  const { ciphertext: encryptedContent, nonce: contentNonce } = await encryptAESGCM(
-    messageBytes,
-    groupKey,
-    aad
-  );
+  const { ciphertext: encryptedContent, nonce: contentNonce } = await encryptAESGCM(messageBytes, groupKey, aad);
 
   // Convert our Ed25519 private key to X25519
   const ourX25519PrivateKey = ed25519PrivateKeyToX25519(ourEd25519PrivateKey);
@@ -297,10 +289,7 @@ export async function encryptForGroup(
     const sharedSecret = await deriveSharedSecret(ourX25519PrivateKey, memberX25519PublicKey);
 
     // Encrypt group key with shared secret
-    const { ciphertext: encryptedKey, nonce: keyNonce } = await encryptAESGCM(
-      groupKey,
-      sharedSecret
-    );
+    const { ciphertext: encryptedKey, nonce: keyNonce } = await encryptAESGCM(groupKey, sharedSecret);
 
     encryptedKeys[memberAid] = {
       encryptedKey: uint8ArrayToBase64Url(encryptedKey),
@@ -341,7 +330,7 @@ export async function decryptGroupMessage(
   groupMessage: GroupMessage,
   ourEd25519PrivateKey: Uint8Array,
   ourAid: string,
-  senderEd25519PublicKey: string
+  senderEd25519PublicKey: string,
 ): Promise<string> {
   // Find our encrypted key
   const ourEncryptedKey = groupMessage.encryptedKeys[ourAid];
@@ -384,20 +373,20 @@ export async function decryptGroupMessage(
  * Encode Uint8Array to base64url (RFC 4648)
  */
 function uint8ArrayToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
+  let binary = '';
   for (let i = 0; i < bytes.length; i++) {
     binary += String.fromCharCode(bytes[i]);
   }
   const base64 = btoa(binary);
-  return base64.replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
 }
 
 /**
  * Decode base64url to Uint8Array
  */
 function base64UrlToUint8Array(base64url: string): Uint8Array {
-  const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const base64 = base64url.replace(/-/g, '+').replace(/_/g, '/');
+  const padding = '='.repeat((4 - (base64.length % 4)) % 4);
   const b64 = base64 + padding;
   const binaryString = atob(b64);
   const bytes = new Uint8Array(binaryString.length);

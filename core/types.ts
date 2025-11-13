@@ -129,7 +129,7 @@ export function isIndexedSig(s: string): boolean {
  * Parse indexed signature into components
  */
 export function parseIndexedSig(sig: IndexedSig): { index: number; signature: string } {
-  const hyphenIndex = sig.indexOf("-");
+  const hyphenIndex = sig.indexOf('-');
   if (hyphenIndex === -1) {
     throw new Error(`Invalid indexed signature format: ${sig}`);
   }
@@ -137,7 +137,7 @@ export function parseIndexedSig(sig: IndexedSig): { index: number; signature: st
   const index = parseInt(sig.substring(0, hyphenIndex), 10);
   const signature = sig.substring(hyphenIndex + 1);
 
-  if (isNaN(index)) {
+  if (Number.isNaN(index)) {
     throw new Error(`Invalid index in signature: ${sig}`);
   }
 

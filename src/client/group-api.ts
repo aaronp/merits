@@ -5,11 +5,11 @@
  * to deal with cryptographic primitives.
  */
 
-import type { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import { signMutationArgs } from "../../core/signatures";
-import { base64UrlToUint8Array } from "../../core/crypto";
-import type { Credentials } from "../../cli/lib/credentials";
+import type { ConvexClient } from 'convex/browser';
+import type { Credentials } from '../../cli/lib/credentials';
+import { api } from '../../convex/_generated/api';
+import { base64UrlToUint8Array } from '../../core/crypto';
+import { signMutationArgs } from '../../core/signatures';
 
 export interface Group {
   id: string;
@@ -26,7 +26,7 @@ export interface Group {
 export class GroupApi {
   constructor(
     private convex: ConvexClient,
-    private credentials: Credentials
+    private credentials: Credentials,
   ) {}
 
   /**
@@ -128,7 +128,7 @@ export class GroupApi {
   async sendGroupMessage(
     groupId: string,
     ct: string,
-    options?: { typ?: string; ttl?: number }
+    options?: { typ?: string; ttl?: number },
   ): Promise<{ messageId: string }> {
     const args = {
       groupId,

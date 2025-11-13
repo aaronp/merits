@@ -12,12 +12,12 @@
  * - group leave: Leave a group
  */
 
-import chalk from "chalk";
-import type { CLIContext } from "../lib/context";
-import { requireCredentials } from "../lib/credentials";
-import { normalizeFormat } from "../lib/options";
-import { signMutationArgs } from "../../core/signatures";
-import { base64UrlToUint8Array } from "../../core/crypto";
+import chalk from 'chalk';
+import { base64UrlToUint8Array } from '../../core/crypto';
+import { signMutationArgs } from '../../core/signatures';
+import type { CLIContext } from '../lib/context';
+import { requireCredentials } from '../lib/credentials';
+import { normalizeFormat } from '../lib/options';
 
 interface GroupCreateOptions {
   credentials?: string;
@@ -56,10 +56,7 @@ interface GroupLeaveOptions {
 /**
  * Create a new group
  */
-export async function createGroup(
-  groupName: string,
-  opts: GroupCreateOptions
-): Promise<void> {
+export async function createGroup(groupName: string, opts: GroupCreateOptions): Promise<void> {
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
@@ -77,12 +74,12 @@ export async function createGroup(
     sig,
   });
 
-  const isJsonMode = ctx.config.outputFormat === "json";
+  const isJsonMode = ctx.config.outputFormat === 'json';
 
   if (isJsonMode) {
     console.log(JSON.stringify({ groupId: result.groupId, name: groupName }, null, 2));
   } else {
-    console.log(chalk.green("✅ Group created successfully!"));
+    console.log(chalk.green('✅ Group created successfully!'));
     console.log(chalk.cyan(`\n📋 Group Details:`));
     console.log(`   ID: ${chalk.bold(result.groupId)}`);
     console.log(`   Name: ${chalk.bold(groupName)}`);
@@ -106,9 +103,9 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
-  if (format === "json") {
+  if (format === 'json') {
     // Canonicalized JSON (RFC8785)
-    const sorted = groups.map(g => ({
+    const sorted = groups.map((g) => ({
       createdAt: g.createdAt,
       createdBy: g.createdBy,
       id: g.id,
@@ -117,9 +114,9 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
     }));
     const canonical = JSON.stringify(sorted, Object.keys(sorted[0] || {}).sort());
     console.log(canonical);
-  } else if (format === "pretty") {
+  } else if (format === 'pretty') {
     console.log(JSON.stringify(groups, null, 2));
-  } else if (format === "raw") {
+  } else if (format === 'raw') {
     console.log(JSON.stringify(groups));
   } else {
     // Fallback to pretty
@@ -130,10 +127,7 @@ export async function listGroups(opts: GroupListOptions): Promise<void> {
 /**
  * Show detailed group information
  */
-export async function groupInfo(
-  groupId: string,
-  opts: GroupInfoOptions
-): Promise<void> {
+export async function groupInfo(groupId: string, opts: GroupInfoOptions): Promise<void> {
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
@@ -152,7 +146,7 @@ export async function groupInfo(
 
   const format = normalizeFormat(opts.format || ctx.config.outputFormat);
 
-  if (format === "json") {
+  if (format === 'json') {
     // Canonicalized JSON (RFC8785)
     const data = {
       createdAt: group.createdAt,
@@ -163,9 +157,9 @@ export async function groupInfo(
     };
     const canonical = JSON.stringify(data, Object.keys(data).sort());
     console.log(canonical);
-  } else if (format === "pretty") {
+  } else if (format === 'pretty') {
     console.log(JSON.stringify(group, null, 2));
-  } else if (format === "raw") {
+  } else if (format === 'raw') {
     console.log(JSON.stringify(group));
   } else {
     // Fallback to pretty
@@ -176,11 +170,7 @@ export async function groupInfo(
 /**
  * Add member to group
  */
-export async function addGroupMember(
-  groupId: string,
-  memberAid: string,
-  opts: GroupAddOptions
-): Promise<void> {
+export async function addGroupMember(groupId: string, memberAid: string, opts: GroupAddOptions): Promise<void> {
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
@@ -198,10 +188,10 @@ export async function addGroupMember(
     sig,
   });
 
-  const isJsonMode = ctx.config.outputFormat === "json";
+  const isJsonMode = ctx.config.outputFormat === 'json';
 
   if (isJsonMode) {
-    console.log(JSON.stringify({ success: true, groupId, memberAid, role: "member" }, null, 2));
+    console.log(JSON.stringify({ success: true, groupId, memberAid, role: 'member' }, null, 2));
   } else {
     console.log(chalk.green(`✅ Added ${memberAid} to group ${groupId}`));
     console.log(`   Role: member`);
@@ -211,11 +201,7 @@ export async function addGroupMember(
 /**
  * Remove member from group
  */
-export async function removeGroupMember(
-  groupId: string,
-  memberAid: string,
-  opts: GroupRemoveOptions
-): Promise<void> {
+export async function removeGroupMember(groupId: string, memberAid: string, opts: GroupRemoveOptions): Promise<void> {
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
@@ -233,7 +219,7 @@ export async function removeGroupMember(
     sig,
   });
 
-  const isJsonMode = ctx.config.outputFormat === "json";
+  const isJsonMode = ctx.config.outputFormat === 'json';
 
   if (isJsonMode) {
     console.log(JSON.stringify({ success: true, groupId, memberAid }, null, 2));
@@ -245,10 +231,7 @@ export async function removeGroupMember(
 /**
  * Leave a group
  */
-export async function leaveGroup(
-  groupId: string,
-  opts: GroupLeaveOptions
-): Promise<void> {
+export async function leaveGroup(groupId: string, opts: GroupLeaveOptions): Promise<void> {
   const ctx = opts._ctx;
   const creds = requireCredentials(opts.credentials);
 
@@ -267,7 +250,7 @@ export async function leaveGroup(
     sig,
   });
 
-  const isJsonMode = ctx.config.outputFormat === "json";
+  const isJsonMode = ctx.config.outputFormat === 'json';
 
   if (isJsonMode) {
     console.log(JSON.stringify({ success: true, groupId, aid: creds.aid }, null, 2));

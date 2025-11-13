@@ -5,8 +5,8 @@
  * They should NEVER be used in production.
  */
 
-import { mutation } from "./_generated/server";
-import { v } from "convex/values";
+import { v } from 'convex/values';
+import { mutation } from './_generated/server';
 
 /**
  * Clear all data from the database
@@ -21,26 +21,26 @@ export const clearAllData = mutation({
     const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
     if (!BOOTSTRAP_KEY) {
       throw new Error(
-        "CLEAR_DB_DISABLED - Database clearing is not available in this environment. " +
-        "For dev setup, set BOOTSTRAP_KEY environment variable."
+        'CLEAR_DB_DISABLED - Database clearing is not available in this environment. ' +
+          'For dev setup, set BOOTSTRAP_KEY environment variable.',
       );
     }
 
     // Get all tables
     const tables = [
-      "challenges",
-      "users",
-      "keyStates",
-      "roles",
-      "userRoles",
-      "rolePermissions",
-      "permissions",
-      "groupChats",
-      "groupMembers",
-      "groupMessages",
-      "messages",
-      "authChallenges",
-      "usedNonces",
+      'challenges',
+      'users',
+      'keyStates',
+      'roles',
+      'userRoles',
+      'rolePermissions',
+      'permissions',
+      'groupChats',
+      'groupMembers',
+      'groupMessages',
+      'messages',
+      'authChallenges',
+      'usedNonces',
     ];
 
     let totalDeleted = 0;
@@ -83,15 +83,15 @@ export const clearAllData = mutation({
 export const deleteDocument = mutation({
   args: {
     table: v.string(),
-    id: v.id("groupMessages"), // We'll use this for groupMessages
+    id: v.id('groupMessages'), // We'll use this for groupMessages
   },
   handler: async (ctx, args) => {
     // Security check: Only allow in dev with BOOTSTRAP_KEY set
     const BOOTSTRAP_KEY = process.env.BOOTSTRAP_KEY;
     if (!BOOTSTRAP_KEY) {
       throw new Error(
-        "DELETE_DISABLED - Document deletion is not available in this environment. " +
-        "For dev setup, set BOOTSTRAP_KEY environment variable."
+        'DELETE_DISABLED - Document deletion is not available in this environment. ' +
+          'For dev setup, set BOOTSTRAP_KEY environment variable.',
       );
     }
 
@@ -114,7 +114,7 @@ export const deleteDocument = mutation({
 export const clearGroupMessages = mutation({
   args: {},
   handler: async (ctx) => {
-    const messages = await ctx.db.query("groupMessages").collect();
+    const messages = await ctx.db.query('groupMessages').collect();
 
     let deleted = 0;
     for (const msg of messages) {

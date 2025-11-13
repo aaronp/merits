@@ -4,24 +4,23 @@
  * Provides message send/receive/ack plus real-time subscribe functionality.
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
+import type { ConvexClient } from 'convex/browser';
+import { api } from '../../convex/_generated/api';
+import type { Id } from '../../convex/_generated/dataModel';
 import type {
-  Transport,
-  MessageSendRequest,
   EncryptedMessage,
+  MessageSendRequest,
   SubscribeOptions,
-} from "../../core/interfaces/Transport";
-import { AuthProof, SignedRequest } from "../../core/types";
-import { sha256Hex } from "../../core/crypto";
-import { signMutationArgs } from "../../core/signatures";
+  Transport,
+} from '../../core/interfaces/Transport';
+import { signMutationArgs } from '../../core/signatures';
+import type { SignedRequest } from '../../core/types';
 
 /**
  * Convex implementation of Transport interface
  */
 export class ConvexTransport implements Transport {
-  constructor(private client: ConvexClient) { }
+  constructor(private client: ConvexClient) {}
 
   async sendMessage(req: MessageSendRequest): Promise<{ messageId: string }> {
     const messageId = await this.client.mutation(api.messages.send, {
@@ -37,10 +36,7 @@ export class ConvexTransport implements Transport {
     return { messageId };
   }
 
-  async receiveMessages(req: {
-    for: string;
-    sig: SignedRequest;
-  }): Promise<EncryptedMessage[]> {
+  async receiveMessages(req: { for: string; sig: SignedRequest }): Promise<EncryptedMessage[]> {
     const messages = await this.client.mutation(api.messages.receive, {
       recpAid: req.for,
       sig: req.sig,
@@ -49,13 +45,9 @@ export class ConvexTransport implements Transport {
     return messages.map((m: any) => this.toEncryptedMessage(m, req.for));
   }
 
-  async ackMessage(req: {
-    messageId: string;
-    sig: SignedRequest;
-    receiptSig?: string[];
-  }): Promise<void> {
+  async ackMessage(req: { messageId: string; sig: SignedRequest; receiptSig?: string[] }): Promise<void> {
     await this.client.mutation(api.messages.acknowledge, {
-      messageId: req.messageId as Id<"messages">,
+      messageId: req.messageId as Id<'messages'>,
       receipt: req.receiptSig ?? [],
       sig: req.sig,
     });
@@ -73,58 +65,50 @@ export class ConvexTransport implements Transport {
     const processedIds = new Set<string>();
 
     // Subscribe to the reactive query
-    const unsubscribe = this.client.onUpdate(
-      api.messages.list,
-      { recpAid: opts.for },
-      async (messages: any[]) => {
-        for (const msg of messages) {
-          const id = msg._id ?? msg.id;
-          // Skip already-processed messages
-          if (processedIds.has(id)) {
-            continue;
+    const unsubscribe = this.client.onUpdate(api.messages.list, { recpAid: opts.for }, async (messages: any[]) => {
+      for (const msg of messages) {
+        const id = msg._id ?? msg.id;
+        // Skip already-processed messages
+        if (processedIds.has(id)) {
+          continue;
+        }
+
+        processedIds.add(id);
+
+        try {
+          const encryptedMsg = this.toEncryptedMessage(msg, opts.for);
+
+          // Call user's handler
+          const shouldAck = await opts.onMessage(encryptedMsg);
+
+          // Auto-ack if handler returned true OR autoAck option is true
+          const doAck = opts.autoAck !== undefined ? opts.autoAck : shouldAck;
+
+          if (doAck) {
+            // Generate signature for ack using credentials
+            const ackArgs = {
+              messageId: id,
+              receipt: [],
+            };
+            const sig = await signMutationArgs(ackArgs, opts.credentials.privateKey, opts.credentials.aid);
+
+            await this.ackMessage({
+              messageId: id,
+              sig,
+            });
+
+            // Remove from processed set after ack (message won't appear again)
+            processedIds.delete(id);
           }
-
-          processedIds.add(id);
-
-          try {
-            const encryptedMsg = this.toEncryptedMessage(msg, opts.for);
-
-            // Call user's handler
-            const shouldAck = await opts.onMessage(encryptedMsg);
-
-            // Auto-ack if handler returned true OR autoAck option is true
-            const doAck = opts.autoAck !== undefined ? opts.autoAck : shouldAck;
-
-            if (doAck) {
-              // Generate signature for ack using credentials
-              const ackArgs = {
-                messageId: id,
-                receipt: [],
-              };
-              const sig = await signMutationArgs(
-                ackArgs,
-                opts.credentials.privateKey,
-                opts.credentials.aid
-              );
-
-              await this.ackMessage({
-                messageId: id,
-                sig,
-              });
-
-              // Remove from processed set after ack (message won't appear again)
-              processedIds.delete(id);
-            }
-          } catch (err) {
-            if (opts.onError) {
-              opts.onError(err as Error);
-            } else {
-              throw err;
-            }
+        } catch (err) {
+          if (opts.onError) {
+            opts.onError(err as Error);
+          } else {
+            throw err;
           }
         }
       }
-    );
+    });
 
     // Return cancel function
     return () => {
@@ -156,14 +140,5 @@ export class ConvexTransport implements Transport {
         evtSaid: msg.senderEvtSaid,
       },
     };
-  }
-
-  /**
-   * Compute SHA-256 hash of ciphertext
-   */
-  private computeCtHash(ct: string): string {
-    const encoder = new TextEncoder();
-    const data = encoder.encode(ct);
-    return sha256Hex(data);
   }
 }

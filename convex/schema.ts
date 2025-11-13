@@ -20,8 +20,8 @@
  * @see https://keri.one for KERI specification
  */
 
-import { defineSchema, defineTable } from "convex/server";
-import { v } from "convex/values";
+import { defineSchema, defineTable } from 'convex/server';
+import { v } from 'convex/values';
 
 export default defineSchema({
   /**
@@ -67,15 +67,15 @@ export default defineSchema({
     senderKsn: v.number(), // Key sequence at send
     senderEvtSaid: v.string(), // Last event SAID at send
     envelopeHash: v.string(), // hash(headers+ctHash) - audit anchor
-    usedChallengeId: v.optional(v.id("challenges")), // Which challenge authorized insertion (not needed for signed requests)
+    usedChallengeId: v.optional(v.id('challenges')), // Which challenge authorized insertion (not needed for signed requests)
     // Receipt fields (non-repudiable proof of delivery)
     receiptSig: v.optional(v.array(v.string())), // Recipient's indexed sigs over envelopeHash
     receiptKsn: v.optional(v.number()), // Recipient's KSN at acknowledgment
     receiptEvtSaid: v.optional(v.string()), // Recipient's event SAID at acknowledgment
   })
-    .index("by_recipient", ["recpAid", "retrieved"])
-    .index("by_expiration", ["expiresAt"])
-    .index("by_recipient_time", ["recpAid", "createdAt"]),
+    .index('by_recipient', ['recpAid', 'retrieved'])
+    .index('by_expiration', ['expiresAt'])
+    .index('by_recipient_time', ['recpAid', 'createdAt']),
 
   /**
    * Challenges - Challenge-response authentication system
@@ -106,8 +106,8 @@ export default defineSchema({
     expiresAt: v.number(),
     used: v.boolean(),
   })
-    .index("by_aid", ["aid"])
-    .index("by_expiration", ["expiresAt"]),
+    .index('by_aid', ['aid'])
+    .index('by_expiration', ['expiresAt']),
 
   /**
    * UsedNonces - Replay protection for signed requests
@@ -134,8 +134,8 @@ export default defineSchema({
     usedAt: v.number(), // When it was first used
     expiresAt: v.number(), // Auto-expire after 10 minutes
   })
-    .index("by_keyId_nonce", ["keyId", "nonce"])
-    .index("by_expiration", ["expiresAt"]),
+    .index('by_keyId_nonce', ['keyId', 'nonce'])
+    .index('by_expiration', ['expiresAt']),
 
   /**
    * KeyStates - KERI key state tracking for each AID
@@ -163,7 +163,7 @@ export default defineSchema({
     threshold: v.string(),
     lastEvtSaid: v.string(),
     updatedAt: v.number(),
-  }).index("by_aid", ["aid"]),
+  }).index('by_aid', ['aid']),
 
   /**
    * Users - Registered user accounts with public keys
@@ -185,8 +185,7 @@ export default defineSchema({
     aid: v.string(),
     publicKey: v.string(),
     createdAt: v.number(),
-  })
-    .index("by_aid", ["aid"]),
+  }).index('by_aid', ['aid']),
 
   /**
    * Roles - Role definitions for RBAC system
@@ -211,8 +210,7 @@ export default defineSchema({
     adminAID: v.string(),
     actionSAID: v.string(),
     timestamp: v.number(),
-  })
-    .index("by_roleName", ["roleName"]),
+  }).index('by_roleName', ['roleName']),
 
   /**
    * Permissions - Permission definitions with optional data constraints
@@ -238,8 +236,7 @@ export default defineSchema({
     adminAID: v.string(),
     actionSAID: v.string(),
     timestamp: v.number(),
-  })
-    .index("by_key", ["key"]),
+  }).index('by_key', ['key']),
 
   /**
    * RolePermissions - Many-to-many mapping between roles and permissions
@@ -254,14 +251,14 @@ export default defineSchema({
    * @see rbac.ts for querying user permissions
    */
   rolePermissions: defineTable({
-    roleId: v.id("roles"),
-    permissionId: v.id("permissions"),
+    roleId: v.id('roles'),
+    permissionId: v.id('permissions'),
     adminAID: v.string(),
     actionSAID: v.string(),
     timestamp: v.number(),
   })
-    .index("by_role", ["roleId"])
-    .index("by_permission", ["permissionId"]),
+    .index('by_role', ['roleId'])
+    .index('by_permission', ['permissionId']),
 
   /**
    * UserRoles - Many-to-many mapping between users and roles
@@ -277,13 +274,13 @@ export default defineSchema({
    */
   userRoles: defineTable({
     userAID: v.string(),
-    roleId: v.id("roles"),
+    roleId: v.id('roles'),
     adminAID: v.string(),
     actionSAID: v.string(),
     timestamp: v.number(),
   })
-    .index("by_user", ["userAID"])
-    .index("by_role", ["roleId"]),
+    .index('by_user', ['userAID'])
+    .index('by_role', ['roleId']),
 
   /**
    * GroupChats - Group conversation metadata
@@ -322,9 +319,9 @@ export default defineSchema({
     createdAt: v.number(),
     createdBy: v.string(), // AID that created the group
   })
-    .index("by_owner", ["ownerAid"])
-    .index("by_created", ["createdAt"])
-    .index("by_tag", ["tag"]),
+    .index('by_owner', ['ownerAid'])
+    .index('by_created', ['createdAt'])
+    .index('by_tag', ['tag']),
 
   /**
    * GroupMessages - Encrypted group message history
@@ -366,7 +363,7 @@ export default defineSchema({
    * @see groups.ts sendGroupMessage() and getGroupMessages()
    */
   groupMessages: defineTable({
-    groupChatId: v.id("groupChats"), // Foreign key to group chat
+    groupChatId: v.id('groupChats'), // Foreign key to group chat
 
     // GroupMessage structure (from CLI encryption)
     encryptedContent: v.string(), // base64url - message encrypted with group key
@@ -384,10 +381,10 @@ export default defineSchema({
     // Optional expiration for cleanup
     expiresAt: v.optional(v.number()),
   })
-    .index("by_group_seq", ["groupChatId", "seqNo"])
-    .index("by_group_time", ["groupChatId", "received"])
-    .index("by_sender", ["senderAid", "received"])
-    .index("by_expiration", ["expiresAt"]),
+    .index('by_group_seq', ['groupChatId', 'seqNo'])
+    .index('by_group_time', ['groupChatId', 'received'])
+    .index('by_sender', ['senderAid', 'received'])
+    .index('by_expiration', ['expiresAt']),
 
   /**
    * GroupMembers - Group membership and message sync tracking
@@ -418,7 +415,7 @@ export default defineSchema({
    * @see groups.ts for membership verification
    */
   groupMembers: defineTable({
-    groupChatId: v.id("groupChats"), // Foreign key to group chat
+    groupChatId: v.id('groupChats'), // Foreign key to group chat
     aid: v.string(), // AID of the member
 
     // Sync tracking
@@ -428,9 +425,9 @@ export default defineSchema({
     joinedAt: v.number(),
     role: v.string(), // "owner" | "admin" | "member"
   })
-    .index("by_group", ["groupChatId"])
-    .index("by_aid", ["aid"])
-    .index("by_group_aid", ["groupChatId", "aid"]),
+    .index('by_group', ['groupChatId'])
+    .index('by_aid', ['aid'])
+    .index('by_group_aid', ['groupChatId', 'aid']),
 
   /**
    * AllowList - Explicit list of AIDs allowed to message a user
@@ -457,8 +454,8 @@ export default defineSchema({
     addedAt: v.number(), // Timestamp when added
     note: v.optional(v.string()), // Optional note (e.g., "work colleague")
   })
-    .index("by_owner", ["ownerAid"]) // Get all allowed AIDs for a user
-    .index("by_owner_allowed", ["ownerAid", "allowedAid"]), // Fast membership check
+    .index('by_owner', ['ownerAid']) // Get all allowed AIDs for a user
+    .index('by_owner_allowed', ['ownerAid', 'allowedAid']), // Fast membership check
 
   /**
    * DenyList - Explicit list of AIDs blocked from messaging a user
@@ -490,6 +487,6 @@ export default defineSchema({
     addedAt: v.number(), // Timestamp when added
     reason: v.optional(v.string()), // Optional reason (e.g., "spam", "harassment")
   })
-    .index("by_owner", ["ownerAid"]) // Get all denied AIDs for a user
-    .index("by_owner_denied", ["ownerAid", "deniedAid"]), // Fast membership check
+    .index('by_owner', ['ownerAid']) // Get all denied AIDs for a user
+    .index('by_owner_denied', ['ownerAid', 'deniedAid']), // Fast membership check
 });

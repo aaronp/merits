@@ -11,14 +11,14 @@
  * - Compatible with @noble/ed25519
  */
 
-import type { Signer } from "../client/types";
-import { sign } from "./crypto";
+import type { Signer } from '../client/types';
+import { sign } from './crypto';
 
 /**
  * Base64URL encode a Uint8Array
  */
 function uint8ArrayToBase64Url(bytes: Uint8Array): string {
-  return Buffer.from(bytes).toString("base64url");
+  return Buffer.from(bytes).toString('base64url');
 }
 
 /**
@@ -49,15 +49,11 @@ export class Ed25519Signer implements Signer {
    */
   constructor(privateKey: Uint8Array, publicKey: Uint8Array) {
     if (privateKey.length !== 32) {
-      throw new Error(
-        `Invalid Ed25519 private key length: expected 32 bytes, got ${privateKey.length}`
-      );
+      throw new Error(`Invalid Ed25519 private key length: expected 32 bytes, got ${privateKey.length}`);
     }
 
     if (publicKey.length !== 32) {
-      throw new Error(
-        `Invalid Ed25519 public key length: expected 32 bytes, got ${publicKey.length}`
-      );
+      throw new Error(`Invalid Ed25519 public key length: expected 32 bytes, got ${publicKey.length}`);
     }
 
     this.privateKey = privateKey;

@@ -11,11 +11,11 @@
  * - Signer abstraction for encapsulating private keys
  */
 
-import { mkdirSync, readFileSync, writeFileSync, existsSync, chmodSync } from "fs";
-import { join, dirname } from "path";
-import { homedir } from "os";
-import { Ed25519Signer } from "../../core/Ed25519Signer";
-import type { Signer } from "../../src/client/types";
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { Ed25519Signer } from '../../core/Ed25519Signer';
+import type { Signer } from '../../src/client/types';
 
 /**
  * Credentials structure for signing requests
@@ -49,7 +49,7 @@ export interface IdentityFile {
 /**
  * Default credentials path
  */
-const DEFAULT_CREDENTIALS_PATH = ".merits/credentials.json";
+const DEFAULT_CREDENTIALS_PATH = '.merits/credentials.json';
 
 /**
  * Get the absolute path for credentials storage
@@ -60,8 +60,8 @@ const DEFAULT_CREDENTIALS_PATH = ".merits/credentials.json";
 export function getCredentialsPath(path?: string): string {
   if (path) {
     // If absolute path, use as-is
-    if (path.startsWith("/") || path.startsWith("~")) {
-      return path.replace("~", homedir());
+    if (path.startsWith('/') || path.startsWith('~')) {
+      return path.replace('~', homedir());
     }
     // Otherwise, relative to cwd
     return join(process.cwd(), path);
@@ -128,16 +128,16 @@ export function loadCredentials(path?: string): Credentials | null {
         };
       }
     } catch (err) {
-      console.error("Failed to parse MERITS_CREDENTIALS environment variable:", err);
+      console.error('Failed to parse MERITS_CREDENTIALS environment variable:', err);
       return null;
     }
   }
 
   // Check .meritsrc file in CWD (project-level config)
-  const projectConfigPath = join(process.cwd(), ".meritsrc");
+  const projectConfigPath = join(process.cwd(), '.meritsrc');
   if (!path && existsSync(projectConfigPath)) {
     try {
-      const content = readFileSync(projectConfigPath, "utf-8");
+      const content = readFileSync(projectConfigPath, 'utf-8');
       const parsed = JSON.parse(content);
 
       if (parsed.credentials) {
@@ -148,7 +148,7 @@ export function loadCredentials(path?: string): Credentials | null {
           ksn: parsed.credentials.ksn ?? 0,
         };
       }
-    } catch (err) {
+    } catch (_err) {
       // Silently ignore - will try other paths
     }
   }
@@ -161,7 +161,7 @@ export function loadCredentials(path?: string): Credentials | null {
   }
 
   try {
-    const content = readFileSync(credentialsPath, "utf-8");
+    const content = readFileSync(credentialsPath, 'utf-8');
     const parsed = JSON.parse(content);
 
     // Handle two formats:
@@ -186,7 +186,7 @@ export function loadCredentials(path?: string): Credentials | null {
         ksn: parsed.ksn ?? 0,
       };
     } else {
-      throw new Error("Invalid credentials structure");
+      throw new Error('Invalid credentials structure');
     }
   } catch (err) {
     console.error(`Failed to load credentials from ${credentialsPath}:`, err);
@@ -251,7 +251,7 @@ export function requireCredentials(path?: string): Credentials {
       `No credentials found. Please authenticate first:\n` +
         `  merits incept --seed <your-seed> > identity.json\n` +
         `  merits <command> --credentials identity.json\n\n` +
-        `Or set MERITS_CREDENTIALS environment variable with your identity JSON.`
+        `Or set MERITS_CREDENTIALS environment variable with your identity JSON.`,
     );
   }
 
@@ -276,8 +276,8 @@ export function requireCredentials(path?: string): Credentials {
  */
 export function createSignerFromCredentials(credentials: Credentials): Signer {
   // Decode private and public keys from base64url
-  const privateKeyBytes = Buffer.from(credentials.privateKey, "base64url");
-  const publicKeyBytes = Buffer.from(credentials.publicKey, "base64url");
+  const privateKeyBytes = Buffer.from(credentials.privateKey, 'base64url');
+  const publicKeyBytes = Buffer.from(credentials.publicKey, 'base64url');
 
   // Create and return Ed25519Signer
   return new Ed25519Signer(privateKeyBytes, publicKeyBytes);

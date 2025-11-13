@@ -5,13 +5,13 @@
  * and a wrapper pattern for command handlers.
  */
 
-import type { CLIContext } from "./context";
+import type { CLIContext } from './context';
 
 /**
  * Global options available to all commands
  */
 export interface GlobalOptions {
-  format?: "json" | "pretty" | "raw";
+  format?: 'json' | 'pretty' | 'raw';
   credentials?: string;
   noBanner?: boolean;
   verbose?: boolean;
@@ -26,16 +26,16 @@ export interface GlobalOptions {
 /**
  * Normalized format type (after processing)
  */
-export type NormalizedFormat = "json" | "pretty" | "raw";
+export type NormalizedFormat = 'json' | 'pretty' | 'raw';
 
 /**
  * Normalize format option (defaults to "json")
  */
 export function normalizeFormat(format?: string): NormalizedFormat {
-  if (format === "pretty" || format === "raw") {
+  if (format === 'pretty' || format === 'raw') {
     return format;
   }
-  return "json"; // Default to json
+  return 'json'; // Default to json
 }
 
 /**
@@ -56,14 +56,12 @@ export function normalizeFormat(format?: string): NormalizedFormat {
  * ```
  */
 export function withGlobalOptions<T extends Record<string, any>>(
-  handler: (opts: GlobalOptions & T) => Promise<void>
+  handler: (opts: GlobalOptions & T) => Promise<void>,
 ): (opts: GlobalOptions & T) => Promise<void> {
   return async (opts: GlobalOptions & T) => {
     // Ensure _ctx is present
     if (!opts._ctx) {
-      throw new Error(
-        "CLI context not initialized. This is a bug in the CLI framework."
-      );
+      throw new Error('CLI context not initialized. This is a bug in the CLI framework.');
     }
 
     // Read format from config (config has precedence over opts.format)
@@ -71,7 +69,7 @@ export function withGlobalOptions<T extends Record<string, any>>(
     const normalizedFormat = normalizeFormat(format);
 
     // Suppress banner if requested
-    if (!opts.noBanner && normalizedFormat === "json") {
+    if (!opts.noBanner && normalizedFormat === 'json') {
       opts.noBanner = true; // Suppress banners in JSON mode automatically
     }
 
@@ -79,4 +77,3 @@ export function withGlobalOptions<T extends Record<string, any>>(
     await handler({ ...opts, format: normalizedFormat } as GlobalOptions & T);
   };
 }
-

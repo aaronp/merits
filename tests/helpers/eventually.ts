@@ -7,7 +7,7 @@
  * Instead of sleep(), we poll at regular intervals.
  */
 
-import { TEST_CONFIG } from "../config";
+import { TEST_CONFIG } from '../config';
 
 export interface EventuallyOptions {
   /** Timeout in milliseconds (default: from TEST_CONFIG.EVENTUALLY_TIMEOUT) */
@@ -33,13 +33,9 @@ export interface EventuallyOptions {
  */
 export async function eventually(
   condition: () => boolean | Promise<boolean>,
-  options: EventuallyOptions = {}
+  options: EventuallyOptions = {},
 ): Promise<void> {
-  const {
-    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
-    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
-    message
-  } = options;
+  const { timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT, interval = TEST_CONFIG.EVENTUALLY_INTERVAL, message } = options;
 
   const startTime = Date.now();
 
@@ -53,9 +49,7 @@ export async function eventually(
     const elapsed = Date.now() - startTime;
 
     if (elapsed >= timeout) {
-      const msg = message
-        ? `${message} (timeout after ${timeout}ms)`
-        : `Condition not met within ${timeout}ms`;
+      const msg = message ? `${message} (timeout after ${timeout}ms)` : `Condition not met within ${timeout}ms`;
       throw new Error(msg);
     }
 
@@ -77,13 +71,9 @@ export async function eventually(
  */
 export async function eventuallyAssert(
   assertion: () => void | Promise<void>,
-  options: EventuallyOptions = {}
+  options: EventuallyOptions = {},
 ): Promise<void> {
-  const {
-    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
-    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
-    message
-  } = options;
+  const { timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT, interval = TEST_CONFIG.EVENTUALLY_INTERVAL, message } = options;
 
   const startTime = Date.now();
   let lastError: Error | undefined;
@@ -98,9 +88,7 @@ export async function eventuallyAssert(
       const elapsed = Date.now() - startTime;
 
       if (elapsed >= timeout) {
-        const msg = message
-          ? `${message} (timeout after ${timeout}ms)`
-          : `Assertion failed after ${timeout}ms`;
+        const msg = message ? `${message} (timeout after ${timeout}ms)` : `Assertion failed after ${timeout}ms`;
 
         // Throw with original error details
         throw new Error(`${msg}\n\nLast error: ${lastError.message}`);
@@ -124,13 +112,9 @@ export async function eventuallyAssert(
  */
 export async function eventuallyValue<T>(
   getValue: () => T | undefined | null | Promise<T | undefined | null>,
-  options: EventuallyOptions = {}
+  options: EventuallyOptions = {},
 ): Promise<T> {
-  const {
-    timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT,
-    interval = TEST_CONFIG.EVENTUALLY_INTERVAL,
-    message
-  } = options;
+  const { timeout = TEST_CONFIG.EVENTUALLY_TIMEOUT, interval = TEST_CONFIG.EVENTUALLY_INTERVAL, message } = options;
 
   const startTime = Date.now();
 
@@ -144,9 +128,7 @@ export async function eventuallyValue<T>(
     const elapsed = Date.now() - startTime;
 
     if (elapsed >= timeout) {
-      const msg = message
-        ? `${message} (timeout after ${timeout}ms)`
-        : `Value not defined within ${timeout}ms`;
+      const msg = message ? `${message} (timeout after ${timeout}ms)` : `Value not defined within ${timeout}ms`;
       throw new Error(msg);
     }
 

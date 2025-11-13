@@ -23,8 +23,8 @@
  * ```
  */
 
-import { createMeritsProgram } from "../../../cli/build-program";
-import { CommanderError } from "commander";
+import { CommanderError } from 'commander';
+import { createMeritsProgram } from '../../../cli/build-program';
 
 /**
  * Result from running a CLI command in-process
@@ -87,17 +87,14 @@ export interface RunOptions {
  * expect(result.stderr).toContain("unknown command");
  * ```
  */
-export async function runCliInProcess(
-  args: string[],
-  opts: RunOptions = {}
-): Promise<CliResult> {
+export async function runCliInProcess(args: string[], opts: RunOptions = {}): Promise<CliResult> {
   // Save original environment and cwd
   const originalEnv = { ...process.env };
   const originalCwd = process.cwd();
 
   // Buffers for capturing output
-  let stdoutBuffer = "";
-  let stderrBuffer = "";
+  let stdoutBuffer = '';
+  let stderrBuffer = '';
 
   // Save original console methods
   const originalConsoleLog = console.log;
@@ -120,14 +117,14 @@ export async function runCliInProcess(
 
     // Intercept console.log (captures output from commands)
     console.log = (...args: any[]) => {
-      const text = args.map(String).join(" ");
-      stdoutBuffer += text + "\n";
+      const text = args.map(String).join(' ');
+      stdoutBuffer += `${text}\n`;
     };
 
     // Intercept console.error (captures error messages)
     console.error = (...args: any[]) => {
-      const text = args.map(String).join(" ");
-      stderrBuffer += text + "\n";
+      const text = args.map(String).join(' ');
+      stderrBuffer += `${text}\n`;
     };
 
     // Create fresh program instance
@@ -149,9 +146,9 @@ export async function runCliInProcess(
     });
 
     // Build argv: ["node", "merits", ...args]
-    const argv = ["node", "merits", ...args];
+    const argv = ['node', 'merits', ...args];
 
-    originalConsoleLog('> merits:', args.join(' '))
+    originalConsoleLog('> merits:', args.join(' '));
 
     // Parse and execute
     await program.parseAsync(argv);
@@ -165,11 +162,11 @@ export async function runCliInProcess(
     // Extract exit code from CommanderError
     if (error instanceof CommanderError) {
       exitCode = error.exitCode;
-    } else if (error.code === "commander.unknownCommand") {
+    } else if (error.code === 'commander.unknownCommand') {
       exitCode = 1;
-    } else if (error.code === "commander.missingArgument") {
+    } else if (error.code === 'commander.missingArgument') {
       exitCode = 1;
-    } else if (error.code === "commander.optionMissingArgument") {
+    } else if (error.code === 'commander.optionMissingArgument') {
       exitCode = 1;
     } else {
       // Generic error: exit code 1
@@ -204,14 +201,13 @@ export async function runCliInProcess(
     }
   }
 
-
   const result = {
     code: exitCode,
     stdout: stdoutBuffer,
     stderr: stderrBuffer,
     json,
     error: caughtError,
-  }
+  };
 
   if (opts.expectSuccess === false) {
     // the test will do some assertions
@@ -239,9 +235,7 @@ export async function runCliInProcess(
 export function assertSuccess(result: CliResult): void {
   if (result.code !== 0) {
     throw new Error(
-      `Command failed with exit code ${result.code}\n` +
-      `Stdout: ${result.stdout}\n` +
-      `Stderr: ${result.stderr}`
+      `Command failed with exit code ${result.code}\n` + `Stdout: ${result.stdout}\n` + `Stderr: ${result.stderr}`,
     );
   }
 }
@@ -262,10 +256,6 @@ export function assertSuccess(result: CliResult): void {
  */
 export function assertFailure(result: CliResult): void {
   if (result.code === 0) {
-    throw new Error(
-      `Command succeeded when it should have failed\n` +
-      `Stdout: ${result.stdout}\n` +
-      `Stderr: ${result.stderr}`
-    );
+    throw new Error(`Command succeeded when it should have failed\nStdout: ${result.stdout}\nStderr: ${result.stderr}`);
   }
 }

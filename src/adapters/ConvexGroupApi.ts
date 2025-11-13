@@ -2,34 +2,36 @@
  * ConvexGroupApi: Convex implementation of GroupApi interface
  */
 
-import { ConvexClient } from "convex/browser";
-import { api } from "../../convex/_generated/api";
+import type { ConvexClient } from 'convex/browser';
+import { api } from '../../convex/_generated/api';
 import type {
-  GroupApi,
-  CreateGroupRequest,
   AddMembersRequest,
-  RemoveMembersRequest,
-  GroupSendRequest,
-  ListGroupsRequest,
+  CreateGroupRequest,
   GetGroupRequest,
-  LeaveGroupRequest,
   Group,
+  GroupApi,
   GroupId,
-} from "../../core/interfaces/GroupApi";
+  GroupSendRequest,
+  LeaveGroupRequest,
+  ListGroupsRequest,
+  RemoveMembersRequest,
+} from '../../core/interfaces/GroupApi';
 
 export class ConvexGroupApi implements GroupApi {
-  constructor(private client: ConvexClient) { }
+  constructor(private client: ConvexClient) {}
 
   async createGroup(req: CreateGroupRequest): Promise<{ groupId: GroupId }> {
     const result = await this.client.mutation(api.groups.createGroup, {
       name: req.name,
       initialMembers: req.initialMembers,
       sig: (req as any).sig, // Pass signed request if available
-      auth: (req as any).auth ? {
-        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
-        sigs: (req as any).auth.sigs,
-        ksn: (req as any).auth.ksn,
-      } : undefined,
+      auth: (req as any).auth
+        ? {
+            challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+            sigs: (req as any).auth.sigs,
+            ksn: (req as any).auth.ksn,
+          }
+        : undefined,
     });
 
     return { groupId: result.groupId };
@@ -40,11 +42,13 @@ export class ConvexGroupApi implements GroupApi {
       groupId: req.groupId as any,
       members: req.members,
       sig: (req as any).sig, // Pass signed request if available
-      auth: (req as any).auth ? {
-        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
-        sigs: (req as any).auth.sigs,
-        ksn: (req as any).auth.ksn,
-      } : undefined,
+      auth: (req as any).auth
+        ? {
+            challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+            sigs: (req as any).auth.sigs,
+            ksn: (req as any).auth.ksn,
+          }
+        : undefined,
     });
   }
 
@@ -53,11 +57,13 @@ export class ConvexGroupApi implements GroupApi {
       groupId: req.groupId as any,
       members: req.members,
       sig: (req as any).sig, // Pass signed request if available
-      auth: (req as any).auth ? {
-        challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
-        sigs: (req as any).auth.sigs,
-        ksn: (req as any).auth.ksn,
-      } : undefined,
+      auth: (req as any).auth
+        ? {
+            challengeId: (req as any).auth.challengeId ? ((req as any).auth.challengeId as any) : undefined,
+            sigs: (req as any).auth.sigs,
+            ksn: (req as any).auth.ksn,
+          }
+        : undefined,
     });
   }
 
@@ -101,7 +107,7 @@ export class ConvexGroupApi implements GroupApi {
       aid = result.aid;
     } else {
       // For signed requests, derive AID from signature verification
-      throw new Error("getGroup with signed requests not yet implemented");
+      throw new Error('getGroup with signed requests not yet implemented');
     }
 
     const group = await this.client.query(api.groups.getGroup, {

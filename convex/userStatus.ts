@@ -8,8 +8,8 @@
  * - Session token metadata
  */
 
-import { query } from "./_generated/server";
-import { v } from "convex/values";
+import { v } from 'convex/values';
+import { query } from './_generated/server';
 
 /**
  * Get comprehensive user status
@@ -23,8 +23,8 @@ export const getUserStatus = query({
   handler: async (ctx, { aid }) => {
     // Get user's roles
     const userRoles = await ctx.db
-      .query("userRoles")
-      .withIndex("by_user", (q) => q.eq("userAID", aid))
+      .query('userRoles')
+      .withIndex('by_user', (q) => q.eq('userAID', aid))
       .collect();
 
     // Fetch role names
@@ -32,15 +32,15 @@ export const getUserStatus = query({
       userRoles.map(async (ur) => {
         const role = await ctx.db.get(ur.roleId);
         return role?.roleName || null;
-      })
+      }),
     );
 
     const roles = roleNames.filter((name) => name !== null) as string[];
 
     // Get user's group memberships
     const groupMembers = await ctx.db
-      .query("groupMembers")
-      .withIndex("by_aid", (q) => q.eq("aid", aid))
+      .query('groupMembers')
+      .withIndex('by_aid', (q) => q.eq('aid', aid))
       .collect();
 
     const groups = await Promise.all(
@@ -54,7 +54,7 @@ export const getUserStatus = query({
           role: member.role,
           joinedAt: member.joinedAt,
         };
-      })
+      }),
     );
 
     // Filter out null groups (deleted groups)
@@ -62,16 +62,16 @@ export const getUserStatus = query({
 
     // Get user's key state (public key)
     const keyState = await ctx.db
-      .query("keyStates")
-      .withIndex("by_aid", (q) => q.eq("aid", aid))
-      .filter((q) => q.eq(q.field("ksn"), 0))
+      .query('keyStates')
+      .withIndex('by_aid', (q) => q.eq('aid', aid))
+      .filter((q) => q.eq(q.field('ksn'), 0))
       .first();
 
     const publicKey = keyState?.keys[0] || null;
 
     return {
       aid,
-      roles: roles.length > 0 ? roles : ["anon"], // Default to anon if no roles
+      roles: roles.length > 0 ? roles : ['anon'], // Default to anon if no roles
       groups: activeGroups,
       publicKey,
       publicKeyKsn: keyState?.ksn ?? 0,

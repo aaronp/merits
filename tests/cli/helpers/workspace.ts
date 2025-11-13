@@ -10,8 +10,8 @@
  *   scenario.cleanup(); // or use afterEach/afterAll hooks
  */
 
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 // Test run identifier for this session
 const TEST_RUN_ID = Date.now();
@@ -23,7 +23,7 @@ const TEST_RUN_ID = Date.now();
  * @returns Path to the test data directory
  */
 function tempDir(): string {
-  const testDataRoot = join(process.cwd(), "testdata", TEST_RUN_ID.toString());
+  const testDataRoot = join(process.cwd(), 'testdata', TEST_RUN_ID.toString());
   if (!existsSync(testDataRoot)) {
     mkdirSync(testDataRoot, { recursive: true });
   }
@@ -42,7 +42,7 @@ function tempDir(): string {
  * ```
  */
 export function cleanTestDir(): void {
-  const testDataRoot = join(process.cwd(), "testdata");
+  const testDataRoot = join(process.cwd(), 'testdata');
   try {
     if (existsSync(testDataRoot)) {
       rmSync(testDataRoot, { recursive: true, force: true });
@@ -106,12 +106,12 @@ export function mkScenario(name: string): TestScenario {
   const root = mkdtempSync(join(tempDir(), `merits-${name}`));
 
   // Create .merits data directory
-  const dataDir = join(root, ".merits");
+  const dataDir = join(root, '.merits');
   mkdirSync(dataDir, { recursive: true });
 
   // Define paths for common files
-  const sessionPath = join(dataDir, "session.json");
-  const keysPath = join(dataDir, "keys.json");
+  const sessionPath = join(dataDir, 'session.json');
+  const keysPath = join(dataDir, 'keys.json');
 
   // Cleanup function
   const cleanup = () => {
@@ -138,7 +138,7 @@ export function mkScenario(name: string): TestScenario {
  * @param obj - Object to serialize as JSON
  */
 export function writeJSON(path: string, obj: any): void {
-  writeFileSync(path, JSON.stringify(obj, null, 2), "utf-8");
+  writeFileSync(path, JSON.stringify(obj, null, 2), 'utf-8');
 }
 
 /**
@@ -148,7 +148,7 @@ export function writeJSON(path: string, obj: any): void {
  * @returns Parsed JSON object
  */
 export function readJSON(path: string): any {
-  const content = readFileSync(path, "utf-8");
+  const content = readFileSync(path, 'utf-8');
   return JSON.parse(content);
 }
 
@@ -158,12 +158,15 @@ export function readJSON(path: string): any {
  * @param scenario - Test scenario
  * @param token - Session token object
  */
-export function writeSessionToken(scenario: TestScenario, token: {
-  token: string;
-  aid: string;
-  expiresAt: number;
-  ksn: number;
-}): void {
+export function writeSessionToken(
+  scenario: TestScenario,
+  token: {
+    token: string;
+    aid: string;
+    expiresAt: number;
+    ksn: number;
+  },
+): void {
   writeJSON(scenario.sessionPath, token);
 }
 
@@ -188,11 +191,14 @@ export function readSessionToken(scenario: TestScenario): {
  * @param scenario - Test scenario
  * @param keys - Key pair object
  */
-export function writeKeys(scenario: TestScenario, keys: {
-  aid: string;
-  privateKey: string;
-  publicKey: string;
-}): void {
+export function writeKeys(
+  scenario: TestScenario,
+  keys: {
+    aid: string;
+    privateKey: string;
+    publicKey: string;
+  },
+): void {
   writeJSON(scenario.keysPath, keys);
 }
 
@@ -239,7 +245,10 @@ export function readKeys(scenario: TestScenario): {
  * cleanup(); // Clean up all user directories
  * ```
  */
-export function mkMultiUserScenario(name: string, userNames: string[]): {
+export function mkMultiUserScenario(
+  name: string,
+  userNames: string[],
+): {
   root: string;
   users: Record<string, TestScenario>;
   cleanup: () => void;
@@ -253,15 +262,15 @@ export function mkMultiUserScenario(name: string, userNames: string[]): {
     const userRoot = join(root, userName);
     mkdirSync(userRoot, { recursive: true });
 
-    const dataDir = join(userRoot, ".merits");
+    const dataDir = join(userRoot, '.merits');
     mkdirSync(dataDir, { recursive: true });
 
     users[userName] = {
       root: userRoot,
       dataDir,
-      sessionPath: join(dataDir, "session.json"),
-      keysPath: join(dataDir, "keys.json"),
-      cleanup: () => { }, // Handled by parent cleanup
+      sessionPath: join(dataDir, 'session.json'),
+      keysPath: join(dataDir, 'keys.json'),
+      cleanup: () => {}, // Handled by parent cleanup
     };
   }
 

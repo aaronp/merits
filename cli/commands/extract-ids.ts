@@ -16,8 +16,8 @@
  *   ["msg_1", "msg_2"]
  */
 
-import { withGlobalOptions, normalizeFormat, type GlobalOptions } from "../lib/options";
-import { readFileSync } from "fs";
+import { readFileSync } from 'node:fs';
+import { type GlobalOptions, normalizeFormat, withGlobalOptions } from '../lib/options';
 
 export interface ExtractIdsOptions extends GlobalOptions {
   file: string; // Path to messages file
@@ -32,16 +32,16 @@ export const extractIds = withGlobalOptions(async (opts: ExtractIdsOptions) => {
   const format = normalizeFormat(opts.format);
 
   if (!opts.file) {
-    throw new Error("--file is required");
+    throw new Error('--file is required');
   }
 
   // Load messages from file
-  const fileContent = readFileSync(opts.file, "utf-8");
+  const fileContent = readFileSync(opts.file, 'utf-8');
   const messages = JSON.parse(fileContent);
 
   // Validate that we have an array
   if (!Array.isArray(messages)) {
-    throw new Error("Invalid messages file format. Expected JSON array of messages.");
+    throw new Error('Invalid messages file format. Expected JSON array of messages.');
   }
 
   // Extract IDs
@@ -55,19 +55,19 @@ export const extractIds = withGlobalOptions(async (opts: ExtractIdsOptions) => {
   }
 
   if (ids.length === 0) {
-    console.error("Warning: No message IDs found in file");
+    console.error('Warning: No message IDs found in file');
   }
 
   // Output in requested format
   switch (format) {
-    case "json":
+    case 'json':
       // RFC8785 canonicalized JSON for deterministic test snapshots
       console.log(canonicalizeJSON(ids));
       break;
-    case "pretty":
+    case 'pretty':
       console.log(JSON.stringify(ids, null, 2));
       break;
-    case "raw":
+    case 'raw':
       console.log(JSON.stringify(ids));
       break;
   }
@@ -79,12 +79,12 @@ export const extractIds = withGlobalOptions(async (opts: ExtractIdsOptions) => {
  * - No whitespace
  */
 function canonicalizeJSON(obj: any): string {
-  if (obj === null || typeof obj !== "object") {
+  if (obj === null || typeof obj !== 'object') {
     return JSON.stringify(obj);
   }
 
   if (Array.isArray(obj)) {
-    return `[${obj.map(canonicalizeJSON).join(",")}]`;
+    return `[${obj.map(canonicalizeJSON).join(',')}]`;
   }
 
   // Sort object keys
@@ -93,5 +93,5 @@ function canonicalizeJSON(obj: any): string {
     return `${JSON.stringify(key)}:${canonicalizeJSON(obj[key])}`;
   });
 
-  return `{${entries.join(",")}}`;
+  return `{${entries.join(',')}}`;
 }

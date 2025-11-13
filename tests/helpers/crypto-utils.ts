@@ -6,19 +6,19 @@
  */
 
 export {
-  generateKeyPair,
-  sign,
-  verify,
-  signPayload,
-  encodeCESRKey,
-  decodeCESRKey,
+  base64UrlToUint8Array,
+  computeArgsHash,
   createAID,
   createIndexedSignature,
+  decodeCESRKey,
+  encodeCESRKey,
+  generateKeyPair,
+  type KeyPair,
   parseIndexedSignature,
   sha256,
-  computeArgsHash,
   sha256Hex,
+  sign,
+  signPayload,
   uint8ArrayToBase64Url,
-  base64UrlToUint8Array,
-  type KeyPair,
-} from "../../core/crypto";
+  verify,
+} from '../../core/crypto';

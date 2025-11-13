@@ -28,7 +28,7 @@ export const CRYPTO_DEFAULTS = {
    * - 32-byte public keys, 64-byte signatures
    * - Used for message signing and authentication
    */
-  SIGNATURE_ALGORITHM: "Ed25519" as const,
+  SIGNATURE_ALGORITHM: 'Ed25519' as const,
 
   /**
    * Key exchange algorithm: X25519
@@ -36,7 +36,7 @@ export const CRYPTO_DEFAULTS = {
    * - Derived from Ed25519 keys
    * - Used for deriving shared secrets in group encryption
    */
-  KEY_EXCHANGE_ALGORITHM: "X25519" as const,
+  KEY_EXCHANGE_ALGORITHM: 'X25519' as const,
 
   /**
    * Symmetric encryption: AES-256-GCM
@@ -44,7 +44,7 @@ export const CRYPTO_DEFAULTS = {
    * - 256-bit keys, 96-bit nonces
    * - Used for message content encryption
    */
-  ENCRYPTION_ALGORITHM: "AES-256-GCM" as const,
+  ENCRYPTION_ALGORITHM: 'AES-256-GCM' as const,
 
   /**
    * Key derivation: HKDF-SHA256
@@ -52,14 +52,14 @@ export const CRYPTO_DEFAULTS = {
    * - SHA-256 as the hash function
    * - Used for deriving group keys from shared secrets
    */
-  KEY_DERIVATION_FUNCTION: "HKDF-SHA256" as const,
+  KEY_DERIVATION_FUNCTION: 'HKDF-SHA256' as const,
 
   /**
    * Hash function: SHA-256
    * - 256-bit cryptographic hash
    * - Used for content hashing and integrity checks
    */
-  HASH_ALGORITHM: "SHA-256" as const,
+  HASH_ALGORITHM: 'SHA-256' as const,
 } as const;
 
 /**
@@ -75,7 +75,7 @@ export const KEY_FORMATS = {
    * - Format: D + base64url(publicKey)
    * - Example: DqU5mb1SmwpsLq7Wbvc3lA6qyoqcE-0vKLGC_kGrHzIH
    */
-  ED25519_PUBLIC_KEY_PREFIX: "D" as const,
+  ED25519_PUBLIC_KEY_PREFIX: 'D' as const,
 
   /**
    * Ed25519 Key Sizes
@@ -117,7 +117,7 @@ export const SESSION_CONSTANTS = {
   /**
    * Default session token file path
    */
-  DEFAULT_TOKEN_PATH: ".merits/session.json",
+  DEFAULT_TOKEN_PATH: '.merits/session.json',
 } as const;
 
 /**
@@ -134,9 +134,9 @@ export const MESSAGE_CONSTANTS = {
    * Message types
    */
   TYPES: {
-    TEXT: "text",
-    ENCRYPTED: "encrypted",
-    GROUP: "group",
+    TEXT: 'text',
+    ENCRYPTED: 'encrypted',
+    GROUP: 'group',
   } as const,
 } as const;
 
@@ -165,34 +165,34 @@ export const FILE_PERMISSIONS = {
  */
 export const CRYPTO_INFO = {
   signatures: {
-    algorithm: "Ed25519",
-    description: "Fast, secure digital signatures using Edwards curve",
-    keySize: "32 bytes (256 bits)",
-    signatureSize: "64 bytes (512 bits)",
+    algorithm: 'Ed25519',
+    description: 'Fast, secure digital signatures using Edwards curve',
+    keySize: '32 bytes (256 bits)',
+    signatureSize: '64 bytes (512 bits)',
     encoding: "CESR format with 'D' prefix",
   },
   keyExchange: {
-    algorithm: "X25519",
-    description: "Elliptic curve Diffie-Hellman for key exchange",
-    keySize: "32 bytes (256 bits)",
-    derivation: "Converted from Ed25519 keys",
+    algorithm: 'X25519',
+    description: 'Elliptic curve Diffie-Hellman for key exchange',
+    keySize: '32 bytes (256 bits)',
+    derivation: 'Converted from Ed25519 keys',
   },
   encryption: {
-    algorithm: "AES-256-GCM",
-    description: "Authenticated encryption with associated data (AEAD)",
-    keySize: "32 bytes (256 bits)",
-    nonceSize: "12 bytes (96 bits)",
-    tagSize: "16 bytes (128 bits)",
+    algorithm: 'AES-256-GCM',
+    description: 'Authenticated encryption with associated data (AEAD)',
+    keySize: '32 bytes (256 bits)',
+    nonceSize: '12 bytes (96 bits)',
+    tagSize: '16 bytes (128 bits)',
   },
   keyDerivation: {
-    algorithm: "HKDF-SHA256",
-    description: "HMAC-based Key Derivation Function with SHA-256",
-    usage: "Deriving group keys from shared secrets",
+    algorithm: 'HKDF-SHA256',
+    description: 'HMAC-based Key Derivation Function with SHA-256',
+    usage: 'Deriving group keys from shared secrets',
   },
   hashing: {
-    algorithm: "SHA-256",
-    description: "Cryptographic hash function",
-    outputSize: "32 bytes (256 bits)",
+    algorithm: 'SHA-256',
+    description: 'Cryptographic hash function',
+    outputSize: '32 bytes (256 bits)',
   },
 } as const;
 

@@ -14,7 +14,7 @@
  * For testing, use the factory directly to avoid process.exit.
  */
 
-import { createMeritsProgram } from "./build-program";
+import { createMeritsProgram } from './build-program';
 
 /**
  * Main entry point
@@ -27,12 +27,12 @@ async function main() {
 // Execute with error handling
 main().catch((error) => {
   // Extract error details
-  const errorMessage = error.message || "Unknown error";
-  const errorCode = error.code || "CLI_ERROR";
+  const errorMessage = error.message || 'Unknown error';
+  const errorCode = error.code || 'CLI_ERROR';
   const errorContext = error.context || {};
 
   // Format error for stderr
-  console.error("");
+  console.error('');
   console.error(`❌ Error: ${errorMessage}`);
 
   // Show error code if available
@@ -47,15 +47,15 @@ main().catch((error) => {
 
   // Show additional context in debug mode
   if (process.env.DEBUG || process.env.MERITS_DEBUG) {
-    console.error("");
-    console.error("Debug information:");
+    console.error('');
+    console.error('Debug information:');
     console.error(JSON.stringify({ errorCode, errorContext }, null, 2));
-    console.error("");
-    console.error("Stack trace:");
+    console.error('');
+    console.error('Stack trace:');
     console.error(error.stack);
   }
 
-  console.error("");
+  console.error('');
 
   // Exit with non-zero code
   process.exit(1);

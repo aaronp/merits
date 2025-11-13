@@ -23,8 +23,8 @@
  *   merits send <AID> --raw <base64url-ciphertext> --alg "x25519-xsalsa20poly1305"
  */
 
-import { requireCredentials } from "../lib/credentials";
-import type { GlobalOptions } from "../lib/options";
+import { requireCredentials } from '../lib/credentials';
+import type { GlobalOptions } from '../lib/options';
 
 export interface SendOptions extends GlobalOptions {
   message?: string;
@@ -36,11 +36,8 @@ export interface SendOptions extends GlobalOptions {
   ttl?: number; // TTL in milliseconds
 }
 
-export async function sendMessage(
-  recipient: string,
-  opts: SendOptions
-): Promise<void> {
-  const ctx = opts._ctx;
+export async function sendMessage(recipient: string, opts: SendOptions): Promise<void> {
+  const _ctx = opts._ctx;
 
   try {
     // Load credentials
@@ -59,12 +56,14 @@ export async function sendMessage(
   } catch (error: any) {
     // Handle permission/RBAC errors
     // Convex sometimes returns generic "Server Error" for permission denials
-    if (error.message?.includes("Not permitted") ||
-        error.message?.includes("permission") ||
-        error.message?.includes("Cannot send message") ||
-        error.message?.includes("Server Error")) {
+    if (
+      error.message?.includes('Not permitted') ||
+      error.message?.includes('permission') ||
+      error.message?.includes('Cannot send message') ||
+      error.message?.includes('Server Error')
+    ) {
       // Standardize error message for RBAC/permission denials
-      throw new Error("Role denied");
+      throw new Error('Role denied');
     }
 
     // Re-throw other errors to be handled by the global error handler
@@ -75,31 +74,22 @@ export async function sendMessage(
 /**
  * Send direct message to an AID
  */
-async function sendDirectMessage(
-  recipient: string,
-  creds: any,
-  opts: SendOptions
-): Promise<void> {
+async function sendDirectMessage(recipient: string, creds: any, opts: SendOptions): Promise<void> {
   const ctx = opts._ctx;
   let messageId: string;
 
   if (opts.raw) {
     // RAW MODE: Send pre-encrypted ciphertext as-is
     if (!opts.alg) {
-      throw new Error("--alg is required when using --raw mode");
+      throw new Error('--alg is required when using --raw mode');
     }
 
-    messageId = await ctx.client.sendRawMessage(
-      recipient,
-      opts.raw,
-      creds,
-      {
-        typ: opts.typ,
-        alg: opts.alg,
-        ek: opts.ek,
-        ttl: opts.ttl,
-      }
-    );
+    messageId = await ctx.client.sendRawMessage(recipient, opts.raw, creds, {
+      typ: opts.typ,
+      alg: opts.alg,
+      ek: opts.ek,
+      ttl: opts.ttl,
+    });
   } else {
     // NORMAL MODE: Encrypt message with recipient's public key
     let message: string;
@@ -111,27 +101,24 @@ async function sendDirectMessage(
     }
 
     if (!message) {
-      throw new Error("No message provided (use --message or pipe to stdin)");
+      throw new Error('No message provided (use --message or pipe to stdin)');
     }
 
     // Use high-level API that handles encryption
-    messageId = await ctx.client.sendMessage(
-      recipient,
-      message,
-      creds,
-      {
-        typ: opts.typ,
-        ttl: opts.ttl,
-      }
-    );
+    messageId = await ctx.client.sendMessage(recipient, message, creds, {
+      typ: opts.typ,
+      ttl: opts.ttl,
+    });
   }
 
   // Output result as JSON
-  console.log(JSON.stringify({
-    messageId,
-    recipient,
-    sentAt: Date.now(),
-  }));
+  console.log(
+    JSON.stringify({
+      messageId,
+      recipient,
+      sentAt: Date.now(),
+    }),
+  );
 }
 
 /**
@@ -140,16 +127,12 @@ async function sendDirectMessage(
  * Implements zero-knowledge group encryption where the backend cannot decrypt messages.
  * Uses ephemeral AES-256-GCM keys with per-member key distribution via X25519 ECDH.
  */
-async function sendGroupMessage(
-  groupId: string,
-  creds: any,
-  opts: SendOptions
-): Promise<void> {
+async function sendGroupMessage(groupId: string, creds: any, opts: SendOptions): Promise<void> {
   const ctx = opts._ctx;
 
   // Group messages don't support raw/pre-encrypted mode
   if (opts.raw) {
-    throw new Error("Group messages do not support pre-encrypted content (--raw). Use --message instead.");
+    throw new Error('Group messages do not support pre-encrypted content (--raw). Use --message instead.');
   }
 
   // Get message content
@@ -161,26 +144,23 @@ async function sendGroupMessage(
   }
 
   if (!plaintext) {
-    throw new Error("No message provided (use --message or pipe to stdin)");
+    throw new Error('No message provided (use --message or pipe to stdin)');
   }
 
   // Use high-level API that handles encryption and authentication
-  const result = await ctx.client.sendGroupMessage(
-    groupId,
-    plaintext,
-    creds,
-    {
-      typ: opts.typ,
-    }
-  );
+  const result = await ctx.client.sendGroupMessage(groupId, plaintext, creds, {
+    typ: opts.typ,
+  });
 
   // Output result as JSON
-  console.log(JSON.stringify({
-    groupId,
-    messageId: result.messageId,
-    seqNo: result.seqNo,
-    sentAt: result.sentAt,
-  }));
+  console.log(
+    JSON.stringify({
+      groupId,
+      messageId: result.messageId,
+      seqNo: result.seqNo,
+      sentAt: result.sentAt,
+    }),
+  );
 }
 
 /**
@@ -201,5 +181,5 @@ async function readStdin(): Promise<string> {
   for await (const chunk of process.stdin) {
     chunks.push(chunk);
   }
-  return Buffer.concat(chunks).toString("utf-8").trim();
+  return Buffer.concat(chunks).toString('utf-8').trim();
 }

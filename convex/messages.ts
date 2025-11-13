@@ -1,8 +1,8 @@
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { verifySignedRequest, computeCtHash, computeEnvelopeHash } from "./auth";
-import { resolveUserClaims, claimsInclude, PERMISSIONS } from "./permissions";
-import { canMessage, canMessageBatch } from "./accessControl";
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { canMessage, canMessageBatch } from './accessControl';
+import { computeCtHash, computeEnvelopeHash, verifySignedRequest } from './auth';
+import { claimsInclude, PERMISSIONS, resolveUserClaims } from './permissions';
 
 /**
  * Send a message to a recipient (authenticated via signed request)
@@ -58,10 +58,9 @@ export const send = mutation({
     // AUTHORIZATION: RBAC permission check
     // Check if recipient is a group or a user
     const isGroup = await ctx.db
-      .query("groupChats")
-      .filter((q) => q.eq(q.field("_id"), args.recpAid))
+      .query('groupChats')
+      .filter((q) => q.eq(q.field('_id'), args.recpAid))
       .first();
-
 
     const claims = await resolveUserClaims(ctx, senderAid);
     console.log('[MESSAGES] Sender AID:', senderAid);
@@ -85,7 +84,7 @@ export const send = mutation({
         const result = data === undefined || data === null;
         if (result) return true; // global allow
         if (Array.isArray(data)) return data.includes(args.recpAid);
-        if (typeof data === "object" && Array.isArray((data as any).aids)) {
+        if (typeof data === 'object' && Array.isArray((data as any).aids)) {
           return (data as any).aids.includes(args.recpAid);
         }
         return false;
@@ -98,9 +97,8 @@ export const send = mutation({
       }
     }
 
-
     if (!allowed) {
-      throw new Error("Not permitted to message this recipient");
+      throw new Error('Not permitted to message this recipient');
     }
 
     // ACCESS CONTROL: Check allow/deny lists
@@ -110,17 +108,9 @@ export const send = mutation({
     }
 
     // Compute envelope hash (audit anchor)
-    const envelopeHash = await computeEnvelopeHash(
-      args.recpAid,
-      senderAid,
-      ctHash,
-      args.alg,
-      args.ek,
-      now,
-      expiresAt
-    );
+    const envelopeHash = await computeEnvelopeHash(args.recpAid, senderAid, ctHash, args.alg, args.ek, now, expiresAt);
 
-    const messageId = await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert('messages', {
       recpAid: args.recpAid,
       senderAid, // Server-verified, not client-supplied!
       ct: args.ct,
@@ -164,16 +154,14 @@ export const receive = mutation({
 
     // SECURITY: Ensure the verified AID matches the recipient
     if (verifiedAid !== args.recpAid) {
-      throw new Error("Cannot receive messages for different AID");
+      throw new Error('Cannot receive messages for different AID');
     }
 
     // Get all unretrieved messages for the recipient that haven't expired
     const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_recipient", (q) =>
-        q.eq("recpAid", args.recpAid).eq("retrieved", false)
-      )
-      .filter((q) => q.gt(q.field("expiresAt"), now))
+      .query('messages')
+      .withIndex('by_recipient', (q) => q.eq('recpAid', args.recpAid).eq('retrieved', false))
+      .filter((q) => q.gt(q.field('expiresAt'), now))
       .collect();
 
     // ACCESS CONTROL: Filter out messages from blocked senders
@@ -210,7 +198,7 @@ export const receive = mutation({
  */
 export const acknowledge = mutation({
   args: {
-    messageId: v.id("messages"),
+    messageId: v.id('messages'),
     receipt: v.optional(v.array(v.string())), // Recipient signs envelopeHash (optional)
     sig: v.object({
       signature: v.string(),
@@ -224,7 +212,7 @@ export const acknowledge = mutation({
     // Fetch message to get recpAid
     const message = await ctx.db.get(args.messageId);
     if (!message) {
-      throw new Error("Message not found");
+      throw new Error('Message not found');
     }
 
     // Verify signed request authentication
@@ -235,7 +223,7 @@ export const acknowledge = mutation({
 
     // SECURITY: Ensure the verified AID matches the recipient
     if (verifiedAid !== message.recpAid) {
-      throw new Error("Cannot acknowledge message for different AID");
+      throw new Error('Cannot acknowledge message for different AID');
     }
 
     // TODO: Verify receipt signatures over envelopeHash
@@ -263,9 +251,9 @@ export const cleanupExpired = mutation({
     const now = Date.now();
 
     const expiredMessages = await ctx.db
-      .query("messages")
-      .withIndex("by_expiration")
-      .filter((q) => q.lt(q.field("expiresAt"), now))
+      .query('messages')
+      .withIndex('by_expiration')
+      .filter((q) => q.lt(q.field('expiresAt'), now))
       .collect();
 
     for (const msg of expiredMessages) {
@@ -291,15 +279,15 @@ export const list = query({
 
     // Get all non-expired, unretrieved messages for recipient
     const messages = await ctx.db
-      .query("messages")
-      .withIndex("by_recipient", (q) => q.eq("recpAid", args.recpAid))
+      .query('messages')
+      .withIndex('by_recipient', (q) => q.eq('recpAid', args.recpAid))
       .filter((q) =>
         q.and(
-          q.gt(q.field("expiresAt"), now), // Not expired
-          q.eq(q.field("retrieved"), false)  // Not yet retrieved
-        )
+          q.gt(q.field('expiresAt'), now), // Not expired
+          q.eq(q.field('retrieved'), false), // Not yet retrieved
+        ),
       )
-      .order("desc") // Newest first
+      .order('desc') // Newest first
       .collect();
 
     // ACCESS CONTROL: Filter out messages from blocked senders
@@ -399,14 +387,9 @@ export const getUnread = query({
 
     // Get direct messages
     const directMessages = await ctx.db
-      .query("messages")
-      .withIndex("by_recipient", (q) => q.eq("recpAid", args.aid))
-      .filter((q) =>
-        q.and(
-          q.gt(q.field("expiresAt"), now),
-          q.eq(q.field("retrieved"), false)
-        )
-      )
+      .query('messages')
+      .withIndex('by_recipient', (q) => q.eq('recpAid', args.aid))
+      .filter((q) => q.and(q.gt(q.field('expiresAt'), now), q.eq(q.field('retrieved'), false)))
       .collect();
 
     // ACCESS CONTROL: Filter out direct messages from blocked senders
@@ -422,7 +405,7 @@ export const getUnread = query({
       from: msg.senderAid,
       to: msg.recpAid,
       ct: msg.ct,
-      typ: msg.typ ?? "encrypted",
+      typ: msg.typ ?? 'encrypted',
       createdAt: msg.createdAt,
       isGroupMessage: false,
     }));
@@ -431,9 +414,12 @@ export const getUnread = query({
     if (includeGroups) {
       // Get all groups the user is a member of
       const memberships = await ctx.db
-        .query("groupMembers")
-        .withIndex("by_aid", (q) => q.eq("aid", args.aid))
+        .query('groupMembers')
+        .withIndex('by_aid', (q) => q.eq('aid', args.aid))
         .collect();
+      console.log(
+        `[getUnread] User ${args.aid} is a member of ${memberships.length} group(s): ${memberships.map((m) => m.groupChatId).join(', ')}`,
+      );
 
       // Collect all group messages first (before fetching sender keys)
       const allGroupMessages: Array<{
@@ -443,22 +429,38 @@ export const getUnread = query({
 
       // For each group, get unread messages
       for (const membership of memberships) {
-        const groupMessages = await ctx.db
-          .query("groupMessages")
-          .withIndex("by_group_seq", (q) =>
-            q.eq("groupChatId", membership.groupChatId)
-          )
-          .filter((q) =>
-            q.and(
-              q.gt(q.field("seqNo"), membership.latestSeqNo),
-              q.neq(q.field("senderAid"), args.aid), // Don't show user's own messages
-              q.or(
-                q.eq(q.field("expiresAt"), undefined),
-                q.gt(q.field("expiresAt"), now)
-              )
-            )
-          )
+        console.log(
+          `[getUnread] Checking group ${membership.groupChatId} for AID ${args.aid}, latestSeqNo: ${membership.latestSeqNo}`,
+        );
+        // Get all messages for this group first (without filters) to debug
+        const allGroupMessagesRaw = await ctx.db
+          .query('groupMessages')
+          .withIndex('by_group_seq', (q) => q.eq('groupChatId', membership.groupChatId))
           .collect();
+
+        console.log(
+          `[getUnread] Group ${membership.groupChatId} has ${allGroupMessagesRaw.length} total message(s) in database`,
+        );
+
+        // Apply filters manually to see what's being filtered out
+        const filteredBySeqNo = allGroupMessagesRaw.filter((m) => m.seqNo > membership.latestSeqNo);
+        const filteredBySender = filteredBySeqNo.filter((m) => m.senderAid !== args.aid);
+        const filteredByExpiry = filteredBySender.filter((m) => !m.expiresAt || m.expiresAt > now);
+
+        console.log(
+          `[getUnread] Group ${membership.groupChatId} filters: total=${allGroupMessagesRaw.length}, after seqNo(${membership.latestSeqNo}) filter=${filteredBySeqNo.length}, after sender(${args.aid}) filter=${filteredBySender.length}, after expiry filter=${filteredByExpiry.length}`,
+        );
+        if (allGroupMessagesRaw.length > 0) {
+          const sample = allGroupMessagesRaw[0];
+          console.log(
+            `[getUnread] Sample message: seqNo=${sample.seqNo}, senderAid=${sample.senderAid}, latestSeqNo=${membership.latestSeqNo}, seqNo > latestSeqNo? ${sample.seqNo > membership.latestSeqNo}, senderAid !== args.aid? ${sample.senderAid !== args.aid}`,
+          );
+        }
+
+        const groupMessages = filteredByExpiry;
+        console.log(
+          `[getUnread] Found ${groupMessages.length} unread message(s) in group ${membership.groupChatId} for AID ${args.aid}`,
+        );
 
         // Store messages with their membership context
         for (const msg of groupMessages) {
@@ -482,10 +484,10 @@ export const getUnread = query({
       const senderUsers = await Promise.all(
         uniqueSenderAids.map((aid) =>
           ctx.db
-            .query("users")
-            .withIndex("by_aid", (q) => q.eq("aid", aid))
-            .first()
-        )
+            .query('users')
+            .withIndex('by_aid', (q) => q.eq('aid', aid))
+            .first(),
+        ),
       );
 
       // Create lookup map for O(1) access
@@ -511,7 +513,7 @@ export const getUnread = query({
             groupId: membership.groupChatId,
             aad: msg.aad,
           },
-          typ: "group-encrypted",
+          typ: 'group-encrypted',
           createdAt: msg.received,
           isGroupMessage: true,
           groupId: membership.groupChatId,

@@ -23,9 +23,9 @@
  * @see accessControl.ts for canMessage() helper
  */
 
-import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
-import { verifySignedRequest } from "./auth";
+import { v } from 'convex/values';
+import { mutation, query } from './_generated/server';
+import { verifySignedRequest } from './auth';
 
 /**
  * Add an AID to the user's deny-list (block someone)
@@ -67,10 +67,8 @@ export const add = mutation({
 
     // Check if already in list
     const existing = await ctx.db
-      .query("denyList")
-      .withIndex("by_owner_denied", (q) =>
-        q.eq("ownerAid", ownerAid).eq("deniedAid", args.deniedAid)
-      )
+      .query('denyList')
+      .withIndex('by_owner_denied', (q) => q.eq('ownerAid', ownerAid).eq('deniedAid', args.deniedAid))
       .first();
 
     if (existing) {
@@ -78,7 +76,7 @@ export const add = mutation({
     }
 
     // Add to deny-list
-    const id = await ctx.db.insert("denyList", {
+    const id = await ctx.db.insert('denyList', {
       ownerAid,
       deniedAid: args.deniedAid,
       addedAt: Date.now(),
@@ -128,14 +126,12 @@ export const remove = mutation({
 
     // Find entry
     const entry = await ctx.db
-      .query("denyList")
-      .withIndex("by_owner_denied", (q) =>
-        q.eq("ownerAid", ownerAid).eq("deniedAid", args.deniedAid)
-      )
+      .query('denyList')
+      .withIndex('by_owner_denied', (q) => q.eq('ownerAid', ownerAid).eq('deniedAid', args.deniedAid))
       .first();
 
     if (!entry) {
-      throw new Error("AID not in deny-list");
+      throw new Error('AID not in deny-list');
     }
 
     // Remove from deny-list
@@ -168,8 +164,8 @@ export const list = query({
   },
   handler: async (ctx, args) => {
     const entries = await ctx.db
-      .query("denyList")
-      .withIndex("by_owner", (q) => q.eq("ownerAid", args.ownerAid))
+      .query('denyList')
+      .withIndex('by_owner', (q) => q.eq('ownerAid', args.ownerAid))
       .collect();
 
     return {
@@ -216,8 +212,8 @@ export const clear = mutation({
 
     // Get all entries
     const entries = await ctx.db
-      .query("denyList")
-      .withIndex("by_owner", (q) => q.eq("ownerAid", ownerAid))
+      .query('denyList')
+      .withIndex('by_owner', (q) => q.eq('ownerAid', ownerAid))
       .collect();
 
     // Delete all entries
